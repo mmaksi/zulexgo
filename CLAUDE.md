@@ -16,9 +16,14 @@ ZulexGO is the consumer-facing (B2C) web app for German vehicle registration ser
 - Full product and integration constraints — status modelling, polling, idempotency, GDPR and German consumer-law obligations — are in `docs/prd.md`. Do not re-derive them here.
 - **Shadcn** use Shadcn for all UI components. Create custom components only when needed. Otherwise create always from Shadcn. Use `gloabls.css` for unified and standarised css across the codebase.
 
+## Design
+Follow the design standards for this project using the user-interface-design skill at `.claude/skills/user-interface-design`. The UI design must be compatible on all devices including mobile devices, ipads, laptops and large screens.
+
 ## Testing
 
-Follow test driven development approach. **Every unit of code you write ships with a unit test that proves it works**, and every core feature is additionally covered by an integration test. A change that adds behaviour without tests is incomplete.
+**Test what can silently break, not everything you write.** A test earns its place by protecting a rule, a behaviour, or a boundary — something a future change could break without anyone noticing. Tests that restate the source line above them cost maintenance and buy nothing; a suite full of them makes the real failures harder to see.
+
+Write the test first where you are testing logic or a fix. Static presentation does not need a test at all.
 
 ### Tooling
 
@@ -40,13 +45,28 @@ Follow test driven development approach. **Every unit of code you write ships wi
 - Integration tests live in **`tests/integration/`** and are named for the flow, not the file: `deregistration-checkout.test.ts`, `status-polling.test.ts`.
 - Shared fixtures and MSW handlers go in `tests/fixtures/` and `tests/msw/`; never duplicate a Zulex payload inline across files.
 
-### What unit tests must cover
+### What to test
 
-For each unit: the happy path, every branch, the boundaries, edge cases and the failure mode.
+Test it when it is one of these:
+
+- **Domain and business rules** — eligibility, pricing, status mapping, what is purchasable. Cover the happy path, every branch, the boundaries and the failure mode; these are the units where exhaustiveness pays.
+- **Interactive behaviour** — anything a user drives: forms, validation, the funnel, disclosure, navigation panels.
+- **Security and privacy invariants** — see Non-negotiables below.
+- **Integration boundaries** — the Zulex API and Stripe clients, route handlers, server actions. Stub at the network layer.
+- **Accessibility contracts that break invisibly** — accessible names, landmark and heading structure, keyboard operability.
+- **Every bug you fix** — a failing test that reproduces it comes first, and it stays as the regression guard.
+
+### What not to test
+
+- **Static copy and markup.** That a heading contains the words you typed, that a card lists four services, that a paragraph exists.
+- **Design tokens and class names.** Colour, spacing, radius, breakpoints. jsdom has no layout, so these assert the source, not the result. Check the design in a browser instead.
+- **Presentational wrappers.** Layout components, section frames, decorative elements.
+- **Content-model character limits.** Real constraints, but enforce them in review — as tests they fail on every copy edit without catching a defect.
+- **Third-party primitives.** Base UI and shadcn are already tested. Test the way this app configures them, not that they work.
 
 ### What integration tests must cover
 
-Core flows are tested end to end across module boundaries, with the Zulex API and Stripe stubbed at the network layer.
+Core flows end to end across module boundaries, with the Zulex API and Stripe stubbed at the network layer.
 
 ### Non-negotiables
 
@@ -55,6 +75,8 @@ Core flows are tested end to end across module boundaries, with the Zulex API an
 - Test behaviour, not implementation: assert on what the user or the caller observes. Avoid snapshot tests except for stable, reviewed output (e.g. generated email HTML), and never snapshot whole component trees.
 - A bug fix starts with a failing test that reproduces it. Do not fix, then test.
 - Never weaken or skip a test to make a build pass. If a test is wrong, fix the test deliberately and say so.
+- A test that cannot fail is worse than no test. When you add a guard, prove it catches the thing it guards against before you keep it.
+- Delete a test that no longer protects anything. Coverage is not the target — an untested presentational component is fine, an untested domain rule is not.
 
 ## Skills
 
@@ -63,7 +85,7 @@ Project skills live in `.claude/skills/`. Invoke them by name — they carry the
 | Skill | What it is | Use it when |
 |---|---|---|
 | `clean-code` | Pragmatic coding standards — concise and direct, no over-engineering, no unnecessary comments. | Writing or reviewing any code. Marked CRITICAL: treat it as this repo's default style. |
-| `test-driven-development` | The test-first loop — write the test, watch it fail, write the minimum to pass. | Implementing any feature or fixing any bug; this is how the Testing section above is carried out. |
+| `test-driven-development` | The test-first loop — write the test, watch it fail, write the minimum to pass. | Implementing logic or fixing a bug — i.e. the code the Testing section above says to test. Not for static presentation. |
 | `cleaning-up-codebases` | Systematic cleanup that asks "should this exist?" before "how do I improve this?" — removal over refactoring. | Reviewing for dead code, cruft, scope creep, or architectural drift. |
 | `project-structure` | The folder tree, the purpose of each folder, and the dependency rules between layers. | Creating a file, or deciding where code belongs. |
 | `external-services` | Ports and adapters for every third party — domain-language interfaces, one folder per vendor, contract tests. | Integrating, calling, or replacing any outside service. |
@@ -81,3 +103,4 @@ Read these before making decisions in their area; they are authoritative and thi
 | [docs/design-standard.md](docs/design-standard.md) | Full visual specification derived from the Zulex Style Guide — colour, type, spacing, the brand wedge, elevation, motion. | Making any visual decision, writing CSS, or adding a component. |
 | [docs/site-contract.md](docs/site-contract.md) | Page structure, content inventory, and behaviour spec (navigation, scroll, hover, mobile, transitions). | Building or changing a page, or implementing interaction behaviour. |
 | [docs/content-model.md](docs/content-model.md) | Every page section's content fields with length, format, and tone constraints. | Writing copy, defining props/schemas, or wiring content into a section. |
+| [docs/launch-plan.md](docs/launch-plan.md) | Dependency-ordered milestones M0–M9 to production, with exit criteria, default technical decisions, and fallbacks for blocked items. | Deciding what to build next, or checking whether a milestone's exit criteria are met. |

@@ -1,3 +1,8 @@
 /.claude
 /docs
 /node_modules
+/.next
+/next-env.d.ts
+/coverage
+tsconfig.tsbuildinfo
+.DS_Store
