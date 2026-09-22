@@ -5,7 +5,7 @@ import {
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
-} from "@/components/ui/accordion"
+} from "@/src/ui/accordion"
 import { Section, SectionHeading } from "@/src/ui/section"
 
 // content-model.md §1 — 5-8 items, question <=80, answer <=400 chars, plain German.

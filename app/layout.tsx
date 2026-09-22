@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Kanit } from "next/font/google";
 import "./globals.css";
-import { cn } from "@/lib/utils";
+import { cn } from "@/src/lib/utils";
 
 // design-standard.md §3.1 — load only 300, 600 italic (wordmark) and 800 (H1).
 const kanit = Kanit({

@@ -3,7 +3,7 @@
 import { useState } from "react"
 import Link from "next/link"
 import { ArrowRight, Menu } from "lucide-react"
-import { Button, buttonLink } from "@/components/ui/button"
+import { Button, buttonLink } from "@/src/ui/button"
 import {
   Sheet,
   SheetContent,
@@ -11,7 +11,7 @@ import {
   SheetHeader,
   SheetTitle,
   SheetTrigger,
-} from "@/components/ui/sheet"
+} from "@/src/ui/sheet"
 
 export type NavItem = { label: string; href: string }
 

@@ -1,5 +1,5 @@
 import { ArrowRight } from "lucide-react"
-import { buttonLink } from "@/components/ui/button"
+import { buttonLink } from "@/src/ui/button"
 
 // content-model.md §1 — headline <=60, subline <=140, CTA <=25 chars, verb-first.
 const STATS = [

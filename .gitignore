@@ -1,8 +1,21 @@
-/.claude
-/docs
+# Dependencies
 /node_modules
+
+# Build output
 /.next
 /next-env.d.ts
-/coverage
 tsconfig.tsbuildinfo
+
+# Test output
+/coverage
+
+# Secrets — every local env file stays out of git; the template does not.
+.env
+.env.*
+!.env.example
+
+# Machine-local agent settings and docs
+.claude
+
+# OS noise
 .DS_Store

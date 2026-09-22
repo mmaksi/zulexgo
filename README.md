@@ -1,36 +1,52 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ZulexGO
 
-## Getting Started
+Consumer-facing (B2C) web app for German vehicle registration services, built on the
+B2B Zulex API. The MVP covers one service: vehicle de-registration
+(Außerbetriebsetzung), from eligibility check through payment to the official KBA
+confirmation. There are no user accounts — order status is reached through a
+one-time link sent by email.
 
-First, run the development server:
+## Getting started
 
 ```bash
+npm ci
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Scripts
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Script | What it does |
+|---|---|
+| `npm run dev` | Development server |
+| `npm run build` | Production build |
+| `npm run start` | Serve the production build |
+| `npm run lint` | ESLint |
+| `npm run typecheck` | `tsc --noEmit` |
+| `npm test` | Jest (jsdom + node projects) |
+| `npm run test:watch` | Jest in watch mode |
 
-## Learn More
+## Stages
 
-To learn more about Next.js, take a look at the following resources:
+Stage is selected by `APP_ENV` (`dev`, `staging`, `production`) — never `NODE_ENV`.
+Local secrets go in `.env.local`, which is gitignored; `.env.example` is the
+committed template. See the `environments` skill.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Where things live
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+`app/` is routing only; `src/core/` is framework-free application logic; `src/adapters/`
+implements the ports in `src/core/ports/`; `src/ui/` holds the design system and the
+Shadcn primitives; `src/config/` is the composition root. The full tree and the
+dependency rules between layers are in the `project-structure` skill.
 
-## Deploy on Vercel
+All Zulex API calls are server-side only — the `X-Api-Key` is a merchant credential
+and must never reach the browser.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Documentation
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+`CLAUDE.md` carries the working rules. The authoritative product and design specs
+(`docs/`) and the coding-standard skills (`.claude/`) are **deliberately not
+checked in** — they live alongside the repo, not in it. `CLAUDE.md` and
+`AGENTS.md` reference them by path, so get a copy from the team before relying on
+those links.

@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { buttonLink } from "@/components/ui/button"
+import { buttonLink } from "@/src/ui/button"
 import { Wordmark } from "@/src/ui/wordmark"
 import { MobileNav, type NavItem } from "./mobile-nav"
 

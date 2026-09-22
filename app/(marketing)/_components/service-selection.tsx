@@ -1,6 +1,6 @@
 import { ArrowRight } from "lucide-react"
-import { Badge } from "@/components/ui/badge"
-import { buttonLink } from "@/components/ui/button"
+import { Badge } from "@/src/ui/badge"
+import { buttonLink } from "@/src/ui/button"
 import {
   Card,
   CardContent,
@@ -8,7 +8,7 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card"
+} from "@/src/ui/card"
 import { Section, SectionHeading } from "@/src/ui/section"
 
 /**

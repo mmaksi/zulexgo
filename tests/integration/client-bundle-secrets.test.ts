@@ -8,7 +8,7 @@ import { join } from "node:path"
  * the client and fails if one can read a server secret — so the guard is in
  * place before the Zulex and Stripe clients are written.
  */
-const ROOTS = ["app", "components", "src", "lib"]
+const ROOTS = ["app", "src"]
 const SOURCE = /\.(ts|tsx)$/
 const SECRET_HEADERS = [/x-api-key/i, /x-idempotency-key/i]
 
