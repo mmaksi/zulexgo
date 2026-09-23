@@ -48,3 +48,4 @@ npm run lint && npm run typecheck && npm test && npm run build
 ```
 
 That is exactly what CI runs. Running it locally first saves a round trip.
+>>> Test staging
