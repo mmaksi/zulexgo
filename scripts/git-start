@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+#
+# git start <branch-name>
+#
+# Creates a branch from the current origin/staging, which is where all work
+# starts. Starting from main instead leaves you on the last released code and
+# drags main's merge commits back into staging — see CONTRIBUTING.md.
+
+set -euo pipefail
+
+BASE=origin/staging
+
+if [ $# -ne 1 ] || [ -z "$1" ]; then
+  echo "Usage: git start <branch-name>" >&2
+  exit 1
+fi
+
+echo "Fetching $BASE..."
+git fetch origin
+
+echo "Creating $1 from $BASE..."
+# --no-track, or the new branch would take origin/staging as its upstream and a
+# later bare `git push` would aim at the protected branch instead of its own.
+git switch --no-track -c "$1" "$BASE"
+
+echo
+echo "When you are ready:  git push -u origin HEAD"
