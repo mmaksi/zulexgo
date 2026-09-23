@@ -40,7 +40,7 @@ The funnel UI (M4 Track B) starts as soon as M2's fakes exist and runs alongside
 
 | Decision | Default | Why |
 |---|---|---|
-| Hosting | **Vercel**, two projects: `zulexgo-staging` (auto-deploys `main`, `APP_ENV=staging`) and `zulexgo` (production, deploys only by promotion, `APP_ENV=production`) | Separate projects give hard secret separation between stages, which the `environments` skill requires ("secrets must not work across stages"). Vercel Cron drives the poller; needs a plan tier that allows per-minute crons. |
+| Hosting | **Vercel**, two projects tracking two permanent branches: `zulexgo-staging` deploys `staging` (`APP_ENV=staging`), `zulexgo` deploys `main` (`APP_ENV=production`) | Separate projects give hard secret separation between stages, which the `environments` skill requires ("secrets must not work across stages"). The repository is public so branch protection is free: no direct push to either branch, CI required on both, and `main` accepts a reviewed pull request from `staging` only — so "nothing reaches production that has not run on staging" is enforced by the forge rather than by habit. See `CONTRIBUTING.md`. Vercel Cron drives the poller; needs a plan tier that allows per-minute crons, and commercial use requires Vercel Pro regardless. |
 | Database | **Supabase Postgres**, region Frankfurt (eu-central-1), one project per stage | EU residency for GDPR. Accessed **server-side only** through the Supavisor pooler (transaction mode) from Vercel functions; migrations use the direct connection. No Supabase Auth (no accounts by design), no client-side Supabase SDK, no RLS-based access — the app is the only client. |
 | Postgres driver | `pg` (node-postgres) behind the `ApplicationRepository` adapter | No ORM, so the raw-SQL migrations stay the single source of truth. |
 | Migration runner | **Small in-repo runner** (TDD'd) reading `db/migrations/NNNN_slug/{up,down}.sql`, recording version + checksum in `schema_migrations`, one transaction per migration | Supabase CLI migrations are flat, timestamped, up-only — incompatible with the skill's folder-with-`down.sql` rule. Owning ~100 lines is cheaper than amending the skill. Override: adopt Supabase CLI and amend `database-migrations`. |
@@ -82,16 +82,27 @@ The funnel UI (M4 Track B) starts as soon as M2's fakes exist and runs alongside
 **Why here:** `environments` needs zod-validated `APP_ENV` read once in `src/config/`; `external-services` needs `src/config/container.ts` and the `no-restricted-imports` rule *before* the first vendor adapter; the TDD rule only means something once CI enforces it. Deploying the existing marketing site to staging now proves the deploy path at zero risk.
 
 **How:**
-- Add `zod` as a direct dependency. `src/config/env.ts` validates `APP_ENV`, `DATABASE_URL`, `DIRECT_DATABASE_URL`, `ZULEX_BASE_URL`, `ZULEX_API_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, `MAIL_DRIVER`, `PAYMENT_DRIVER`, `REGISTRATION_DRIVER`, `MAIL_ALLOWLIST`, `APP_BASE_URL`, `CODES_ENCRYPTION_KEY`, `CRON_SECRET`, `SUPABASE_STORAGE_*`. Fails fast naming the missing variable.
-- Guardrails as tests: live Stripe key rejected unless production; test key rejected in production; production Zulex URL rejected unless production; no source file branches on `NODE_ENV`.
+- Add `zod` as a direct dependency. `src/config/env.ts` validates `APP_ENV`, `DATABASE_URL`, `DIRECT_DATABASE_URL`, `ZULEX_BASE_URL`, `ZULEX_API_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, `RESEND_API_KEY`, `MAIL_DRIVER`, `PAYMENT_DRIVER`, `REGISTRATION_DRIVER`, `REPOSITORY_DRIVER`, `STORAGE_DRIVER`, `MAIL_ALLOWLIST`, `APP_BASE_URL`, `CODES_ENCRYPTION_KEY`, `CRON_SECRET`, `SUPABASE_STORAGE_*`. Fails fast naming the missing variable.
+- **Five driver variables, not three** (see Deviation 6). Each one names the adapter a port is wired to, and each gates the credentials that adapter needs:
+
+  | Driver | Values | Gates | Flips to the real value in |
+  |---|---|---|---|
+  | `PAYMENT_DRIVER` | `fake` \| `stripe` | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | M4 |
+  | `REGISTRATION_DRIVER` | `fake` \| `zulex` | `ZULEX_BASE_URL`, `ZULEX_API_KEY` | M4 |
+  | `MAIL_DRIVER` | `console` \| `resend` | `RESEND_API_KEY`; `MAIL_ALLOWLIST` on staging | M4 |
+  | `REPOSITORY_DRIVER` | `fake` \| `postgres` | `DATABASE_URL`, `DIRECT_DATABASE_URL`, `CODES_ENCRYPTION_KEY` | M3 |
+  | `STORAGE_DRIVER` | `fake` \| `supabase` | `SUPABASE_STORAGE_URL`, `SUPABASE_STORAGE_BUCKET`, `SUPABASE_STORAGE_SERVICE_KEY` | M5 |
+
+  A variable is required **only when its driver is switched on**, so `APP_ENV=dev` boots on fakes with no secrets at all and staging deploys in M1 before any vendor credential exists. Production rejects every fake value, so a deployed production cannot quietly run on one.
+- Guardrails as tests: live Stripe key rejected unless production; test key rejected in production; production Zulex URL rejected unless production; production rejected on any fake driver; staging mail confined to `MAIL_ALLOWLIST`, which production forbids; no source file branches on `NODE_ENV`.
 - `src/config/container.ts` — `createContainer(env)`. First two ports done the full 7-step way (port → contract → fake → real → wire → lint): `Clock` and `TokenGenerator`, so the pattern exists before Stripe/Zulex.
 - ESLint `no-restricted-imports` block from `external-services` added to `eslint.config.mjs`.
 - `.env.example` committed with every variable and a one-line comment.
-- `.github/workflows/ci.yml`: `npm ci`, lint, typecheck, `jest --ci`, `next build` with placeholder staging env — so the existing client-bundle-secrets test runs against a real build.
+- `.github/workflows/ci.yml`: `npm ci`, lint, typecheck, `jest --ci`, `next build` with placeholder staging env — so the existing client-bundle-secrets test runs against a real build. A second job, `main accepts staging only`, fails any pull request into `main` whose source branch is not `staging`. Both are required checks.
 - Vercel: two projects created; staging auto-deploys `main`; production deploy-gated. Supabase: staging project provisioned (schema arrives in M3).
 - `next.config.ts`: baseline security headers (HSTS, `X-Content-Type-Options`, `Referrer-Policy`). CSP deferred to M7 once Stripe Elements' needs are known.
 
-**Exit criteria:** CI required on `main` and red on a deliberately failing test; staging URL serves the marketing page; a test proves `createContainer` with an `sk_live_` key and `APP_ENV=staging` throws; `tests/integration/client-bundle-secrets.test.ts` still passes.
+**Exit criteria:** CI required on `main` and `staging` and red on a deliberately failing test; staging URL serves the marketing page; a test proves `createContainer` with an `sk_live_` key and `APP_ENV=staging` throws; `tests/integration/client-bundle-secrets.test.ts` still passes.
 
 ---
 
@@ -126,7 +137,7 @@ The funnel UI (M4 Track B) starts as soon as M2's fakes exist and runs alongside
 - `db/migrations/0001_create_applications` (encrypted codes, `idempotency_key` unique, `zulex_application_id`, `next_poll_at`, `poll_attempts`, `authority_ikfz_status`, `agb_version`, `consent_at` — adding consent columns now avoids an expand/contract cycle in M7), `0002_create_payments`, `0003_create_status_history`, `0004_create_status_tokens`. Each folder has `up.sql`, `down.sql`, `README.md`.
 - `src/adapters/persistence/postgres/` passing the `ApplicationRepository` contract against a real local Postgres.
 - `db/seed/seed.ts`: idempotent, deterministic, refuses unless `APP_ENV=dev` (guardrail test); at least one application per `ApplicationStatus` value — the coverage test iterates the enum, so when the dashboard lands in M5 it cannot render a state the seed lacks.
-- Staging Supabase migrated in the deploy step; never seeded (guardrail test).
+- Staging Supabase migrated in the deploy step; never seeded (guardrail test). Staging and production flip `REPOSITORY_DRIVER=postgres`, which makes `DATABASE_URL`, `DIRECT_DATABASE_URL` and `CODES_ENCRYPTION_KEY` required at boot.
 
 **Exit criteria:** CI migration rehearsal green; Postgres adapter passes the same contract file as the fake; enum-coverage seed test green; `APP_ENV=staging npm run db:seed` exits non-zero.
 
@@ -169,7 +180,7 @@ The funnel UI (M4 Track B) starts as soon as M2's fakes exist and runs alongside
 
 **How:**
 - All email templates (order confirmation + one per status change + resend-link) as reviewed HTML snapshots — the one snapshot case `CLAUDE.md` permits — carrying only plate and reference, never codes or tokens beyond the link itself. Sent by `advance-status` on every transition.
-- `src/adapters/documents/zulex/` + Supabase Storage cache passing the `DocumentStore` contract; `UNKNOWN` → "Dokument".
+- `src/adapters/documents/zulex/` + Supabase Storage cache passing the `DocumentStore` contract; `UNKNOWN` → "Dokument". Staging and production flip `STORAGE_DRIVER=supabase`, which makes the `SUPABASE_STORAGE_*` variables required at boot.
 - Dashboard: stepper (5 steps by default — see the open item in Context) with timestamps from `status_history`, outcome block (success + downloads / rejection reason placeholder), help block, **"Resend my link"** (email + reference → send to the *stored* address only; constant-time response; rate-limited; token rotated on resend), revalidation on focus/interval, stepper pulse while polling.
 - Token lifecycle: ≥128-bit, revocable, rate-limited lookups.
 
@@ -266,12 +277,15 @@ The funnel UI (M4 Track B) starts as soon as M2's fakes exist and runs alongside
 2. **Shadcn files moved** from `components/`+`lib/` to `src/ui`+`src/lib` to satisfy `project-structure`; alternatively amend the skill.
 3. **Design standard §5.5 amended** from Font Awesome to lucide — **done in M0**, not pending. The deviation and its reasoning are recorded inside §5.5 so the change is not later mistaken for drift.
 4. **`.claude/` and `docs/` un-ignored** in M0 — `CLAUDE.md` calls them authoritative; CI and collaborators must see them.
-5. **`test-driven-development` skill vs `CLAUDE.md`:** the skill still says "Always" for every feature and lists configuration as an exception that needs approval; `CLAUDE.md` now scopes test-first to logic, behaviour, boundaries and fixes, and excludes presentation and configuration outright. `CLAUDE.md` wins as the project instruction; the skill's "When to Use" section should be aligned to it in M0 so the two never disagree.
+5. **Five driver variables, not the three named in M1** — `REPOSITORY_DRIVER` and `STORAGE_DRIVER` were added so that "required only when switched on" has something to switch for `DATABASE_URL` and `SUPABASE_STORAGE_*`. Without them the only choices were to require a database URL on every deployed stage — which would have blocked the M1 staging deploy until M3 — or to leave it optional forever, which would let production boot with no database. **Decided in M1.**
+6. **`Clock` and `TokenGenerator` are real in every stage**, including dev, while every vendor port follows the skill's "fake in dev" rule. They carry no driver variable: there is no network, no money and no secret to fake away, and a frozen clock or a predictable status link in a running dev server is a bug rather than a convenience. Their fakes exist for tests, which is what `external-services` rule 4 requires. **Decided in M1**; the reasoning is recorded in `src/config/container.ts`.
+7. **Two permanent branches, `staging` and `main`, instead of promoting a build** — `staging` and `main` each have a Vercel project, and branch protection enforces the path between them: no direct push to either, CI required on both, and `main` accepts a reviewed pull request from `staging` only. The repository is public because protected branches are a paid feature on private ones. `enforce_admins` is off while there is a single account, since a required approval cannot come from the pull request's own author; `docs/provisioning.md` §4 records that gap and the command that closes it. **Decided after M1.**
+8. **`test-driven-development` skill vs `CLAUDE.md`:** the skill still says "Always" for every feature and lists configuration as an exception that needs approval; `CLAUDE.md` now scopes test-first to logic, behaviour, boundaries and fixes, and excludes presentation and configuration outright. `CLAUDE.md` wins as the project instruction; the skill's "When to Use" section should be aligned to it in M0 so the two never disagree.
 
 ## Critical files (to create or change)
 
 - `.gitignore`, `package.json`, `components.json` — M0
-- `src/config/env.ts`, `src/config/container.ts`, `eslint.config.mjs`, `.env.example`, `.github/workflows/ci.yml`, `next.config.ts` — M1
+- `src/config/env.ts`, `src/config/container.ts`, `eslint.config.mjs`, `.env.example`, `.github/workflows/ci.yml`, `CONTRIBUTING.md`, `next.config.ts` — M1
 - `src/core/domain/application-status.ts` (the machine everything derives from), `src/core/ports/*.ts` + `*.contract.ts`, `src/adapters/*/fake/` — M2
 - `db/migrations/0001_…0004_*`, `db/seed/seed.ts`, `src/adapters/persistence/postgres/` — M3
 - `src/adapters/{registration/zulex,payment/stripe,mail/resend}/`, `src/core/use-cases/*.ts`, `src/core/domain/poll-schedule.ts`, `app/(funnel)/deregister/`, `app/status/[token]/`, `app/api/internal/poll/route.ts`, `app/api/webhooks/zulex/route.ts` (if the webhook exists), `vercel.json`, `tests/integration/*.test.ts` — M4

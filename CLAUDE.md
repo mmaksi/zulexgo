@@ -53,6 +53,7 @@ Test it when it is one of these:
 - **Interactive behaviour** — anything a user drives: forms, validation, the funnel, disclosure, navigation panels.
 - **Security and privacy invariants** — see Non-negotiables below.
 - **Integration boundaries** — the Zulex API and Stripe clients, route handlers, server actions. Stub at the network layer.
+- **Sources of non-determinism** — `Clock` and `TokenGenerator`, and anything else that would otherwise make a test sleep or guess. Both their adapters run the port's contract suite: the real one and the fake. The real ones are one-line wrappers, so it is tempting to skip them — don't. The fake is only trustworthy as a stand-in for production if the same suite passes against both, and every test that asserts on hold expiry, poll backoff or a status link is resting on that. See `external-services` § Non-determinism is a port.
 - **Accessibility contracts that break invisibly** — accessible names, landmark and heading structure, keyboard operability.
 - **Every bug you fix** — a failing test that reproduces it comes first, and it stays as the regression guard.
 

@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main, staging]
+  push:
+    branches: [main, staging]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Only runs for pull requests into main, where it is a required check.
+  # Deliberately not required on staging, where it never runs.
+  branch-flow:
+    name: main accepts staging only
+    if: github.event_name == 'pull_request' && github.base_ref == 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Refuse any source but staging
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          if [ "$HEAD_REF" != "staging" ]; then
+            echo "::error::main accepts pull requests from staging only; this one is from '$HEAD_REF'. Merge it into staging first, then open staging → main."
+            exit 1
+          fi
+
+  verify:
+    name: lint, typecheck, test, build
+    runs-on: ubuntu-latest
+
+    # A production build of the staging configuration, with placeholders only.
+    # No real secret is needed: every driver is a fake, and the point of the
+    # build step is to prove the client bundle cannot see a server secret.
+    env:
+      APP_ENV: staging
+      APP_BASE_URL: https://ci.example.test
+      CRON_SECRET: ci-placeholder-cron-secret
+      PAYMENT_DRIVER: fake
+      REGISTRATION_DRIVER: fake
+      MAIL_DRIVER: console
+      REPOSITORY_DRIVER: fake
+      STORAGE_DRIVER: fake
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run lint
+
+      - run: npm run typecheck
+
+      - run: npm test -- --ci
+
+      - run: npm run build

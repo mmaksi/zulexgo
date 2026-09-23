@@ -14,8 +14,9 @@ tsconfig.tsbuildinfo
 .env.*
 !.env.example
 
-# Machine-local agent settings and docs
-.claude
+# Machine-local agent settings only; the skills and commands are the rules CI
+# and collaborators work to, so they stay in git.
+.claude/settings.local.json
 
 # OS noise
 .DS_Store
