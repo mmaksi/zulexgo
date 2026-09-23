@@ -101,21 +101,26 @@ developers; this is the settings half:
 | Approving reviews | 0 | 1 |
 | Required checks | `lint, typecheck, test, build` | `lint, typecheck, test, build`, `main accepts staging only` |
 | Force push / delete | blocked | blocked |
-| Applies to admins | no — see below | no — see below |
+| Applies to admins | yes | yes |
 
-**`enforce_admins` is off, deliberately.** With one GitHub account on the
-project, turning it on makes `main` permanently unmergeable: the single required
-approval cannot come from the author of the pull request. Turn it on the day a
-second reviewer exists:
+**Required approvals on `main` are 0, not 1.** The flow is meant to end in a
+manager's review, but a pull request cannot be approved by its own author, so
+with a single GitHub account on the project a required approval would make
+`main` permanently unmergeable. Everything else still binds: no direct push by
+anyone including the owner, CI required, and a feature branch cannot reach
+`main`. Raise it the day a second reviewer is a collaborator:
 
 ```bash
-gh api -X POST repos/mmaksi/zulexgo/branches/main/protection/enforce_admins
-gh api -X POST repos/mmaksi/zulexgo/branches/staging/protection/enforce_admins
+gh api -X PATCH repos/mmaksi/zulexgo/branches/main/protection/required_pull_request_reviews \
+  -F required_approving_review_count=1
 ```
 
-Until then the rules bind every collaborator, and the owner can override in an
-emergency. That is a real gap, not a formality — it is written down here so it is
-a decision rather than a surprise.
+**`enforce_admins` is on for both branches**, which is what makes "no direct
+push" true rather than aspirational — it was verified by pushing at both
+branches and having both rejected with `GH006: protected branch hook declined`.
+It also means the owner has no override: an emergency fix goes through a pull
+request like everything else, or protection is relaxed deliberately and in the
+open.
 
 No repository secrets are needed: CI builds against placeholders, and both
 deployments run through Vercel's own Git integration.
