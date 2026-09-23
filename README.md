@@ -10,10 +10,23 @@ one-time link sent by email.
 
 ```bash
 npm ci
+git config alias.start '!./scripts/git-start'
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+Open [http://localhost:3000](http://localhost:3000). No secrets are needed — `dev`
+runs on in-memory fakes for every external service.
+
+The middle line registers `git start`, which is how you begin a piece of work:
+
+```bash
+git start feature/eligibility-check
+```
+
+It fetches and branches off the current `origin/staging`, which is the only
+correct base — see [CONTRIBUTING.md](CONTRIBUTING.md). The alias lives in your
+local `.git/config`, so it is a one-off per clone and is not shared by git
+itself; the script it calls, `scripts/git-start`, is checked in.
 
 ## Scripts
 
@@ -26,6 +39,7 @@ Open [http://localhost:3000](http://localhost:3000).
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm test` | Jest (jsdom + node projects) |
 | `npm run test:watch` | Jest in watch mode |
+| `git start <branch>` | Branch off the current `origin/staging` (see Getting started) |
 
 ## Stages
 
@@ -45,8 +59,12 @@ and must never reach the browser.
 
 ## Documentation
 
-`CLAUDE.md` carries the working rules. The authoritative product and design specs
-(`docs/`) and the coding-standard skills (`.claude/`) are **deliberately not
-checked in** — they live alongside the repo, not in it. `CLAUDE.md` and
-`AGENTS.md` reference them by path, so get a copy from the team before relying on
-those links.
+| File | What it is |
+|---|---|
+| [CONTRIBUTING.md](CONTRIBUTING.md) | The branch workflow and the rules that enforce it. Read before your first pull request. |
+| `CLAUDE.md` / `AGENTS.md` | The working rules, for people and for coding agents. |
+| `docs/` | Authoritative product, design and launch specs. |
+| `docs/provisioning.md` | The cloud resources, who owns them, and how each stage is wired. |
+| `.claude/skills/` | The coding standards `CLAUDE.md` refers to by name. |
+
+All of these are checked in — a fresh clone has everything.
