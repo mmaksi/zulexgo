@@ -16,6 +16,31 @@ ZulexGO is the consumer-facing (B2C) web app for German vehicle registration ser
 - Full product and integration constraints — status modelling, polling, idempotency, GDPR and German consumer-law obligations — are in `docs/prd.md`. Do not re-derive them here.
 - **Shadcn** use Shadcn for all UI components. Create custom components only when needed. Otherwise create always from Shadcn. Use `gloabls.css` for unified and standarised css across the codebase.
 
+## Branching
+
+Two permanent branches, `staging` and `main`, both protected. **You cannot push to
+either** — the rules apply to admins, so there is no override to look for. A push
+to one fails with `GH006: protected branch hook declined`.
+
+Work always starts from `staging`:
+
+```bash
+git start <branch-name>
+```
+
+That is a repo alias for `scripts/git-start`. Where it is not registered, the
+equivalent is `git fetch origin && git switch --no-track -c <name> origin/staging`.
+Never branch from `main`: it holds the last released code and its promotion merge
+commits, both of which leak into `staging` when the branch merges back.
+
+Open the pull request **into `staging`**, never into `main` — a required check,
+`main accepts staging only`, fails any pull request into `main` whose source
+branch is not `staging`. Promoting `staging` to `main` is a separate, deliberate
+pull request.
+
+The full flow and what enforces each rule are in `CONTRIBUTING.md`; the branch
+protection settings and the one gap in them are in `docs/provisioning.md` §4.
+
 ## Design
 Follow the design standards for this project using the user-interface-design skill at `.claude/skills/user-interface-design`. The UI design must be compatible on all devices including mobile devices, ipads, laptops and large screens.
 
