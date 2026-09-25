@@ -50,7 +50,6 @@ These are GitHub branch protection rules, not etiquette. They fail loudly.
 | No direct push to `main` or `staging` | Branch protection: a pull request is required on both, and the rules apply to admins too — verified by a rejected push |
 | Nothing merges without CI green | Branch protection: `lint, typecheck, test, build` is a required check |
 | A feature branch may not merge into `main` | The `main accepts staging only` check, required on `main`, fails any pull request whose source is not `staging` |
-| `main` needs review | **Not enforced yet** — required approvals are 0 while there is a single GitHub account, because nobody can approve their own pull request. Raised to 1 the day a second reviewer joins; see `docs/provisioning.md` §4. |
 | No force-push, no deletion of `main` or `staging` | Branch protection |
 
 If you find yourself wanting to bypass one of these, change the rule in the open

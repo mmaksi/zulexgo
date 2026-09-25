@@ -14,7 +14,7 @@ ZulexGO is the consumer-facing (B2C) web app for German vehicle registration ser
 - **No vendor is imported outside its own adapter.** External services — Stripe, the Zulex API, email, storage — sit behind ports in `src/core/ports/` and are wired in a single composition root. Stripe is the first payment adapter, not a dependency of the core; others will follow. See the `external-services` skill.
 - Three stages — `dev`, `staging`, `production` — selected by `APP_ENV`, never `NODE_ENV`. Payments use manual capture (pre-authorization). No user accounts or auth in the MVP; status is reached by one-time link.
 - Full product and integration constraints — status modelling, polling, idempotency, GDPR and German consumer-law obligations — are in `docs/prd.md`. Do not re-derive them here.
-- **Shadcn** use Shadcn for all UI components. Create custom components only when needed. Otherwise create always from Shadcn. Use `gloabls.css` for unified and standarised css across the codebase.
+- **Shadcn** use Shadcn for all UI components. Create custom components only when needed. Otherwise create always from Shadcn. Use `app/globals.css` for unified and standarised css across the codebase.
 
 ## Branching
 
@@ -53,7 +53,7 @@ Write the test first where you are testing logic or a fix. Static presentation d
 ### Tooling
 
 - **Jest** is the test runner — no Vitest, no bespoke harnesses. Run it with `npm test` (CI: `npm test -- --ci`).
-- Component and browser-side code runs on `jest-environment-jsdom`; route handlers, server actions, and the Zulex/Stripe clients run on `node`.
+- The file extension picks the environment: `*.test.tsx` runs on `jest-environment-jsdom`, `*.test.ts` on `node`. So components and browser-side code get `.tsx` tests; route handlers, server actions, the Zulex/Stripe clients and pure functions get `.ts`.
 - Use established libraries rather than hand-rolling. Reach for the standard tool for the job:
   - **@testing-library/react** + **@testing-library/user-event** — React components, driven the way a user drives them (roles and labels, never class names or test IDs by default).
   - **@testing-library/jest-dom** — DOM matchers.
@@ -65,8 +65,8 @@ Write the test first where you are testing logic or a fix. Static presentation d
 
 ### Naming and location
 
-- One test file per resource, named after the resource it covers: **`resource.test.ts`**, or `resource.test.tsx` when it renders React. `resource-name.test.js` is tolerated only where there is no TypeScript source — prefer `.ts`/`.tsx` in every new file.
-- Unit tests sit **next to the file under test**: `app/lib/eligibility.ts` → `app/lib/eligibility.test.ts`.
+- One test file per resource, named after the resource it covers: **`resource.test.ts`**, or `resource.test.tsx` when it renders React. Jest matches nothing else, so a `.test.js` file never runs.
+- Unit tests sit **next to the file under test**: `src/core/domain/eligibility.ts` → `src/core/domain/eligibility.test.ts`.
 - Integration tests live in **`tests/integration/`** and are named for the flow, not the file: `deregistration-checkout.test.ts`, `status-polling.test.ts`.
 - Shared fixtures and MSW handlers go in `tests/fixtures/` and `tests/msw/`; never duplicate a Zulex payload inline across files.
 
@@ -85,7 +85,7 @@ Test it when it is one of these:
 ### What not to test
 
 - **Static copy and markup.** That a heading contains the words you typed, that a card lists four services, that a paragraph exists.
-- **Design tokens and class names.** Colour, spacing, radius, breakpoints. jsdom has no layout, so these assert the source, not the result. Check the design in a browser instead.
+- **Design tokens and class names.** Colour, spacing, radius, breakpoints. jsdom has no layout, so these assert the source, not the result. Check the design in a browser instead. The exception is class *merging* — `cn` deciding which of two conflicting classes survives is logic, and its output is tested.
 - **Presentational wrappers.** Layout components, section frames, decorative elements.
 - **Content-model character limits.** Real constraints, but enforce them in review — as tests they fail on every copy edit without catching a defect.
 - **Third-party primitives.** Base UI and shadcn are already tested. Test the way this app configures them, not that they work.

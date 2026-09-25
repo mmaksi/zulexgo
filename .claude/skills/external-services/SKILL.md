@@ -83,15 +83,18 @@ Adapters are selected in exactly one place, `src/config/container.ts`, based on 
 
 ```ts
 // src/config/container.ts
-export function createContainer(env: AppEnv): Container {
+export function createContainer(source: EnvSource = process.env): Container {
+  const env = parseEnv(source)
   return {
-    payments: env.PAYMENT_DRIVER === 'stripe'
+    env,
+    payments: env.PAYMENT_DRIVER === "stripe"
       ? new StripePaymentProvider(env.STRIPE_SECRET_KEY)
       : new FakePaymentProvider(),
     registration: /* ... */,
     mailer: /* ... */,
-    clock: /* ... */,
-  };
+    clock: new SystemClock(),
+    tokens: new CryptoTokenGenerator(),
+  }
 }
 ```
 

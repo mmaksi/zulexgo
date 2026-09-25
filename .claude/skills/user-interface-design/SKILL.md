@@ -201,7 +201,7 @@ Warning text is always `--color-grau-dark` on `--color-warning-tint`; `--color-w
 
 | Family | Weights in use | Role |
 |---|---|---|
-| **Kanit** [S] | 300 Light, 600 SemiBold Italic (wordmark only), 800 ExtraBold (H1 only) | Everything. |
+| **Kanit** [S] | 300 Light, 400 Regular (text below 16px, §3.2), 600 SemiBold Italic (wordmark only), 800 ExtraBold (H1 only) | Everything. |
 | **Euro Plate Regular** [S] | Regular | **Licence plates only.** Uppercase-only face, includes the D/EU oval glyph. Never use it for UI text, headings, or reference numbers. |
 
 ```css
@@ -209,7 +209,7 @@ Warning text is always `--color-grau-dark` on `--color-warning-tint`; `--color-w
 --font-plate: 'Euro Plate', 'FE-Schrift', monospace;
 ```
 
-Kanit is on Google Fonts. Load **only** 300, 600 italic, and 800 — `display=swap`, self-hosted WOFF2 preferred, preload the 300 and 800 subsets. Euro Plate is a licensed font: load it lazily and only on views that render a plate; if it fails, the plate falls back to `--font-sans` 600 uppercase with `letter-spacing: 0.08em` inside the plate frame.
+Kanit is on Google Fonts. Load **only** 300, 400, 600 italic, and 800 — `display=swap`, self-hosted WOFF2 preferred, preload the 300 and 800 subsets. Euro Plate is a licensed font: load it lazily and only on views that render a plate; if it fails, the plate falls back to `--font-sans` 600 uppercase with `letter-spacing: 0.08em` inside the plate frame.
 
 ### 3.2 Scale
 
@@ -245,11 +245,13 @@ Uppercase headings need `hyphens: none` and `overflow-wrap: break-word`; German 
 ### 3.4 Wordmark
 
 - Set in **Kanit SemiBold Italic, tracking −20** (= `letter-spacing: -0.02em`). [S]
-- `ZUL` in `--color-orange`, `EX` in `--color-grau`. The two-tone split is mandatory — including in negative/knockout variants, where one half becomes white. [S]
-- Icon: `Z` and `X` in Kanit with colour-separated terminals. [S]
-- Claim "DIE ZULASSUNGSSOFTWARE DER ZUKUNFT" sits below the wordmark at **half the wordmark's height (H/2)**, tracked out so its width matches the wordmark exactly. Match the width — do not hard-code a tracking value. [S]
+- The ZulexGO lockup is `ZULEX` in `--color-grau` followed by `GO` in `--color-orange`, set as one word. The two-tone split is mandatory in every variant. [D, from the source's two-tone rule]
+- On `--color-grau-dark` surfaces, `ZULEX` becomes white and `GO` becomes `--color-orange-bright` (8.01:1). These are the only two variants. [D]
+- The lockup carries no claim. The source's claim "DIE ZULASSUNGSSOFTWARE DER ZUKUNFT" belongs to the Zulex B2B product and is not used in ZulexGO. [D]
 - Minimum clear space around the lockup: **H/2 on all sides**, where H is the wordmark height. [D, by extension of the source's H/2 measure]
-- Never re-colour, rotate, outline, or set the wordmark in another face.
+- Never re-colour beyond the two variants above, rotate, outline, or set the wordmark in another face.
+
+> **Source, for reference.** The Zulex style guide splits the parent mark as `ZUL` in orange and `EX` in grau, with an icon of `Z` and `X` in colour-separated terminals and the claim below at H/2 [S]. ZulexGO is a separate product mark and does not reproduce that split.
 
 ---
 
@@ -393,10 +395,14 @@ Horizontal rules between content sections use `--border-subtle`. Do not use a fu
 
 ### 5.5 Iconography
 
-- **Font Awesome, solid style.** `fa-solid fa-chevron-right` is the specified list bullet. [S]
+- **lucide**, imported from `lucide-react`. `ChevronRight` is the list bullet. [D]
+- **One icon library, no exceptions.** Shadcn generates components with lucide imports already in them, so a second set would mean two systems in one codebase — one written by the CLI, one by hand. If an icon is missing, draw it as an inline SVG on lucide's 24×24 grid rather than adding a package. [D]
 - Icon colour follows text colour; the bullet chevron is `--color-grau`. [S]
 - Sizes: 16px inline with body, 20px in buttons, 24px standalone, 48px+ as a feature/decorative mark. All on the 4px grid. [D]
+- lucide is a **stroked** set, not a filled one. Keep the default 2px stroke; drop to `strokeWidth={1.5}` at 24px and above, where 2px reads heavy beside Light text. [D]
 - The chevron-right also sets the system's directional language: forward actions point right, back actions point left, disclosure points right and rotates 90° down when open. [D]
+
+> **Deviation from the source — approved 2026-09-22.** The style guide specifies Font Awesome, solid style, with `fa-solid fa-chevron-right` as the list bullet [S]. ZulexGO uses lucide instead, for the single-library reason above. The brand is not affected: the icons are decorative, none of them is a brand mark, and every geometry rule in this section — the right-pointing chevron, the 90° disclosure rotation, the size scale, colour following text — is unchanged. The one visual consequence is stroke versus fill, which sits comfortably with §5.2 flatness. Do not "restore" Font Awesome as a drift fix; this is a decision, not an oversight.
 
 ### 5.6 Photography
 
@@ -451,7 +457,7 @@ Never use `ease-in-out` on a hover, never use a bounce/elastic curve anywhere, a
 
 Focus rings are **never** removed and **never** orange (2.31:1 — fails). `:focus-visible` only, so mouse users do not see rings; keyboard users always do.
 
-Hover effects are suppressed under `@media (hover: hover)`. On touch, the active state is the feedback.
+Hover effects apply only under `@media (hover: hover)` — Tailwind v4 `hover:` already does this — so touch devices never show a stuck hover. On touch, the active state is the feedback.
 
 ### 6.4 Component behaviour
 

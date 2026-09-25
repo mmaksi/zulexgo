@@ -125,6 +125,14 @@ describe("zulex base url guardrails", () => {
     )
   })
 
+  it("rejects any host but integration outside production; Zulex has only the two", () => {
+    for (const stage of [dev, staging]) {
+      expect(() =>
+        parseEnv({ ...stage, REGISTRATION_DRIVER: "zulex", ZULEX_BASE_URL: "https://zulex.example.test/v1", ZULEX_API_KEY: "k" })
+      ).toThrow(/ZULEX_BASE_URL/)
+    }
+  })
+
   it("accepts the integration host on staging", () => {
     expect(
       parseEnv({ ...staging, REGISTRATION_DRIVER: "zulex", ZULEX_BASE_URL: ZULEX_BASE_URLS.integration, ZULEX_API_KEY: "k" })
@@ -150,6 +158,12 @@ describe("production may not run on a fake", () => {
 })
 
 describe("mail", () => {
+  it("never sends real mail from dev, where every address is seeded", () => {
+    expect(() =>
+      parseEnv({ ...dev, MAIL_DRIVER: "resend", RESEND_API_KEY: "re_x", MAIL_ALLOWLIST: "a@example.test" })
+    ).toThrow(/MAIL_DRIVER/)
+  })
+
   it("requires an allowlist on staging so a seeded address is never mailed", () => {
     expect(() => parseEnv({ ...staging, MAIL_DRIVER: "resend", RESEND_API_KEY: "re_x" })).toThrow(
       /MAIL_ALLOWLIST/

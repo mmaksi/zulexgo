@@ -1,4 +1,4 @@
-import { cn } from "cn"
+import { cn } from "@/src/lib/utils"
 
 /**
  * design-standard.md §3.4 — Kanit SemiBold Italic, tracking -0.02em, the

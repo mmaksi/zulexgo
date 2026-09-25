@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { Wedge } from "@/src/ui/wedge"
 import { Wordmark } from "@/src/ui/wordmark"
+import { CurrentYear } from "./current-year"
 
 // content-model.md §1 — the footer carries the statutory links and support contact.
 const LEGAL = [
@@ -54,7 +55,7 @@ export function SiteFooter() {
 
         <div className="page-frame border-t border-white/10 py-6">
           <p className="text-small text-white/60">
-            © {new Date().getFullYear()} ZulexGO. Außerbetriebsetzung über die
+            © <CurrentYear /> ZulexGO. Außerbetriebsetzung über die
             amtliche i-Kfz-Schnittstelle des Kraftfahrt-Bundesamtes.
           </p>
         </div>

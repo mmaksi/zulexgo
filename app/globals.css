@@ -147,9 +147,9 @@
   --duration-slow: 300ms;
 
   /* --- Borders §5.4 -------------------------------------------------------- */
-  --border-subtle: var(--color-bg-blue); /* card edges, table rows */
-  --border-default: var(--color-grau-bright); /* inputs, controls */
-  --border-strong: var(--color-grau); /* focus-within, selected */
+  --border-subtle: 1px solid var(--color-bg-blue); /* card edges, table rows */
+  --border-default: 1px solid var(--color-grau-bright); /* inputs, controls */
+  --border-strong: 2px solid var(--color-grau); /* focus-within, selected */
 
   /* --- The wedge §5.1 ------------------------------------------------------ */
   --wedge-slope: 0.0186; /* 1.07 degrees - do not change */
@@ -172,8 +172,8 @@
   --accent-foreground: var(--color-grau-dark);
   --destructive: var(--color-error);
   --destructive-foreground: var(--color-white);
-  --border: var(--border-subtle);
-  --input: var(--border-default);
+  --border: var(--color-bg-blue); /* colour of --border-subtle */
+  --input: var(--color-grau-bright); /* colour of --border-default */
   /* §2.3 rule 3: focus rings are grau-dark. Orange on white fails 3:1. */
   --ring: var(--color-grau-dark);
   --chart-1: var(--color-orange);
@@ -187,7 +187,7 @@
   --sidebar-primary-foreground: var(--color-grau-dark);
   --sidebar-accent: var(--color-white);
   --sidebar-accent-foreground: var(--color-grau-dark);
-  --sidebar-border: var(--border-subtle);
+  --sidebar-border: var(--color-bg-blue);
   --sidebar-ring: var(--color-grau-dark);
 }
 

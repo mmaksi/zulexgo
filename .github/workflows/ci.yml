@@ -33,7 +33,8 @@ jobs:
 
     # A production build of the staging configuration, with placeholders only.
     # No real secret is needed: every driver is a fake, and the point of the
-    # build step is to prove the client bundle cannot see a server secret.
+    # build step is to prove the client bundle cannot see a server secret:
+    # ZULEX_API_KEY is a canary that must not appear in any client chunk.
     env:
       APP_ENV: staging
       APP_BASE_URL: https://ci.example.test
@@ -43,6 +44,7 @@ jobs:
       MAIL_DRIVER: console
       REPOSITORY_DRIVER: fake
       STORAGE_DRIVER: fake
+      ZULEX_API_KEY: ci-canary-zulex-api-key-must-not-ship
 
     steps:
       - uses: actions/checkout@v4
@@ -61,3 +63,10 @@ jobs:
       - run: npm test -- --ci
 
       - run: npm run build
+
+      - name: Client chunks carry no server secret
+        run: |
+          if grep -rqF "$ZULEX_API_KEY" .next/static; then
+            echo "::error::The ZULEX_API_KEY canary is in the client bundle."
+            exit 1
+          fi

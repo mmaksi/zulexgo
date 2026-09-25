@@ -16,7 +16,7 @@ Nothing here belongs in code, and no value from here belongs in git.
 | Where | your laptop | Vercel project `zulexgo-staging` | Vercel project `zulexgo` |
 | Git branch | — | `staging` | `main` |
 | `APP_ENV` | `dev` | `staging` | `production` |
-| Deploys | — | automatically, on every merge to `staging` | automatically, on every merge to `main` — which only `staging` may merge into, after review |
+| Deploys | — | automatically, on every merge to `staging` | automatically, on every merge to `main` — which only `staging` may merge into |
 | Zulex | fake | integration host, then real key | production host |
 | Stripe | fake | test mode | live mode |
 | Mail | console | real provider, allowlisted recipients | real provider |
@@ -64,7 +64,7 @@ give.
 Same import, named **`zulexgo`**, with one difference: set **Production Branch**
 to **`main`**.
 
-Nothing reaches `main` except a reviewed pull request from `staging` that passed
+Nothing reaches `main` except a pull request from `staging` that passed
 CI — that is what branch protection enforces, so the deploy needs no gate of its
 own. See `CONTRIBUTING.md` for the flow.
 
@@ -98,17 +98,15 @@ developers; this is the settings half:
 | | `staging` | `main` |
 |---|---|---|
 | Pull request required | yes | yes |
-| Approving reviews | 0 | 1 |
+| Approving reviews | 0 | 0 |
 | Required checks | `lint, typecheck, test, build` | `lint, typecheck, test, build`, `main accepts staging only` |
 | Force push / delete | blocked | blocked |
 | Applies to admins | yes | yes |
 
-**Required approvals on `main` are 0, not 1.** The flow is meant to end in a
-manager's review, but a pull request cannot be approved by its own author, so
-with a single GitHub account on the project a required approval would make
-`main` permanently unmergeable. Everything else still binds: no direct push by
-anyone including the owner, CI required, and a feature branch cannot reach
-`main`. Raise it the day a second reviewer is a collaborator:
+**No approving review is required on either branch.** What binds is the rest:
+no direct push by anyone including the owner, CI required, and a feature branch
+cannot reach `main`. If review is ever wanted on `main`, it needs a second
+collaborator — a pull request cannot be approved by its own author — and then:
 
 ```bash
 gh api -X PATCH repos/mmaksi/zulexgo/branches/main/protection/required_pull_request_reviews \

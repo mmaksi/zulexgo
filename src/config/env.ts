@@ -1,7 +1,9 @@
+import "server-only"
 import { z } from "zod"
 
 /**
- * The single place this application reads `process.env`.
+ * The single place this application interprets `process.env`; the container
+ * only hands it over.
  *
  * `next build` sets `NODE_ENV=production` for the staging build too, so the
  * stage is carried by `APP_ENV` and nothing else. Everything here fails at
@@ -142,13 +144,11 @@ function checkRegistration(env: Parsed, ctx: Ctx, isProduction: boolean) {
 
   if (!env.ZULEX_BASE_URL) return
 
-  const isProductionHost = env.ZULEX_BASE_URL === ZULEX_BASE_URLS.production
+  // Zulex has exactly two hosts: production for production, integration for everything else.
+  const expected = isProduction ? ZULEX_BASE_URLS.production : ZULEX_BASE_URLS.integration
 
-  if (isProductionHost && !isProduction) {
-    reject(ctx, "ZULEX_BASE_URL", "the Zulex production host is only allowed when APP_ENV is production.")
-  }
-  if (!isProductionHost && isProduction) {
-    reject(ctx, "ZULEX_BASE_URL", `must be the Zulex production host (${ZULEX_BASE_URLS.production}) in production.`)
+  if (env.ZULEX_BASE_URL !== expected) {
+    reject(ctx, "ZULEX_BASE_URL", `must be the Zulex ${isProduction ? "production" : "integration"} host (${expected}) when APP_ENV is ${env.APP_ENV}.`)
   }
 }
 
@@ -159,6 +159,9 @@ function checkMail(env: Parsed, ctx: Ctx, isProduction: boolean) {
 
   const sendsRealMail = env.MAIL_DRIVER !== "console"
 
+  if (env.APP_ENV === "dev" && sendsRealMail) {
+    reject(ctx, "MAIL_DRIVER", "must be console in dev, where every address is seeded and none may be mailed for real.")
+  }
   if (env.APP_ENV === "staging" && sendsRealMail && env.MAIL_ALLOWLIST.length === 0) {
     reject(ctx, "MAIL_ALLOWLIST", "must list every address staging is allowed to mail, so seeded data cannot reach a real person.")
   }

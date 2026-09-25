@@ -139,63 +139,15 @@ File to edit: UserService.ts
 
 ---
 
-## Verification Scripts (MANDATORY)
+## Verification (MANDATORY)
 
-> 🔴 **CRITICAL:** Each agent runs ONLY their own skill's scripts after completing work.
+Before reporting work as done, run what CI runs and read the output:
 
-### Agent → Script Mapping
-
-| Agent | Script | Command |
-|-------|--------|---------|
-| **frontend-specialist** | UX Audit | `python ~/.claude/skills/frontend-design/scripts/ux_audit.py .` |
-| **frontend-specialist** | A11y Check | `python ~/.claude/skills/frontend-design/scripts/accessibility_checker.py .` |
-| **backend-specialist** | API Validator | `python ~/.claude/skills/api-patterns/scripts/api_validator.py .` |
-| **mobile-developer** | Mobile Audit | `python ~/.claude/skills/mobile-design/scripts/mobile_audit.py .` |
-| **database-architect** | Schema Validate | `python ~/.claude/skills/database-design/scripts/schema_validator.py .` |
-| **security-auditor** | Security Scan | `python ~/.claude/skills/vulnerability-scanner/scripts/security_scan.py .` |
-| **seo-specialist** | SEO Check | `python ~/.claude/skills/seo-fundamentals/scripts/seo_checker.py .` |
-| **seo-specialist** | GEO Check | `python ~/.claude/skills/geo-fundamentals/scripts/geo_checker.py .` |
-| **performance-optimizer** | Lighthouse | `python ~/.claude/skills/performance-profiling/scripts/lighthouse_audit.py <url>` |
-| **test-engineer** | Test Runner | `python ~/.claude/skills/testing-patterns/scripts/test_runner.py .` |
-| **test-engineer** | Playwright | `python ~/.claude/skills/webapp-testing/scripts/playwright_runner.py <url>` |
-| **Any agent** | Lint Check | `python ~/.claude/skills/lint-and-validate/scripts/lint_runner.py .` |
-| **Any agent** | Type Coverage | `python ~/.claude/skills/lint-and-validate/scripts/type_coverage.py .` |
-| **Any agent** | i18n Check | `python ~/.claude/skills/i18n-localization/scripts/i18n_checker.py .` |
-
-> ❌ **WRONG:** `test-engineer` running `ux_audit.py`
-> ✅ **CORRECT:** `frontend-specialist` running `ux_audit.py`
-
----
-
-### 🔴 Script Output Handling (READ → SUMMARIZE → ASK)
-
-**When running a validation script, you MUST:**
-
-1. **Run the script** and capture ALL output
-2. **Parse the output** - identify errors, warnings, and passes
-3. **Summarize to user** in this format:
-
-```markdown
-## Script Results: [script_name.py]
-
-### ❌ Errors Found (X items)
-- [File:Line] Error description 1
-- [File:Line] Error description 2
-
-### ⚠️ Warnings (Y items)
-- [File:Line] Warning description
-
-### ✅ Passed (Z items)
-- Check 1 passed
-- Check 2 passed
-
-**Should I fix the X errors?**
+```bash
+npm run lint
+npm run typecheck
+npm test
+npm run build
 ```
 
-4. **Wait for user confirmation** before fixing
-5. **After fixing** → Re-run script to confirm
-
-> 🔴 **VIOLATION:** Running script and ignoring output = FAILED task.
-> 🔴 **VIOLATION:** Auto-fixing without asking = Not allowed.
-> 🔴 **Rule:** Always READ output → SUMMARIZE → ASK → then fix.
-
+If any step fails, fix it or report the failure verbatim — never claim done over a red check.
