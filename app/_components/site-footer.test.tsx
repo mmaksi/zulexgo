@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react"
 import { SiteFooter } from "./site-footer"
 
 /**
- * § 5 TMG and the GDPR require Impressum, AGB and Datenschutz to be reachable
+ * § 5 DDG and the GDPR require Impressum, AGB and Datenschutz to be reachable
  * from every page. This is a compliance rule rather than copy, and with
  * typedRoutes off a link to a route that does not exist fails silently.
  */

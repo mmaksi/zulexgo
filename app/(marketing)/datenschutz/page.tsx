@@ -1,5 +1,5 @@
 import type { Metadata } from "next"
-import { LegalLink, LegalPage, LegalSection } from "../_components/legal-page"
+import { LegalLink, LegalPage, LegalSection } from "@/app/_components/legal-page"
 
 export const metadata: Metadata = {
   title: "Datenschutzerklärung — ZulexGO",

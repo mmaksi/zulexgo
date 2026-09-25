@@ -3,10 +3,11 @@ import { Kanit } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/src/lib/utils";
 
-// design-standard.md §3.1 — load only 300, 600 italic (wordmark) and 800 (H1).
+// design-standard.md §3.1 — load only 300, 400 (text below 16px), 600 italic
+// (wordmark) and 800 (H1).
 const kanit = Kanit({
   subsets: ["latin"],
-  weight: ["300", "800"],
+  weight: ["300", "400", "800"],
   display: "swap",
   variable: "--font-kanit",
 });

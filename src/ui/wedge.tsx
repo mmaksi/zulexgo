@@ -1,4 +1,4 @@
-import { cn } from "cn"
+import { cn } from "@/src/lib/utils"
 
 /**
  * design-standard.md §5.1 — the brand's only graphic device. Full bleed, thick

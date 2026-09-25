@@ -11,11 +11,13 @@ one-time link sent by email.
 ```bash
 npm ci
 git config alias.start '!./scripts/git-start'
+cp .env.example .env.local
 npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000). No secrets are needed — `dev`
-runs on in-memory fakes for every external service.
+runs on in-memory fakes for every external service — but `APP_ENV` must be set:
+the server validates its environment at start and refuses to run without it.
 
 The middle line registers `git start`, which is how you begin a piece of work:
 
@@ -36,7 +38,7 @@ itself; the script it calls, `scripts/git-start`, is checked in.
 | `npm run build` | Production build |
 | `npm run start` | Serve the production build |
 | `npm run lint` | ESLint |
-| `npm run typecheck` | `tsc --noEmit` |
+| `npm run typecheck` | `next typegen && tsc --noEmit` |
 | `npm test` | Jest (jsdom + node projects) |
 | `npm run test:watch` | Jest in watch mode |
 | `git start <branch>` | Branch off the current `origin/staging` (see Getting started) |

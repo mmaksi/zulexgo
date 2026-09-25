@@ -1,3 +1,4 @@
+import "server-only"
 import { SystemClock } from "@/src/adapters/clock/system/system-clock"
 import { CryptoTokenGenerator } from "@/src/adapters/tokens/crypto/crypto-token-generator"
 import type { Clock } from "@/src/core/ports/clock"

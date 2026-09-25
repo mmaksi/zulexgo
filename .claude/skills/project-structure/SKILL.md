@@ -19,7 +19,9 @@ app/                    Next.js App Router. Routing, layouts, pages, route handl
   (funnel)/             Route group: the de-registration funnel.
   status/[token]/       Account-free status dashboard.
   api/                  Route handlers — webhooks and client-callable endpoints.
-  _components/          Route-local, non-routable UI (underscore = never a route).
+  _components/          App-level UI shared across route groups (header, footer, landing sections).
+                        Underscore = never a route. A route group may keep its own `_components/`
+                        for UI only it uses.
   globals.css           Tailwind v4 entry + @theme tokens.
 
 src/
@@ -31,9 +33,11 @@ src/
   adapters/             Implementations of ports. One folder per capability, then per vendor.
     payment/stripe/     |  payment/fake/
     registration/zulex/ |  registration/fake/
+    repository/postgres/ |  repository/fake/
     mail/ storage/ clock/ tokens/
   config/               Env parsing (zod), the composition root, environment detection.
   ui/                   Design-system components, shared across routes. See `docs/design-standard.md`.
+  hooks/                Shared React hooks (the Shadcn CLI writes here; see components.json).
   lib/                  Genuinely generic helpers with no domain knowledge. Keep small.
 
 db/
@@ -55,11 +59,13 @@ Config files (`package.json`, `next.config.ts`, `tsconfig.json`, `.env.*`) stay 
 
 | Layer | May import | Must never import |
 |---|---|---|
-| `app/` | `src/core/**`, `src/ui/**`, `src/config/**` | vendor SDKs, `src/adapters/**` directly |
+| `app/` | `src/core/**`, `src/ui/**`, `src/config/**`, `src/lib/**` | vendor SDKs, `src/adapters/**` directly |
 | `src/core/` | `src/core/**` only | anything in `app/`, `adapters/`, `ui/`, `next/*`, `react`, any SDK |
-| `src/adapters/` | `src/core/ports/**`, `src/core/domain/**`, its own SDK | other adapters, `app/`, `src/ui/` |
+| `src/adapters/` | `src/core/ports/**`, `src/core/domain/**`, its own SDK, siblings via `./` | other adapters, `app/`, `src/ui/`, `src/config/` |
 | `src/config/` | everything (it is the composition root) | — |
-| `src/ui/` | `src/ui/**`, `react` | `src/core/use-cases/**`, adapters, SDKs |
+| `src/ui/` | `src/ui/**`, `src/lib/**`, `react`, UI libraries (`@base-ui/react`, `class-variance-authority`, `lucide-react`) | `src/core/use-cases/**`, adapters, vendor SDKs, the bare `cn` package |
+
+Cross-folder imports go through `@/`; a relative `../` import is a lint error, because it would slip past these rules. `eslint.config.mjs` enforces every "must never" above.
 
 `src/core/` importing `next` or `react` is the single most common drift in this codebase's shape. It means business logic has been welded to the framework; move it out.
 

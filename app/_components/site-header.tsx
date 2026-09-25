@@ -14,7 +14,7 @@ const NAV: readonly NavItem[] = [
 
 export function SiteHeader() {
   return (
-    <header className="sticky top-0 z-50 border-b border-border bg-white/95 shadow-md backdrop-blur-[2px]">
+    <header className="sticky top-0 z-50 border-b border-border bg-white shadow-elev-2">
       <div className="page-frame flex h-16 items-center justify-between gap-4 sm:h-18 sm:gap-6">
         <Link
           href="/"
@@ -41,15 +41,17 @@ export function SiteHeader() {
 
         <div className="flex items-center gap-2">
           {/* Below 640px the header would overflow at 320px, so the action
-              lives in the nav panel instead. */}
+              lives in the nav panel instead. Secondary, because design-standard
+              §2.2 allows one orange action per view and the page owns it. */}
           <Link
             href="/#leistungen"
             className={buttonLink({
+              variant: "outline",
               size: "sm",
               className: "hidden sm:inline-flex",
             })}
           >
-            Abmeldung starten
+            Jetzt abmelden
           </Link>
           <MobileNav items={NAV} />
         </div>

@@ -10,7 +10,7 @@ import { join } from "node:path"
 const ROOTS = ["app", "src"]
 const SOURCE = /\.(ts|tsx)$/
 
-export const readsNodeEnv = (source: string) => /process\.env\.NODE_ENV/.test(source)
+const readsNodeEnv = (source: string) => /process\.env\.NODE_ENV/.test(source)
 
 async function sourceFiles(dir: string): Promise<string[]> {
   const entries = await readdir(dir, { withFileTypes: true }).catch(() => [])

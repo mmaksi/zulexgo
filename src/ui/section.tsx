@@ -1,5 +1,5 @@
 import type { ReactNode } from "react"
-import { cn } from "cn"
+import { cn } from "@/src/lib/utils"
 
 /**
  * design-standard.md §4.2/§4.3 — the 1200px page frame plus the section

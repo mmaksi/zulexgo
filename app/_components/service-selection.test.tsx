@@ -12,7 +12,7 @@ describe("ServiceSelection", () => {
 
     const actions = screen.getAllByRole("link")
     expect(actions).toHaveLength(1)
-    expect(actions[0]).toHaveAccessibleName(/abmeldung starten/i)
+    expect(actions[0]).toHaveAccessibleName(/jetzt abmelden/i)
   })
 
   it("marks every other service as unavailable, not merely unlinked", () => {
