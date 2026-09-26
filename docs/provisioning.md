@@ -14,11 +14,12 @@ Nothing here belongs in code; no value from here belongs in git.
 | Git branch | — | `staging` | `main` |
 | `APP_ENV` | `dev` | `staging` | `production` |
 | Deploys | — | automatically, on every merge to `staging` | automatically, on every merge to `main` — which only `staging` may merge into |
-| Zulex | fake | integration host, then real key | production host |
-| Stripe | fake | test mode | live mode |
+| Zulex | integration host (from M4) | integration host (from M4) | production host |
+| Stripe | sandbox `dev` (from M4) | sandbox `staging` (from M4) | live account (business verification pending) |
 | Mail | console | Resend, allowlisted recipients | Resend |
 | Identity (Verimi) | fake | fake until M5, then Verimi | Verimi |
-| Database | local / fake | Supabase project (Frankfurt) | separate Supabase project (Frankfurt) |
+| Database | in-memory, seeded at boot | Supabase project (Frankfurt) | separate Supabase project (Frankfurt) |
+| Document storage | in-memory | Storage in the staging Supabase project (from M5) | Storage in the production Supabase project |
 | Money | none | none | real |
 
 Two Vercel **projects**, not two branches of one: secrets are scoped per project, so production physically cannot read a staging key. The `environments` skill requires this separation; one project cannot give it.
@@ -97,9 +98,9 @@ Each blocks the milestone beside it; none blocks M1.
 
 | Item | Needed by | Note |
 |---|---|---|
-| Stripe account, test keys | M4 | Test keys free and immediate. Live activation (KYC) is separate, in M8. Enable card, SEPA Direct Debit, Apple Pay, Google Pay; SEPA needs extra business verification in Stripe. |
+| Stripe keys | M4 | Two sandboxes exist: `dev` (developers' `.env.local`) and `staging` (staging Vercel project); keys never cross between them. Dev receives webhooks via `stripe listen --forward-to localhost:3000/api/webhooks/stripe`, which prints its own signing secret. Production uses the live account, whose business verification (KYC) is still pending and must finish by M8. Enable card, SEPA Direct Debit, Apple Pay, Google Pay in all three; SEPA needs extra business verification in Stripe. |
 | Verimi contract and credentials | M5 | Only if ZulexGO integrates Verimi itself — launch plan Q1–Q4. |
-| Zulex integration key + confirmed base URL | M4 | Ask the Zulex API team for the integration credential and, separately, a signed status-change webhook — see the poller decision in the launch plan. |
+| Zulex integration key + confirmed base URL | M4 | Used by dev and staging — Zulex has one integration and one production environment. Ask the Zulex API team whether they can issue a separate integration key per stage (otherwise dev and staging share one), and, separately, for a signed status-change webhook — see the poller decision in the launch plan. |
 | Zulex production key | M8 | |
 | Resend account, verified sending domain | M4 | SPF/DKIM on the domain below. |
 | Domain | M4 | Until then staging runs on its `*.vercel.app` URL. |

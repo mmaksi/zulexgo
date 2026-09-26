@@ -1,13 +1,13 @@
 ---
 name: database-migrations
-description: Use when changing the database schema or seeding data - every migration gets its own folder with up/down SQL, and dev data comes from the idempotent seed, never from hand-edited rows
+description: Use when changing the database schema or seeding data - every migration gets its own folder with up/down SQL, and dev data comes from the idempotent seed loaded into the in-memory repository, never from hand-edited rows
 ---
 
 # Database Migrations and Seeding
 
 ## Overview
 
-Schema changes are code: reviewed, versioned, reversible, and applied the same way in every environment. Dev data is generated, never handcrafted.
+Schema changes are code: reviewed, versioned, reversible, and applied the same way in every environment that has a database. Dev data is generated, never handcrafted.
 
 **Core principle:** a merged migration is immutable. You fix a mistake with a new migration, never by editing the old one.
 
@@ -42,31 +42,31 @@ A migration folder with no `down.sql` does not pass review.
 3. **Expand, migrate, contract.** Add the new column, deploy code that writes both, backfill, then drop the old one — so a rollback never lands on a schema the previous release cannot read.
 4. **No data manipulation in a schema migration** beyond a backfill that the schema change requires. Business data fixes are scripts, and they are reviewed separately.
 5. **Destructive statements need an explicit note in `README.md`** and are never combined with anything else.
-6. Migrations run identically in dev, staging, and production — same files, same order, same runner. Staging is the rehearsal; if it did not run there, it does not run in production.
+6. Migrations run identically in CI, staging, and production — same files, same order, same runner. Dev has no database: it runs the in-memory repository. CI's Postgres service container rehearses every migration; staging is the rehearsal against a real Supabase project; if it did not run there, it does not run in production.
 
 ## Seeding
 
 ```
 db/seed/
-  seed.ts          # entry point — idempotent, safe to re-run
+  seed.ts          # entry point — loads the data into the in-memory repository
   data/
     applications.ts
     documents.ts
 ```
 
-Run with `npm run db:seed`. Rules:
+The dev composition root loads the seed into the in-memory repository at boot, so every restart starts from the same data. Rules:
 
-- **Dev only.** `seed.ts` reads `APP_ENV` and exits non-zero unless it is `dev`. Staging and production are never seeded — see the `environments` skill.
-- **Idempotent.** Re-running produces the same database, not duplicates. Truncate-then-insert within a transaction, or upsert on a stable key.
+- **Dev only.** `seed.ts` throws unless `APP_ENV` is `dev`. Staging and production are never seeded — see the `environments` skill.
+- **Idempotent.** Loading twice produces the same data, not duplicates: upsert on a stable key.
 - **Deterministic.** Fixed IDs and a seeded RNG, so a bug found against seed data is reproducible by everyone.
 - **Obviously fake.** Security codes, VINs, plates, emails, and tokens must be recognisable as test data (`AAA111`, `example.test`). Never copy a real value from a production payload or a support ticket into seed data.
-- **Covers the states, not just the happy path.** Seed at least one application in each status the status dashboard renders: the seven customer statuses in `docs/launch-plan.md` (submitted & paid, awaiting identity verification, identity verified, submitted to KBA, completed, failed-correctable, failed-final) plus cancelled. If a developer cannot see every UI state right after `db:seed`, the seed is incomplete.
+- **Covers the states, not just the happy path.** Seed at least one application in each status the status dashboard renders: the seven customer statuses in `docs/launch-plan.md` (submitted & paid, awaiting identity verification, identity verified, submitted to KBA, completed, failed-correctable, failed-final) plus cancelled. If a developer cannot see every UI state right after starting the dev server, the seed is incomplete.
 - Seed data is not test fixtures. Jest fixtures live in `tests/fixtures/`; do not import one from the other.
 
 ## Checklist
 
 1. `db/migrations/<next>_<slug>/` with `up.sql`, `down.sql`, `README.md`.
-2. Apply it locally, then apply `down.sql`, then `up.sql` again — all three must succeed.
+2. Up, down, up must all succeed — CI rehearses this against its Postgres service container; run it locally against any Postgres if you want it sooner.
 3. Update the seed if the schema change adds a state the UI can render.
 4. Update repository adapters and their contract tests (`external-services`).
 5. Rehearse on staging before production.
