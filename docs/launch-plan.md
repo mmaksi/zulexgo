@@ -32,7 +32,7 @@ M0 Repo hygiene & remote
  → M1 Config layer, composition root, boundary lint, CI, staging pipeline
  → M2 Domain core + all ports with fakes (status machine)
  → M3 Supabase Postgres, migration runner, schema, seed
- → M4 WALKING SKELETON — real Zulex (integration env) + Stripe (test) + Mailer on staging,
+ → M4 WALKING SKELETON — real Zulex (integration env) + Stripe (staging sandbox) + Mailer on staging,
       minimal funnel + status link + minimal status page
       (identity verification faked until Q1–Q3 are answered)
  → M5 Full status dashboard, all eight emails, documents, resend-link, Verimi step
@@ -53,7 +53,8 @@ Funnel UI (M4 Track B) starts once M2's fakes exist, parallel to M3.
 | Decision | Default | Why |
 |---|---|---|
 | Hosting | **Vercel**, two projects on two permanent branches: `zulexgo-staging` deploys `staging` (`APP_ENV=staging`), `zulexgo` deploys `main` (`APP_ENV=production`) | Separate projects = hard secret separation, required by `environments` ("secrets must not work across stages"). Public repo so branch protection is free: no direct push to either branch, CI required on both, `main` accepts PRs from `staging` only — the forge, not habit, enforces "nothing reaches production that has not run on staging". See `CONTRIBUTING.md`. Vercel Cron drives the poller; needs a plan tier allowing per-minute crons; commercial use requires Vercel Pro regardless. |
-| Database | **Supabase Postgres**, Frankfurt (eu-central-1), one project per stage | EU residency for GDPR. **Server-side only** via Supavisor pooler (transaction mode) from Vercel functions; migrations use the direct connection. No Supabase Auth (no accounts by design), no client-side Supabase SDK, no RLS-based access — the app is the only client. |
+| Database | **Supabase Postgres**, Frankfurt (eu-central-1), one project per deployed stage (staging, production); dev uses the in-memory repository | EU residency for GDPR. **Server-side only** via Supavisor pooler (transaction mode) from Vercel functions; migrations use the direct connection. No Supabase Auth (no accounts by design), no client-side Supabase SDK, no RLS-based access — the app is the only client. |
+| Adapters per stage | **dev:** in-memory repository and document store (seed loaded at boot), console mail, Stripe sandbox `dev`, Zulex integration API, fake identity verification. **staging:** Supabase staging project (Postgres + Storage), Resend with `MAIL_ALLOWLIST`, Stripe sandbox `staging`, Zulex integration API, fake identity verification until M5. **production:** Supabase production project, Resend, Stripe live account, Zulex production API, Verimi. Stripe and Zulex adapters don't exist before M4, so until then dev runs their fakes. Fakes stay valid driver values outside production (e.g. forcing 5b or a 429 locally) and are what tests use. | Vendor-specific code for payment and registration runs in dev, not first on staging. Stripe gives one environment per stage (two sandboxes + live), so keys never cross stages. Zulex has only an integration and a production environment, so dev and staging share the integration one — **[plan assumption]** with one shared key unless Zulex issues one per stage. Database and storage stay in memory in dev: no local Postgres to run; the SQL is exercised by the CI Postgres service container and then staging. Mail stays on the console so seeded addresses are never mailed. Live Stripe needs business verification, due by M8. |
 | Postgres driver | `pg` (node-postgres) behind the `ApplicationRepository` adapter | No ORM; raw-SQL migrations stay the single source of truth. |
 | Migration runner | **Small in-repo runner** (TDD'd) reading `db/migrations/NNNN_slug/{up,down}.sql`, recording version + checksum in `schema_migrations`, one transaction per migration | Supabase CLI migrations are flat, timestamped, up-only — incompatible with the skill's folder-with-`down.sql` rule. Owning ~100 lines beats amending the skill. Override: adopt Supabase CLI and amend `database-migrations`. |
 | Document cache | **Supabase Storage**, private bucket, server-side only, signed URLs never exposed — app streams the PDF after token validation | Keeps official confirmations out of Postgres rows and behind the dashboard's token check. |
@@ -107,7 +108,7 @@ Funnel UI (M4 Track B) starts once M2's fakes exist, parallel to M3.
   | `STORAGE_DRIVER` | `fake` \| `supabase` | `SUPABASE_STORAGE_URL`, `SUPABASE_STORAGE_BUCKET`, `SUPABASE_STORAGE_SERVICE_KEY` | M5 |
   | `IDENTITY_DRIVER` | `fake` \| `verimi` | Verimi credentials — names pending Q1–Q3 | M5 |
 
-  A variable is required **only when its driver is switched on**: `APP_ENV=dev` boots on fakes with no secrets; staging deploys in M1 before any vendor credential exists. Production rejects every fake value, so it cannot quietly run on one.
+  A variable is required **only when its driver is switched on**: until M4, `APP_ENV=dev` boots on fakes with no secrets; staging deploys in M1 before any vendor credential exists. From M4, dev's `.env.local` carries the Stripe `dev` sandbox keys and the Zulex integration key (see Adapters per stage). Production rejects every fake value, so it cannot quietly run on one.
 - Guardrails as tests: live Stripe key rejected unless production; test key rejected in production; production Zulex URL rejected unless production; production rejected on any fake driver; staging mail confined to `MAIL_ALLOWLIST`, which production forbids; no source file branches on `NODE_ENV`.
 - `src/config/container.ts` — `createContainer(env)`. First two ports the full 7-step way (port → contract → fake → real → wire → lint): `Clock` and `TokenGenerator`, so the pattern exists before Stripe/Zulex.
 - ESLint `no-restricted-imports` block from `external-services` in `eslint.config.mjs`.
@@ -133,7 +134,7 @@ Funnel UI (M4 Track B) starts once M2's fakes exist, parallel to M3.
 - `src/core/ports/`, each with a documented guarantee list and a `*.contract.ts` suite: `ApplicationRepository`, `RegistrationGateway`, `PaymentProvider`, `Mailer`, `DocumentStore`, `IdentityVerification` (+ `Clock`, `TokenGenerator` from M1). `IdentityVerification` gets port and fake here; real adapter waits for Q1–Q3.
 - `src/adapters/*/fake/` — one in-memory fake per port passing its contract. Fake gateway scriptable (next status, next error, 429 + `Retry-After`) to drive J3–J6; fake payment provider models hold expiry via injected `Clock`; fake mailer records sends.
 - `tests/fixtures/` + `tests/msw/` skeletons with obviously fake values (`AAA111`, `example.test`), validated by the adapters' zod schemas.
-- Dev container: `APP_ENV=dev` → all fakes.
+- Dev container: `APP_ENV=dev` → all fakes until M4, when payment and registration flip to the Stripe `dev` sandbox and Zulex integration API; repository, document store and identity verification stay fake in dev, mail stays console.
 
 **Port order:** `ApplicationRepository` (use cases need it) → `RegistrationGateway` and `PaymentProvider` (skeleton) → `Mailer` (status link delivered only by email, so on the skeleton's path) → `IdentityVerification` (skeleton passes through its fake) → `DocumentStore`.
 
@@ -143,18 +144,18 @@ Funnel UI (M4 Track B) starts once M2's fakes exist, parallel to M3.
 
 ### M3 — Supabase Postgres, migration runner, schema, seed
 
-**Goal:** Applications, payments, status history, tokens persist across requests in every stage; a developer sees every UI state right after `npm run db:seed`.
+**Goal:** Applications, payments, status history, tokens persist across requests in staging and production; a developer sees every UI state right after starting the dev server.
 
 **Why here:** On Vercel nothing survives between checkout request, status-page visit, and poller tick — skeleton impossible without a real repository. Schema encodes M2's machine.
 
 **How:**
 - In-repo migration runner with `db:migrate`, `db:migrate:down`, `db:status`; CI runs up → down → up against a Postgres service container (the skill's rehearsal).
 - `db/migrations/0001_create_applications` (encrypted codes, `idempotency_key` unique, `zulex_application_id`, `next_poll_at`, `poll_attempts`, `authority_ikfz_status`, `agb_version`, `consent_at` — consent columns now avoid an expand/contract cycle in M7 — `retry_attempts` for the one silent retry, `identity_verification_state`, status column covering all seven statuses plus `cancelled`), `0002_create_payments` (`stripe_customer_id`, `stripe_payment_intent_id`, captured and refunded amounts, retained fee — the only Stripe data stored), `0003_create_status_history`, `0004_create_status_tokens`. Each folder: `up.sql`, `down.sql`, `README.md`.
-- `src/adapters/repository/postgres/` passing the `ApplicationRepository` contract against real local Postgres.
-- `db/seed/seed.ts`: idempotent, deterministic, refuses unless `APP_ENV=dev` (guardrail test); ≥1 application per `ApplicationStatus` value — coverage test iterates the enum, so the M5 dashboard cannot render a state the seed lacks.
+- `src/adapters/repository/postgres/` passing the `ApplicationRepository` contract against Postgres in CI's service container. Dev never runs it; dev uses the in-memory repository.
+- `db/seed/seed.ts`: loaded into the in-memory repository when the dev container boots, so each restart starts from the same data; idempotent, deterministic, throws unless `APP_ENV=dev` (guardrail test); ≥1 application per `ApplicationStatus` value — coverage test iterates the enum, so the M5 dashboard cannot render a state the seed lacks.
 - Staging Supabase migrated in the deploy step; never seeded (guardrail test). Staging and production flip `REPOSITORY_DRIVER=postgres`, making `DATABASE_URL`, `DIRECT_DATABASE_URL`, `CODES_ENCRYPTION_KEY` required at boot.
 
-**Exit criteria:** CI migration rehearsal green; Postgres adapter passes the same contract file as the fake; enum-coverage seed test green; `APP_ENV=staging npm run db:seed` exits non-zero.
+**Exit criteria:** CI migration rehearsal green; Postgres adapter passes the same contract file as the fake; enum-coverage seed test green; loading the seed with `APP_ENV=staging` throws.
 
 ---
 
@@ -168,7 +169,7 @@ Funnel UI (M4 Track B) starts once M2's fakes exist, parallel to M3.
 - Time-boxed **read-only spike** against the integration env (throwaway, untested, never production code): capture real shapes for create/get/patch, `/registration-authorities`, `/documents/{id}`, an induced 400 and a 429. Scrub → `tests/fixtures/zulex/`; findings → `docs/deregistration-user-journeys.md`; delete spike code.
 - `src/adapters/registration/zulex/`: zod response schemas, `X-Idempotency-Key` always sent, `X-Api-Key` from env, `Retry-After` honoured, unknown tags → in progress, vendor errors → domain errors. Passes contract via msw handlers built from captured fixtures.
 - `src/adapters/payment/stripe/`: Payment Element with card, SEPA Direct Debit, Apple Pay, Google Pay; PaymentIntent at checkout, manual capture per payment method (`payment_method_options[card][capture_method]=manual`, SEPA automatic), metadata `order_id`, `service_type`, `customer_email`, `application_id` (last set once Zulex returns it); authorize / capture / release / full refund / partial refund, all idempotent on our ids; hold expiry → domain error. Contract via stripe-mock/msw.
-- `app/api/webhooks/stripe/route.ts`: signing secret validated every call. `payment_intent.succeeded` → start application; `payment_intent.payment_failed` → show payment error; `charge.refunded` → refund email 6. Which event starts the application under manual capture: Q6.
+- `app/api/webhooks/stripe/route.ts`: signing secret validated every call. In dev, events from the `dev` sandbox arrive via `stripe listen --forward-to localhost:3000/api/webhooks/stripe`, which supplies its own signing secret. `payment_intent.succeeded` → start application; `payment_intent.payment_failed` → show payment error; `charge.refunded` → refund email 6. Which event starts the application under manual capture: Q6.
 - Only Stripe Customer ID and PaymentIntent ID persisted — a test asserts no other Stripe payment field reaches the repository.
 - `src/adapters/mail/resend/`: passes `Mailer` contract via msw; **dev hard-blocks sending; staging enforces `MAIL_ALLOWLIST`** (tests for both). Two templates for now: email 1 (order confirmation, order ID, status link) and a generic status change.
 - Add each SDK to `no-restricted-imports` in the same change as its adapter.
@@ -183,7 +184,7 @@ Funnel UI (M4 Track B) starts once M2's fakes exist, parallel to M3.
 - Client validation shares zod schemas from `src/core/domain`. Plate rendered with existing `plate-text` fallback until Euro Plate is licensed.
 - **Tested (per `CLAUDE.md`):** form validation and contextual front-code field, forward/back navigation with preserved state, CTA disabled until T&Cs and right-of-withdrawal consent ticked, processing-fee notice present before payment is possible (legal requirement, so behaviour, not copy), invalid-token error page, accessible names on every input. **Not tested:** progress indicator, confirmation copy, section frames, stepper visual states.
 
-**Convergence:** staging container wired `REGISTRATION_DRIVER=zulex`, `PAYMENT_DRIVER=stripe`, `MAIL_DRIVER=resend`, identity verification still fake; run the scenario by hand with a Stripe test card and allowlisted inbox.
+**Convergence:** dev container wired `REGISTRATION_DRIVER=zulex`, `PAYMENT_DRIVER=stripe` (Stripe `dev` sandbox) — repository fake, mail console; staging container wired `REGISTRATION_DRIVER=zulex`, `PAYMENT_DRIVER=stripe` (Stripe `staging` sandbox), `MAIL_DRIVER=resend`, identity verification still fake; run the scenario by hand with a Stripe test card and allowlisted inbox, first in dev, then on staging.
 
 **Exit criteria:** on staging, one run yields an `applications` row with a Zulex `applicationId`, a test PaymentIntent with all four metadata keys, a delivered email 1, ≥1 poller-driven status transition, and a status page on the right step; the two integration flows + secrets-absent test pass in CI; boundary lint fails on a deliberate `import Stripe from 'stripe'` inside `src/core/`.
 
@@ -267,7 +268,7 @@ Funnel UI (M4 Track B) starts once M2's fakes exist, parallel to M3.
 **Goal:** Production exists, is observable and recoverable; the team answers "what do we do when X" from a runbook.
 
 **How:**
-- Production Vercel project + production Supabase (Frankfurt), `APP_ENV=production`, live Stripe keys, Zulex production key, `https://app.zulex.de/zulex-api/v1`. Deploy pipeline runs guardrail tests against each stage's real config (production rejects a test key; staging rejects the production URL).
+- Production Vercel project + production Supabase (Frankfurt), `APP_ENV=production`, live Stripe keys (business verification of the live account complete), Zulex production key, `https://app.zulex.de/zulex-api/v1`. Deploy pipeline runs guardrail tests against each stage's real config (production rejects a test key; staging rejects the production URL).
 - Domain, TLS, SPF/DKIM/DMARC for the mail domain.
 - Monitoring: error tracking; uptime on `/` and the status route; poller-lag alert (`next_poll_at` overdue); Zulex-call-volume alert (GETs/hour above expected envelope = backoff broken); stuck-application alert (in `submitted_to_kba` beyond authority SLA); Stripe webhook failure alert; capture/refund anomaly alert; daily reconciliation (Stripe captures vs applications); monthly email volume vs Resend tier (3,000 free emails/month).
 - `docs/runbooks/`: stuck application, failed refund (re-triggered via the app's own tooling — document forbids manual refunds in the Stripe dashboard), hold expiring, Zulex outage, key rotation (config change, no deploy), rollback incl. `down.sql` rehearsal on staging, restore from Supabase PITR.
@@ -314,9 +315,11 @@ Funnel UI (M4 Track B) starts once M2's fakes exist, parallel to M3.
 3. **Design standard §5.5 amended** from Font Awesome to lucide — **done in M0**, not pending. Deviation and reasoning recorded inside §5.5 so it isn't later mistaken for drift.
 4. **`.claude/` and `docs/` un-ignored** in M0 — `CLAUDE.md` calls them authoritative; CI and collaborators must see them.
 5. **Five driver variables, not the three named in M1** — `REPOSITORY_DRIVER` and `STORAGE_DRIVER` added so "required only when switched on" has a switch for `DATABASE_URL` and `SUPABASE_STORAGE_*`. Otherwise: require a database URL on every deployed stage (blocking the M1 staging deploy until M3), or leave it optional forever (production could boot with no database). **Decided in M1.**
-6. **`Clock` and `TokenGenerator` are real in every stage**, incl. dev, while every vendor port follows the skill's "fake in dev" rule. No driver variable: no network, money or secret to fake away, and a frozen clock or predictable status link in a running dev server is a bug, not a convenience. Their fakes exist for tests, as `external-services` rule 4 requires. **Decided in M1**; reasoning recorded in `src/config/container.ts`.
+6. **`Clock` and `TokenGenerator` are real in every stage**, incl. dev, while vendor ports are wired per Deviation 9. No driver variable: no network, money or secret to fake away, and a frozen clock or predictable status link in a running dev server is a bug, not a convenience. Their fakes exist for tests, as `external-services` rule 4 requires. **Decided in M1**; reasoning recorded in `src/config/container.ts`.
 7. **Two permanent branches, `staging` and `main`, instead of promoting a build** — each has a Vercel project; branch protection enforces the path: no direct push to either, CI required on both, `main` accepts PRs from `staging` only. Repo is public because protected branches are paid on private ones. `enforce_admins` on for both; no approving review required (`docs/provisioning.md` §4). **Decided after M1.**
 8. **`test-driven-development` skill vs `CLAUDE.md`:** skill said "Always" for every feature and listed configuration as an approval-needing exception; `CLAUDE.md` scopes test-first to logic, behaviour, boundaries and fixes, excluding presentation and configuration outright. `CLAUDE.md` wins as the project instruction. **Resolved:** the skill's "When to Use" section now mirrors `CLAUDE.md`.
+
+9. **Payment and registration are real in dev** (from M4), against the `external-services` default of a fake in dev: Stripe sandbox `dev` and the Zulex integration API, so vendor-specific code fails on a laptop rather than first on staging. Repository, document store and identity verification stay fake in dev, mail stays console. Per-stage wiring: decisions table, Adapters per stage. **Decided before M2.**
 
 ## Critical files (to create or change)
 
