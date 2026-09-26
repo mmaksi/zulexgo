@@ -1,6 +1,6 @@
 import { Landmark, ListChecks, Lock } from "lucide-react"
 
-// content-model.md §1 — exactly three items, label <=40 chars.
+// site-contract.md §2.1 — exactly three items, label <=40 chars.
 const TRUST = [
   {
     icon: Landmark,

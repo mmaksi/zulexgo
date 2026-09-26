@@ -37,7 +37,9 @@ Selected in the composition root (see `external-services`).
 |---|---|---|---|
 | `RegistrationGateway` (Zulex) | Fake adapter by default; integration base URL when testing the real contract | `https://integration-zulex.de/zulex-api/v1` | `https://app.zulex.de/zulex-api/v1` |
 | `PaymentProvider` | Fake, or Stripe test keys / stripe-mock | Stripe **test** keys | Stripe **live** keys |
-| `Mailer` | Console or local mail catcher — never sends | Real provider, recipients restricted to an allowlist | Real provider |
+| `Mailer` | Console or local mail catcher — never sends | Resend, recipients restricted to an allowlist | Resend |
+| `DocumentStore` | Fake | Supabase Storage (from M5) | Supabase Storage |
+| `IdentityVerification` | Fake | Fake until M5, then Verimi — details pending launch plan Q1–Q3 | Verimi |
 | Database | Local Postgres, seeded | Managed instance, migrated, not seeded | Managed instance, migrated, backed up |
 | `Clock` / `TokenGenerator` | Real — tests inject the fakes directly | Real | Real |
 

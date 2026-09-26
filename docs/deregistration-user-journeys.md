@@ -1,71 +1,79 @@
 # De-registration (Außerbetriebsetzung) — User Journeys & API Findings
 
-Scope: B2C MVP built on `POST /deregistration-applications`, `GET /deregistration-applications/{id}`, `PATCH /deregistration-applications/{id}`, `POST /applications/{id}/retry`, `GET /documents/{id}`.
+Scope: B2C MVP on `POST /deregistration-applications`, `GET /deregistration-applications/{id}`, `PATCH /deregistration-applications/{id}`, `POST /applications/{id}/retry`, `GET /documents/{id}`.
+
+Business logic: [launch-plan.md](launch-plan.md) is source of truth; open points are its Q1–Q18. Statuses: 1 submitted & paid → 2 waiting for identity verification → 3 identity verified → 4 submitted to KBA → 5a completed | 5b failed, correctable | 5c failed, not correctable. Email numbers are the launch plan's.
 
 ## Data the customer must provide
 
 | Field | Constraint | Notes |
 |---|---|---|
 | Licence plate (prefix, letters, numbers) | `[A-ZÄÖÜ]{1,3}` / `[A-Z]{1,2}` / 1–4 digits, no leading 0 | Required |
-| Rear plate security code | 3 alphanumeric | Required (scratched off the rear plate seal) |
-| Front plate security code | 3 alphanumeric | Only for two-plate vehicles (cars). API cannot enforce this — the UI must ask "one plate or two?" |
-| Security code, registration certificate part 1 | 7 alphanumeric | Required (scratched field on the Zulassungsbescheinigung Teil I) |
-| VIN | 1–17 chars `[A-Z0-9]` | Required. API pattern is loose; UI should expect 17 chars for modern vehicles but allow shorter for old ones |
+| Rear plate security code | 3 alphanumeric | Required (scratched off rear plate seal) |
+| Front plate security code | 3 alphanumeric | Two-plate vehicles (cars) only. API can't enforce — UI must ask "one plate or two?" |
+| Security code, registration certificate part 1 | 7 alphanumeric | Required (scratched field on Zulassungsbescheinigung Teil I) |
+| VIN | 1–17 chars `[A-Z0-9]` | Required. Loose API pattern; UI expects 17 chars for modern vehicles, allows shorter for old ones |
 | `reserveLicencePlate` | boolean | Out of scope — always omit/send `false` (founder decision) |
-| Email, payment | — | **Not part of the API.** Ours to collect for Stripe, status emails, and the one-time link |
+| Email, payment | — | **Not part of the API.** Ours to collect for Stripe, status emails, one-time link |
 
-Always send `X-Idempotency-Key` (one per checkout attempt) so a network retry can never create two applications and two charges.
+Always send `X-Idempotency-Key` (one per checkout attempt): a network retry must never create two applications and two charges.
 
 ---
 
 ## Journeys
 
 ### J1 — Happy path (two-plate car)
-Customer selects "De-register vehicle" → eligibility check (German plate, has Teil I document and plate seals intact, authority reachable) → enters plate, VIN, scratches and enters the 3 codes (front, rear, certificate) → sees price, pays (Stripe pre-authorization) → gets reference number + one-time status link + confirmation email. Backend submits to the API (`201`, `applicationId`), captures the payment, and polls status. `IN_PROGRESS` → "Submitted to KBA – waiting". `FINISHED` with a `DEREGISTRATION_CONFIRMATION` document → "Completed"; customer downloads the official confirmation PDF from the status page and receives a final email. Insurance and vehicle tax stop automatically via KBA — say so on the success screen.
+Select "De-register vehicle" → eligibility check (German plate, has Teil I, plate seals intact, authority reachable) → enter plate, VIN, scratch and enter 3 codes (front, rear, certificate) → see price and 19.99 € processing-fee notice, pay in Stripe Payment Element (card held by pre-authorization; SEPA captured at checkout) → signed Stripe webhook starts application: **status 1**, email 1 (order ID, status link) → **status 2**, email 2 (Verimi link); selfie + ID scan → **status 3**, email 3 → backend submits to API (`201`, `applicationId`) → **status 4**, email 4, polling starts. `FINISHED` with `DEREGISTRATION_CONFIRMATION` document → **5a**, email 5a; customer downloads official confirmation PDF from status page. Success screen states insurance and vehicle tax stop automatically via KBA. Open: when held card payment is captured (Q7); which Stripe event starts the application (Q6); Zulex called at status 1 or 3 (Q5).
 
 ### J2 — Happy path (motorcycle / trailer, one plate)
-Same as J1, but the UI asked "how many plates?" first and never showed the front-code field. Omitting `frontLicencePlateSecurityCode` is valid — the API accepts it.
+As J1, but UI asked "how many plates?" first and never showed front-code field. Omitting `frontLicencePlateSecurityCode` is valid for the API.
 
 ### J3 — Input rejected at submission (400)
-Backend receives `400`. **Gap: the spec defines no response body for 4xx errors**, so field-level mapping is not guaranteed. Mitigation: validate everything client-side before payment (patterns above, scratch-code length, checksum-ish VIN checks) so a 400 is rare. If it still happens: do not capture the pre-authorization, show "We couldn't submit your application — nothing was charged," and return the user to an editable form.
+Backend receives `400`. **Gap: spec defines no response body for 4xx errors**, so field-level mapping not guaranteed. Mitigation: validate everything client-side before payment (patterns above, scratch-code length, checksum-ish VIN checks) so 400 is rare. If it happens, error algorithm classifies it correctable (5b) or not (5c). Whether a data error gets the one automatic retry: open (Q18). Until the error catalogue exists, unrecognised error → 5b (launch-plan fallback).
 
-### J4 — Rejected by the authority, correction possible
-Status polling shows the application failed with `errorInfo` (code, description, details) and/or a `REJECTION` document. Customer gets an email + status page shows "Rejected – you can correct your data," displaying the human-readable reason. They re-enter the wrong field(s); backend sends `PATCH` with only the corrected fields, which resubmits to KBA. Journey continues at J1's polling step. No extra charge.
-**Gap: nothing in the API says whether a rejection is correctable.** The UI must infer it from `errorInfo.code` — we need the error-code catalogue from the API provider (founder is clarifying).
+### J4 — Failed, correction possible (5b)
+Polling shows failure with `errorInfo` (code, description, details) and/or `REJECTION` document. After error algorithm runs: email 5b (reason, correction link, cancel option + fee notice); status page shows "Correction required" with human-readable reason. Options:
+- **Correct and resubmit:** re-enter wrong field(s); backend sends `PATCH` with only corrected fields, resubmitting to KBA → status 4. Only a price difference is charged, as separate payment, only if one arises (Q11).
+- **Cancel:** 19.99 € retained, rest refunded → status "cancelled", email 6 once Stripe confirms refund. Later resubmission is a new order at full price.
 
-### J5 — Rejected, correction not possible
-E.g. vehicle already deregistered, plate/VIN mismatch confirmed by KBA, alerts against the vehicle. Status page shows a terminal "Rejected" state with the reason and what to do offline (visit the Zulassungsbehörde). **Business decision needed: full or partial refund** — with pre-authorization we can release the hold if we haven't captured yet; if captured, issue a Stripe refund. State the refund policy in the AGB and on this screen.
+**Gap: API doesn't say whether a rejection is correctable.** UI must infer from `errorInfo.code` — needs error-code catalogue from API provider (founder clarifying). Which de-registration failures are correctable: Q10.
+
+### J5 — Failed, correction not possible (5c)
+E.g. vehicle already deregistered, plate/VIN mismatch confirmed by KBA, alerts against vehicle, identity verification failed. Status page: terminal "Failed" with reason and "Start a new application" CTA. Refund amount minus 19.99 € (email 5c, then email 6); new application is a new order at full price. How "minus 19.99 €" is executed on a held payment — partial capture or capture then refund — open (Q8).
 
 ### J6 — Technical error (ERROR status)
-API status `ERROR` with `errorInfo` = technical fault, not a rejection. Backend calls `POST /applications/{id}/retry` (no data change) automatically with backoff; customer just sees "Processing is taking longer than usual." Only escalate to a visible error + support contact if retries keep failing. Never ask the customer to resubmit — that risks duplicates.
+API timeout, KBA temporarily unavailable, or status `ERROR` with technical `errorInfo`. Backend auto-calls `POST /applications/{id}/retry` (no data change) **once**; customer not notified, no refund started. Retry succeeds → 5a. Otherwise classified: technical API error → correctable (5b); technical error on our side → 100 % refund. Line between the two: open (Q9). Never ask customer to resubmit — risks duplicates.
 
 ### J7 — Payment problems
-Card declined / 3DS abandoned → application is never created; customer stays on payment step with Stripe's message. Pre-authorization succeeds but API submission fails permanently → release the hold, email "not charged." Auth expires (~7 days) before completion (manual-processing authority) → either capture at submission instead, or re-request payment; decide per `ikfzStatus` (see J9).
+Card declined / 3DS abandoned → `payment_intent.payment_failed`, application never started; customer stays on payment step with Stripe's message. SEPA Direct Debit captured at checkout but settles over several business days and can still fail afterwards — whether a SEPA order starts before settling: open (Q12). Card hold lasts 7 days; Verimi wait plus manual-processing authority can exceed that. Launch-plan assumption until Q7 answered: capture when Zulex accepts the application if authority online, otherwise on `FINISHED`; email re-authorisation request if hold nears expiry.
 
 ### J8 — Duplicate submission
-Double-click / refresh on "Pay & submit": idempotency key makes the API call safe; Stripe PaymentIntent is likewise idempotent. Same vehicle submitted twice deliberately (two sessions): the API will accept both; second one will be rejected by KBA. Cheap guard: warn if the same plate+VIN has an open application from us.
+Double-click / refresh on "Pay & submit": idempotency key makes API call safe; Stripe PaymentIntent likewise idempotent. Same vehicle deliberately submitted twice (two sessions): API accepts both; KBA rejects the second. Cheap guard: warn if same plate+VIN has an open application from us.
 
 ### J9 — Authority offline or unavailable
-`GET /registration-authorities?licencePlatePrefix=…` before payment. `online` → normal expectations ("usually minutes to hours"). `unavailable`/`offline` → application goes to **manual processing**: tell the customer up front that it may take days, before they pay. This endpoint is a UX gift the flow should always use in the eligibility step.
+`GET /registration-authorities?licencePlatePrefix=…` before payment. `online` → normal expectations ("usually minutes to hours"). `unavailable`/`offline` → **manual processing**: tell customer before payment it may take days. Always use this endpoint in the eligibility step.
 
 ### J10 — Status tracking, lost link, unknown status
-Customer opens the one-time link → personal status dashboard (no account) with the 7-step journey and documents. Lost link → "Resend my link" by email + reference number (send to the stored address only — never reveal data on-page from an email guess). Unknown status tag from the API (spec explicitly warns of new statuses) → render a generic "In progress" step rather than breaking.
+One-time link → personal status dashboard (no account) with seven customer statuses and documents. Lost link → "Resend my link" by email + order ID (launch-plan assumption; send to stored address only — never reveal data on-page from an email guess). Unknown status tag from API (spec explicitly warns of new statuses) → render generic "In progress" step, don't break.
 
 ### J11 — Special plates (edge case)
-Seasonal (Saisonkennzeichen), electric (E), historic (H) plates: the deregistration request has **no `licencePlateAttributes`** (other flows have it). If KBA needs the E/H suffix, these vehicles may be rejected. Clarify with the API provider; until then, either exclude them in the eligibility check or expect J4/J5 outcomes.
+Seasonal (Saisonkennzeichen), electric (E), historic (H) plates: deregistration request has **no `licencePlateAttributes`** (other flows do). If KBA needs E/H suffix, these vehicles may be rejected. Clarify with API provider; until then exclude them in eligibility check or expect J4/J5 outcomes.
+
+### J12 — Identity verification (Verimi)
+After status 1: email 2 with Verimi link; selfie + ID-card scan (~90 s). Success → status 3, email 3, then KBA submission. Failure → 5c (refund minus 19.99 €). Email 2 names a deadline; its length, any reminder, outcome when it passes: open (Q14). Who integrates Verimi, who sends the link, how ZulexGO learns the result: open (Q1–Q3).
 
 ---
 
 ## API & business problems to flag
 
-1. **Status granularity is the biggest gap.** The founder wants 7 customer-facing steps; the API `Status` enum has 3 (`IN_PROGRESS`, `FINISHED`, `ERROR`) and the GET response has **no timestamps**. Steps 1–3 (submitted & paid, waiting for ident, ident done) don't exist in the API at all — our backend must own its own status machine and only map steps 4–7 from the API. `/lists/application-statuses` hints at richer status tags, but they don't appear in the response schema — ask the provider how to obtain them.
-2. **Identity verification isn't in the API.** If we do ident (legally, deregistration is authorized by the physical security codes, so ident is our own risk/compliance choice), it's an entirely separate integration and a place where users can drop off — needs its own reminder emails.
-3. **No webhooks for applications** (only notices mention one, with no subscription endpoint in the spec). Status emails require our backend to poll, respecting `429`/`Retry-After`.
-4. **Error responses have no schema.** 4xx/5xx bodies are undefined; meaningful messages exist only in `errorInfo` on the GET. All customer-facing error text must be ours.
-5. **Rejection vs. technical error is ambiguous** (is a rejection `ERROR`, or `FINISHED` + `REJECTION` document?) and correctability is not signaled. Blocked on provider clarification.
-6. **Secrets are echoed back.** The GET response returns all security codes in plaintext, and the status link is unauthenticated by design. Never render the codes on the status page, never put them in emails or logs, and make link tokens long, random, and revocable.
-7. **The API key is a B2B merchant credential.** Every call goes through our server; the key must never reach the browser.
-8. **No cancellation endpoint.** Once submitted, the customer cannot withdraw the application. Legally (German consumer law) we must obtain explicit consent to immediate performance and waiver of the 14-day withdrawal right at checkout, or we owe refunds. AGB, Impressum, privacy policy (GDPR: VIN + plate + codes + email are personal data — minimize, encrypt, define retention) and full price display incl. authority fees (PAngV) are mandatory.
-9. **Fraud, realistically:** the founder is right that third-party deregistration is hard (physical documents required). Remaining B2C risks: brute-forcing status-link tokens (rate-limit + long tokens), card fraud/chargebacks (pre-auth reduces exposure), and a seller de-registering a car after handing it over (dispute handling policy, keep an audit trail).
-10. **Documents API returns a bare binary** with no filename/content-type metadata; handle `UNKNOWN` document types and unknown alert tags gracefully.
-11. **Spec sloppiness:** POST `404` "application with the given ID does not exist" on a *create* endpoint, `*/*` content types, zero-length idempotency keys allowed. Harmless but signals the error contract needs the follow-up the founder promised.
+1. **Status granularity is the biggest gap.** Founder wants 7 customer-facing steps; API `Status` enum has 3 (`IN_PROGRESS`, `FINISHED`, `ERROR`), GET response has **no timestamps**. Statuses 1–3 (submitted & paid, waiting for identity verification, verified) don't exist in the API — backend owns its status machine, maps only 4, 5a, 5b, 5c from API. `/lists/application-statuses` hints at richer status tags absent from the response schema — ask provider how to obtain them.
+2. **Identity verification isn't in the API.** Business logic requires Verimi step (statuses 2–3); Zulex API has no Verimi field, endpoint or status. Separate integration, and a drop-off point. Legally, de-registration is authorized by the physical security codes, so whether it needs Verimi at all: open (Q4).
+3. **No webhooks for applications** (only notices mention one; no subscription endpoint in spec). Status emails require backend polling, respecting `429`/`Retry-After`.
+4. **Error responses have no schema.** 4xx/5xx bodies undefined; meaningful messages only in `errorInfo` on the GET. All customer-facing error text must be ours.
+5. **Rejection vs. technical error is ambiguous** (rejection = `ERROR`, or `FINISHED` + `REJECTION` document?); correctability not signaled. Blocked on provider clarification.
+6. **Secrets are echoed back.** GET returns all security codes in plaintext; status link is unauthenticated by design. Never render codes on status page, never put them in emails or logs; link tokens long, random, revocable.
+7. **The API key is a B2B merchant credential.** Every call via our server; key must never reach the browser.
+8. **No cancellation endpoint.** Once submitted, customer can't withdraw; business logic's cancel option exists only after correctable failure (5b), when nothing is pending at KBA. T&Cs and right of withdrawal shown before payment; how the 14-day right interacts with the 19.99 € processing fee, and whether an immediate-performance waiver is still needed: open (Q13). Mandatory: AGB, Impressum, privacy policy (GDPR: VIN + plate + codes + email are personal data — minimize, encrypt, define retention), full price display incl. authority fees (PAngV).
+9. **Fraud, realistically:** founder is right that third-party deregistration is hard (physical documents required). Remaining B2C risks: brute-forcing status-link tokens (rate-limit + long tokens), card fraud/chargebacks (pre-auth reduces exposure), seller de-registering a car after handing it over (dispute handling policy, keep audit trail).
+10. **Documents API returns a bare binary**, no filename/content-type metadata; handle `UNKNOWN` document types and unknown alert tags gracefully.
+11. **Spec sloppiness:** POST `404` "application with the given ID does not exist" on a *create* endpoint, `*/*` content types, zero-length idempotency keys allowed. Harmless, but the error contract needs the follow-up the founder promised.

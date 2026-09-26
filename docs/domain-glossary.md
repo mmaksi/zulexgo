@@ -1,22 +1,27 @@
 # Domain Glossary — German Vehicle Registration (ZulexGO)
 
-- **Außerbetriebsetzung (de-registration)** — Officially taking a vehicle out of operation. Stops vehicle tax and insurance automatically via KBA notification. The MVP service.
-- **KBA (Kraftfahrt-Bundesamt)** — Federal Motor Transport Authority. Central registry that processes online applications and issues the final decision.
-- **Zulassungsbehörde / Zulassungsstelle (registration authority)** — Local district authority responsible for the vehicle. Applications route to it; its **i-Kfz status** (`online` / `unavailable` / `offline`) determines automatic vs. manual processing.
-- **i-Kfz (internetbasierte Fahrzeugzulassung)** — Germany's legal framework for online vehicle registration services. Security codes replace in-person identification.
-- **Zulassungsbescheinigung Teil I (registration certificate part 1)** — Vehicle document kept in the car ("Fahrzeugschein"). Carries a concealed **7-character security code** that must be scratched free to de-register. Scratching it voids the document.
+- **Außerbetriebsetzung (de-registration)** — Officially taking a vehicle out of operation. Vehicle tax and insurance stop automatically via KBA notification. The MVP service.
+- **KBA (Kraftfahrt-Bundesamt)** — Federal Motor Transport Authority. Central registry; processes online applications, issues final decision.
+- **Zulassungsbehörde / Zulassungsstelle (registration authority)** — Local district authority responsible for the vehicle; applications route to it. Its **i-Kfz status** (`online` / `unavailable` / `offline`) determines automatic vs. manual processing.
+- **i-Kfz (internetbasierte Fahrzeugzulassung)** — German legal framework for online vehicle registration. Security codes replace in-person identification.
+- **Zulassungsbescheinigung Teil I (registration certificate part 1)** — Vehicle document kept in the car ("Fahrzeugschein"). Concealed **7-character security code**, scratched free to de-register; scratching voids the document.
 - **Zulassungsbescheinigung Teil II (Fahrzeugbrief)** — Ownership document. Not needed for de-registration (relevant for other services).
-- **Kennzeichen (licence plate)** — Format: district prefix (1–3 letters, may contain Ä/Ö/Ü) + 1–2 letters + 1–4 digits. Cars have two plates; motorcycles and trailers one.
-- **Plakette / Siegel (plate seal)** — Official sticker on each plate hiding a **3-character security code**. Scratching it invalidates the plate; rear code always required, front code only for two-plate vehicles.
-- **Sicherheitscode (security code)** — The scratch-off codes above. They are the legal proof of possession that authorizes online de-registration — treat as secrets.
+- **Kennzeichen (licence plate)** — District prefix (1–3 letters, may contain Ä/Ö/Ü) + 1–2 letters + 1–4 digits. Cars have two plates; motorcycles and trailers one.
+- **Plakette / Siegel (plate seal)** — Official sticker on each plate hiding a **3-character security code**; scratching invalidates the plate. Rear code always required, front code only for two-plate vehicles.
+- **Sicherheitscode (security code)** — The scratch-off codes above. Legal proof of possession authorizing online de-registration — treat as secrets.
 - **VIN / FIN (Fahrzeug-Identifizierungsnummer)** — Vehicle identification number, up to 17 characters, printed in Teil I.
-- **Antrag (application)** — One submission to the authority. Identified by our `applicationId` (UUID) and, once at the KBA, a `kbaApplicationNumber`.
-- **Bescheid (notice)** — Formal decision document issued by the registration authority (confirmation or rejection).
-- **Abmeldebescheinigung (deregistration confirmation)** — The official PDF proving the vehicle is de-registered (`DEREGISTRATION_CONFIRMATION` document). The customer's end deliverable.
-- **Gebühr (fee)** — Statutory authority fee, returned as a `FEE` document; shown to the customer inside the total price.
+- **Antrag (application)** — One submission to the authority. Identified by our `applicationId` (UUID) and, once at KBA, a `kbaApplicationNumber`.
+- **Bescheid (notice)** — Formal decision document from the registration authority (confirmation or rejection).
+- **Abmeldebescheinigung (deregistration confirmation)** — Official PDF proving de-registration (`DEREGISTRATION_CONFIRMATION` document). Customer's end deliverable.
+- **Gebühr (fee)** — Statutory authority fee, returned as a `FEE` document; shown inside the customer's total price.
 - **Kennzeichenreservierung (plate reservation)** — Reserving the plate combination for later reuse. Removed from MVP scope.
-- **Saison- / E- / H-Kennzeichen** — Seasonal, electric, and historic plate variants. Not representable in the de-registration request — open API question.
+- **Saison- / E- / H-Kennzeichen** — Seasonal, electric, historic plate variants. Not representable in the de-registration request — open API question.
 - **Wiederzulassung (reactivation)** — Re-registering a de-registered vehicle. Future service, natural follow-up to de-registration.
-- **Pre-authorization (Vorautorisierung)** — Stripe payment hold (`capture_method: manual`): funds reserved at checkout, captured when the application is confirmed, released on failure. Hold validity ≈ 7 days.
-- **One-time status link** — Unguessable URL giving account-free access to the personal status dashboard; the sole access credential, delivered by email.
-- **Widerrufsrecht (right of withdrawal)** — 14-day consumer cancellation right; waived at checkout via explicit consent because processing starts immediately.
+- **Pre-authorization (Vorautorisierung)** — Stripe payment hold (manual capture): funds reserved at checkout, captured later. Cards only; SEPA Direct Debit can't be held, captured at checkout. Card hold lasts 7 days (Visa, Mastercard), then Stripe releases it. When a hold is captured: open (launch plan Q7).
+- **Verimi** — Identity-verification provider. Customer gets Verimi link by email, verifies with selfie + ID-card scan (~90 s); status 2 → 3, before KBA submission. Who integrates it, and whether de-registration needs it: open (launch plan Q1–Q4).
+- **Bearbeitungsgebühr (processing fee)** — 19.99 €, fixed regardless of service type; covers Zulex API fee and administration. Retained when customer cancels after correctable failure (5b) or application can't be corrected (5c); rest refunded. Must be shown before payment.
+- **Status 5a / 5b / 5c** — The three outcomes: completed; failed, correction possible (customer corrects or cancels); failed, correction not possible (new application, refund minus 19.99 €).
+- **Stornierung (cancellation)** — Customer's option at 5b to stop instead of correcting. 19.99 € retained, rest refunded; later resubmission is a new order at full price.
+- **SEPA-Lastschrift (SEPA Direct Debit)** — Bank-account payment in the Payment Element. Captured at checkout, settles over several business days; customer can dispute with their bank for up to 13 months.
+- **One-time status link** — Unguessable URL giving account-free access to the personal status dashboard; sole access credential, delivered by email.
+- **Widerrufsrecht (right of withdrawal)** — 14-day consumer cancellation right; shown with T&Cs before payment. How it interacts with the 19.99 € processing fee, and whether an immediate-performance waiver is still needed: open (launch plan Q13).

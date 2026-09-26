@@ -1,6 +1,6 @@
 import { Section, SectionHeading } from "@/src/ui/section"
 
-// content-model.md §1 — exactly four steps, title <=30, text <=120 chars.
+// site-contract.md §2.1 — exactly four steps, title <=30, text <=120 chars.
 const STEPS = [
   {
     title: "Voraussetzungen prüfen",

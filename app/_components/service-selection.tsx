@@ -14,7 +14,7 @@ import { Section, SectionHeading } from "@/src/ui/section"
 /**
  * prd.md §3 — the MVP sells de-registration only; every other service is
  * visible but disabled, so the roadmap is legible without being clickable.
- * content-model.md §1 — title <=30, description <=90, CTA label <=20 chars.
+ * site-contract.md §2.1 — title <=30, description <=90, CTA label <=20 chars.
  */
 const SERVICES = [
   {
