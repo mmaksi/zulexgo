@@ -15,9 +15,12 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). No secrets are needed — `dev`
-runs on in-memory fakes for every external service — but `APP_ENV` must be set:
-the server validates its environment at start and refuses to run without it.
+Open [http://localhost:3000](http://localhost:3000). No secrets are needed yet —
+until the Stripe and Zulex adapters land (launch plan M4), `dev` runs on in-memory
+fakes for every external service — but `APP_ENV` must be set: the server validates
+its environment at start and refuses to run without it. From M4, dev calls the
+Stripe `dev` sandbox and the Zulex integration API, so `.env.local` needs their
+keys; database and storage stay in memory and mail stays on the console.
 
 The middle line registers `git start`, which is how you begin a piece of work:
 

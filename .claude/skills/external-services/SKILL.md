@@ -22,7 +22,7 @@ If swapping a vendor requires editing a file outside `src/adapters/` and one lin
 1. **A vendor SDK may be imported in exactly one folder.** `import Stripe from 'stripe'` is legal only inside `src/adapters/payment/stripe/`. Anywhere else it is a bug, enforced by lint (see below).
 2. **Ports speak domain language, not vendor language.** `PaymentProvider.authorize()`, not `createPaymentIntent()`. `RegistrationGateway.submitDeregistration()`, not `postDeregistrationApplication()`. If a port method name would change when you swap vendors, rename it.
 3. **Vendor types never cross the boundary.** No `Stripe.PaymentIntent` in a function signature outside the adapter. The adapter maps vendor shapes to domain types at its edge and throws domain errors, not SDK errors.
-4. **Every port ships with at least two adapters:** the real one and an in-memory fake used by tests and by dev mode. A port with one implementation has not been proven swappable.
+4. **Every port ships with at least two adapters:** the real one and an in-memory fake used by tests, and by dev where the `environments` skill wires it. A port with one implementation has not been proven swappable.
 
 ## Defining a port
 
@@ -55,7 +55,7 @@ src/adapters/payment/
     map.ts                         # vendor shape → domain type, and back
     errors.ts                      # vendor error → domain error
   fake/
-    fake-payment-provider.ts       # in-memory; used in dev + tests
+    fake-payment-provider.ts       # in-memory; used by tests
 ```
 
 The adapter owns: SDK construction, auth/credentials, retries and backoff, vendor error translation, and mapping. It owns nothing about business rules — an adapter must never decide *whether* to capture a payment, only *how*.
