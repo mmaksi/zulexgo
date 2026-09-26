@@ -1,15 +1,15 @@
 import type { Metadata } from "next"
-import { LegalLink, LegalPage, LegalSection } from "../_components/legal-page"
+import { LegalLink, LegalPage, LegalSection } from "@/app/_components/legal-page"
 
 export const metadata: Metadata = {
   title: "Impressum — ZulexGO",
-  description: "Angaben gemäß § 5 TMG für ZulexGO.",
+  description: "Angaben gemäß § 5 DDG für ZulexGO.",
 }
 
 export default function ImpressumPage() {
   return (
     <LegalPage title="Impressum">
-      <LegalSection heading="Angaben gemäß § 5 TMG">
+      <LegalSection heading="Angaben gemäß § 5 DDG">
         <p>ZulexGO · Ein Service der G&amp;M Gastro Event GmbH</p>
         <p>
           Kaiserstraße 75

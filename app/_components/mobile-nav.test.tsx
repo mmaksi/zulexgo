@@ -41,7 +41,7 @@ describe("MobileNav", () => {
     render(<MobileNav items={ITEMS} />)
     await open()
 
-    expect(screen.getByRole("link", { name: /abmeldung starten/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /jetzt abmelden/i })).toHaveAttribute(
       "href",
       "/#leistungen"
     )
@@ -63,5 +63,12 @@ describe("MobileNav", () => {
     await user.keyboard("{Escape}")
 
     expect(screen.queryByRole("link", { name: "Leistungen" })).not.toBeInTheDocument()
+  })
+
+  it("names the close control in German, like the rest of the page", async () => {
+    render(<MobileNav items={ITEMS} />)
+    await open()
+
+    expect(screen.getByRole("button", { name: "Menü schließen" })).toBeInTheDocument()
   })
 })

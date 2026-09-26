@@ -4,23 +4,22 @@
 
 ## Project identity
 
-ZulexGO is the consumer-facing (B2C) web app for German vehicle registration services, built on top of the existing B2B Zulex API. The MVP covers one service only — vehicle de-registration (Außerbetriebsetzung) — taking a private owner from eligibility check through payment to the official KBA confirmation. There are no user accounts: order status is reached through a one-time link sent by email.
+B2C web app for German vehicle registration services, built on the B2B Zulex API. MVP: one service, vehicle de-registration (Außerbetriebsetzung), from eligibility check through payment to the official KBA confirmation. No user accounts: order status is reached by a one-time link sent by email.
 
 ## Stack
 
 - **Next.js 16.3.5** (App Router, `app/`) · **React 19.2** · **TypeScript 5** · **Tailwind CSS v4** · **ESLint 9**
-- Next.js 16 and Tailwind v4 both differ from most training data. Read `node_modules/next/dist/docs/` before writing framework code (see `AGENTS.md`), and configure Tailwind CSS-first via `@theme` in `app/globals.css` — there is no `tailwind.config.js`.
-- **All Zulex API calls are server-side only.** The `X-Api-Key` is a merchant credential and must never reach the browser; the app talks to the API through its own route handlers/server actions.
-- **No vendor is imported outside its own adapter.** External services — Stripe, the Zulex API, email, storage — sit behind ports in `src/core/ports/` and are wired in a single composition root. Stripe is the first payment adapter, not a dependency of the core; others will follow. See the `external-services` skill.
-- Three stages — `dev`, `staging`, `production` — selected by `APP_ENV`, never `NODE_ENV`. Payments use manual capture (pre-authorization). No user accounts or auth in the MVP; status is reached by one-time link.
-- Full product and integration constraints — status modelling, polling, idempotency, GDPR and German consumer-law obligations — are in `docs/prd.md`. Do not re-derive them here.
-- **Shadcn** use Shadcn for all UI components. Create custom components only when needed. Otherwise create always from Shadcn. Use `gloabls.css` for unified and standarised css across the codebase.
+- Next.js 16 and Tailwind v4 differ from most training data. Read `node_modules/next/dist/docs/` before writing framework code (see `AGENTS.md`). Tailwind is configured CSS-first via `@theme` in `app/globals.css`; there is no `tailwind.config.js`.
+- **All Zulex API calls are server-side only.** The `X-Api-Key` is a merchant credential and must never reach the browser; the app calls the API through its own route handlers/server actions.
+- **No vendor is imported outside its own adapter.** Stripe, the Zulex API, email, storage and identity verification (Verimi) sit behind ports in `src/core/ports/`, wired in one composition root. Stripe is the first payment adapter, not a core dependency. See the `external-services` skill.
+- Stages `dev`, `staging`, `production`, selected by `APP_ENV`, never `NODE_ENV`.
+- Cards use manual capture (pre-authorization); SEPA Direct Debit cannot be held and is captured at checkout.
+- Business logic and integration constraints (the seven statuses, error algorithm, polling, idempotency, payment and refunds, GDPR and German consumer law) are in `docs/launch-plan.md`, which wins when documents disagree. Do not re-derive them here.
+- **Shadcn** for all UI components; build a custom component only when Shadcn has none. Shared styling lives in `app/globals.css`.
 
 ## Branching
 
-Two permanent branches, `staging` and `main`, both protected. **You cannot push to
-either** — the rules apply to admins, so there is no override to look for. A push
-to one fails with `GH006: protected branch hook declined`.
+`staging` and `main` are both protected. **You cannot push to either**: the rules apply to admins, so there is no override. A push fails with `GH006: protected branch hook declined`.
 
 Work always starts from `staging`:
 
@@ -28,105 +27,97 @@ Work always starts from `staging`:
 git start <branch-name>
 ```
 
-That is a repo alias for `scripts/git-start`. Where it is not registered, the
-equivalent is `git fetch origin && git switch --no-track -c <name> origin/staging`.
-Never branch from `main`: it holds the last released code and its promotion merge
-commits, both of which leak into `staging` when the branch merges back.
+This is a repo alias for `scripts/git-start`. Where it is not registered: `git fetch origin && git switch --no-track -c <name> origin/staging`. Never branch from `main`: its released code and promotion merge commits leak into `staging` when the branch merges back.
 
-Open the pull request **into `staging`**, never into `main` — a required check,
-`main accepts staging only`, fails any pull request into `main` whose source
-branch is not `staging`. Promoting `staging` to `main` is a separate, deliberate
-pull request.
+Open pull requests **into `staging`**, never `main`. The required check `main accepts staging only` fails any pull request into `main` whose source is not `staging`. Promoting `staging` to `main` is a separate, deliberate pull request.
 
-The full flow and what enforces each rule are in `CONTRIBUTING.md`; the branch
-protection settings and the one gap in them are in `docs/provisioning.md` §4.
+Full flow and enforcement: `CONTRIBUTING.md`. Branch protection settings and their one gap: `docs/provisioning.md` §4.
 
 ## Design
-Follow the design standards for this project using the user-interface-design skill at `.claude/skills/user-interface-design`. The UI design must be compatible on all devices including mobile devices, ipads, laptops and large screens.
+
+Follow the `user-interface-design` skill. Every UI must work on phones, tablets, laptops and large screens.
 
 ## Testing
 
-**Test what can silently break, not everything you write.** A test earns its place by protecting a rule, a behaviour, or a boundary — something a future change could break without anyone noticing. Tests that restate the source line above them cost maintenance and buy nothing; a suite full of them makes the real failures harder to see.
+**Test what can silently break, not everything you write.** A test earns its place by protecting a rule, a behaviour or a boundary that a future change could break unnoticed. Tests that restate the source cost maintenance and hide real failures.
 
-Write the test first where you are testing logic or a fix. Static presentation does not need a test at all.
+Write the test first for logic and fixes. Static presentation needs no test.
 
 ### Tooling
 
-- **Jest** is the test runner — no Vitest, no bespoke harnesses. Run it with `npm test` (CI: `npm test -- --ci`).
-- Component and browser-side code runs on `jest-environment-jsdom`; route handlers, server actions, and the Zulex/Stripe clients run on `node`.
-- Use established libraries rather than hand-rolling. Reach for the standard tool for the job:
-  - **@testing-library/react** + **@testing-library/user-event** — React components, driven the way a user drives them (roles and labels, never class names or test IDs by default).
-  - **@testing-library/jest-dom** — DOM matchers.
-  - **msw** — intercept HTTP at the network boundary for Zulex API and Stripe; do not `jest.mock('fetch')` by hand.
-  - **stripe-mock** (or MSW handlers modelled on real Stripe payloads) — payment flows; never call live Stripe in tests.
-  - **zod** schemas (where they exist) as the single source of truth for fixture shape — fixtures must satisfy the same validation as production input.
-  - Use any other testing library if you see fit.
-- Keep tests deterministic: fake timers for polling/backoff, a frozen clock for anything date-dependent, seeded values for token generation. No real network, no real sleeps.
+- **Jest** only (no Vitest, no bespoke harnesses): `npm test`, CI `npm test -- --ci`.
+- The extension picks the environment: `*.test.tsx` → `jest-environment-jsdom` (components, browser code); `*.test.ts` → `node` (route handlers, server actions, Zulex/Stripe clients, pure functions).
+- Use established libraries, not hand-rolled helpers. Others are fine where they fit.
+  - **@testing-library/react** + **@testing-library/user-event**: drive components as a user does, by role and label, not class names or test IDs by default.
+  - **@testing-library/jest-dom**: DOM matchers.
+  - **msw**: intercept Zulex and Stripe HTTP at the network boundary; never `jest.mock('fetch')` by hand.
+  - **stripe-mock**, or MSW handlers modelled on real Stripe payloads, for payment flows; never call live Stripe.
+  - **zod** schemas, where they exist, define fixture shape: fixtures pass the same validation as production input.
+- Deterministic: fake timers for polling/backoff, a frozen clock for dates, seeded token generation. No real network, no real sleeps.
 
 ### Naming and location
 
-- One test file per resource, named after the resource it covers: **`resource.test.ts`**, or `resource.test.tsx` when it renders React. `resource-name.test.js` is tolerated only where there is no TypeScript source — prefer `.ts`/`.tsx` in every new file.
-- Unit tests sit **next to the file under test**: `app/lib/eligibility.ts` → `app/lib/eligibility.test.ts`.
-- Integration tests live in **`tests/integration/`** and are named for the flow, not the file: `deregistration-checkout.test.ts`, `status-polling.test.ts`.
-- Shared fixtures and MSW handlers go in `tests/fixtures/` and `tests/msw/`; never duplicate a Zulex payload inline across files.
+- One test file per resource: **`resource.test.ts`**, or `.test.tsx` when it renders React. Jest matches nothing else; a `.test.js` never runs.
+- Unit tests sit **next to the file under test**: `src/core/domain/eligibility.ts` → `src/core/domain/eligibility.test.ts`.
+- Integration tests live in **`tests/integration/`**, named for the flow: `deregistration-checkout.test.ts`, `status-polling.test.ts`.
+- Shared fixtures in `tests/fixtures/`, MSW handlers in `tests/msw/`; never duplicate a Zulex payload inline across files.
 
 ### What to test
 
-Test it when it is one of these:
-
-- **Domain and business rules** — eligibility, pricing, status mapping, what is purchasable. Cover the happy path, every branch, the boundaries and the failure mode; these are the units where exhaustiveness pays.
-- **Interactive behaviour** — anything a user drives: forms, validation, the funnel, disclosure, navigation panels.
-- **Security and privacy invariants** — see Non-negotiables below.
-- **Integration boundaries** — the Zulex API and Stripe clients, route handlers, server actions. Stub at the network layer.
-- **Sources of non-determinism** — `Clock` and `TokenGenerator`, and anything else that would otherwise make a test sleep or guess. Both their adapters run the port's contract suite: the real one and the fake. The real ones are one-line wrappers, so it is tempting to skip them — don't. The fake is only trustworthy as a stand-in for production if the same suite passes against both, and every test that asserts on hold expiry, poll backoff or a status link is resting on that. See `external-services` § Non-determinism is a port.
-- **Accessibility contracts that break invisibly** — accessible names, landmark and heading structure, keyboard operability.
-- **Every bug you fix** — a failing test that reproduces it comes first, and it stays as the regression guard.
+- **Domain and business rules**: eligibility, pricing, status mapping, what is purchasable. Cover the happy path, every branch, the boundaries and the failure mode.
+- **Interactive behaviour**: forms, validation, the funnel, disclosure, navigation panels.
+- **Security and privacy invariants**: see Non-negotiables.
+- **Integration boundaries**: Zulex and Stripe clients, route handlers, server actions, stubbed at the network layer.
+- **Sources of non-determinism**: `Clock`, `TokenGenerator`, anything that would make a test sleep or guess. The real and fake adapters both run the port's contract suite. Don't skip the real one-line wrappers: the fake is only a trustworthy stand-in if the same suite passes against both, and every test on hold expiry, poll backoff or status links rests on that. See `external-services` § Non-determinism is a port.
+- **Accessibility contracts that break invisibly**: accessible names, landmark and heading structure, keyboard operability.
+- **Every bug you fix**: a failing reproduction test comes first and stays as the regression guard.
 
 ### What not to test
 
-- **Static copy and markup.** That a heading contains the words you typed, that a card lists four services, that a paragraph exists.
-- **Design tokens and class names.** Colour, spacing, radius, breakpoints. jsdom has no layout, so these assert the source, not the result. Check the design in a browser instead.
-- **Presentational wrappers.** Layout components, section frames, decorative elements.
-- **Content-model character limits.** Real constraints, but enforce them in review — as tests they fail on every copy edit without catching a defect.
-- **Third-party primitives.** Base UI and shadcn are already tested. Test the way this app configures them, not that they work.
+- **Static copy and markup**: heading text, that a card lists four services, that a paragraph exists.
+- **Design tokens and class names**: colour, spacing, radius, breakpoints. jsdom has no layout, so these assert the source; check the design in a browser. Exception: class *merging* (`cn` picking which conflicting class survives) is logic and is tested.
+- **Presentational wrappers**: layout components, section frames, decorative elements.
+- **Content-model character limits**: enforce in review; as tests they break on every copy edit and catch no defect.
+- **Third-party primitives**: Base UI and shadcn are already tested. Test how this app configures them.
 
 ### What integration tests must cover
 
-Core flows end to end across module boundaries, with the Zulex API and Stripe stubbed at the network layer.
+Core flows end to end across module boundaries, with Zulex and Stripe stubbed at the network layer.
 
 ### Non-negotiables
 
-- **Security codes and status tokens must never appear in test output, snapshots, or fixtures committed as real values.** Assert that they are absent from logs and rendered status pages — that assertion is itself a required test.
-- The `X-Api-Key` must never be reachable from a jsdom-environment test; a test that proves client bundles cannot see it is a feature test, not a nicety.
-- Test behaviour, not implementation: assert on what the user or the caller observes. Avoid snapshot tests except for stable, reviewed output (e.g. generated email HTML), and never snapshot whole component trees.
-- A bug fix starts with a failing test that reproduces it. Do not fix, then test.
-- Never weaken or skip a test to make a build pass. If a test is wrong, fix the test deliberately and say so.
-- A test that cannot fail is worse than no test. When you add a guard, prove it catches the thing it guards against before you keep it.
-- Delete a test that no longer protects anything. Coverage is not the target — an untested presentational component is fine, an untested domain rule is not.
+- **Security codes and status tokens never appear in test output, snapshots, or fixtures committed as real values.** Asserting their absence from logs and rendered status pages is itself a required test.
+- The `X-Api-Key` must never be reachable from a jsdom-environment test; a test proving client bundles cannot see it is a feature test.
+- Test behaviour, not implementation: assert what the user or caller observes. Snapshots only for stable, reviewed output (e.g. generated email HTML); never whole component trees.
+- A bug fix starts with a failing test that reproduces it. Never fix, then test.
+- Never weaken or skip a test to make a build pass. If a test is wrong, fix it deliberately and say so.
+- A test that cannot fail is worse than none. Prove a new guard catches what it guards against before keeping it.
+- Delete tests that no longer protect anything. Coverage is not the target: an untested presentational component is fine, an untested domain rule is not.
 
 ## Skills
 
-Project skills live in `.claude/skills/`. Invoke them by name — they carry the full instructions, so this file does not repeat them.
+In `.claude/skills/`; invoke by name. They carry the full instructions.
 
 | Skill | What it is | Use it when |
 |---|---|---|
-| `clean-code` | Pragmatic coding standards — concise and direct, no over-engineering, no unnecessary comments. | Writing or reviewing any code. Marked CRITICAL: treat it as this repo's default style. |
-| `test-driven-development` | The test-first loop — write the test, watch it fail, write the minimum to pass. | Implementing logic or fixing a bug — i.e. the code the Testing section above says to test. Not for static presentation. |
-| `cleaning-up-codebases` | Systematic cleanup that asks "should this exist?" before "how do I improve this?" — removal over refactoring. | Reviewing for dead code, cruft, scope creep, or architectural drift. |
-| `project-structure` | The folder tree, the purpose of each folder, and the dependency rules between layers. | Creating a file, or deciding where code belongs. |
-| `external-services` | Ports and adapters for every third party — domain-language interfaces, one folder per vendor, contract tests. | Integrating, calling, or replacing any outside service. |
-| `database-migrations` | One folder per migration with up/down SQL, plus the idempotent dev-only seed. | Changing the schema, or adding mock data. |
-| `environments` | What `dev`, `staging` and `production` are for, which adapters each wires up, and the guardrails between them. | Reading config, adding an env var, or choosing a base URL. |
-| `user-interface-design` | design standards for ZulexGo visual identity | doing any UI work or creating React components |
+| `clean-code` | Pragmatic standards: concise, no over-engineering, no unnecessary comments. **CRITICAL: the repo's default style.** | Writing or reviewing any code. |
+| `test-driven-development` | Test-first loop: write the test, watch it fail, write the minimum to pass. | Implementing logic or fixing a bug (what Testing says to test). Not static presentation. |
+| `cleaning-up-codebases` | Cleanup that asks "should this exist?" first; removal over refactoring. | Reviewing for dead code, cruft, scope creep, architectural drift. |
+| `project-structure` | Folder tree, folder purposes, dependency rules between layers. | Creating a file or deciding where code belongs. |
+| `external-services` | Ports and adapters for every third party: domain-language interfaces, one folder per vendor, contract tests. | Integrating, calling or replacing an outside service. |
+| `database-migrations` | One folder per migration with up/down SQL, plus the idempotent dev-only seed. | Changing the schema or adding mock data. |
+| `environments` | What each stage is for, which adapters it wires, guardrails between them. | Reading config, adding an env var, choosing a base URL. |
+| `user-interface-design` | ZulexGO visual identity standards. | Any UI work or React component. |
 
 ## Supporting documents
 
-Read these before making decisions in their area; they are authoritative and this file intentionally does not repeat them.
+Authoritative; read before deciding in their area. This file does not repeat them.
 
 | Document | What it is | Read it when |
 |---|---|---|
-| [docs/prd.md](docs/prd.md) | Vision, personas, prioritised feature list, technical constraints, success criteria. | Starting any feature, or deciding whether something belongs in the MVP. |
-| [docs/design-standard.md](docs/design-standard.md) | Full visual specification derived from the Zulex Style Guide — colour, type, spacing, the brand wedge, elevation, motion. | Making any visual decision, writing CSS, or adding a component. |
-| [docs/site-contract.md](docs/site-contract.md) | Page structure, content inventory, and behaviour spec (navigation, scroll, hover, mobile, transitions). | Building or changing a page, or implementing interaction behaviour. |
-| [docs/content-model.md](docs/content-model.md) | Every page section's content fields with length, format, and tone constraints. | Writing copy, defining props/schemas, or wiring content into a section. |
-| [docs/launch-plan.md](docs/launch-plan.md) | Dependency-ordered milestones M0–M9 to production, with exit criteria, default technical decisions, and fallbacks for blocked items. | Deciding what to build next, or checking whether a milestone's exit criteria are met. |
+| [docs/prd.md](docs/prd.md) | Vision, personas, prioritised features, success criteria, with pointers to where each rule lives. | Starting a feature, or deciding if something is MVP. |
+| [docs/design-standard.md](docs/design-standard.md) | Visual spec from the Zulex Style Guide: colour, type, spacing, brand wedge, elevation, motion. | Any visual decision, CSS or new component. |
+| [docs/site-contract.md](docs/site-contract.md) | Page structure, content fields with length/format/tone limits, behaviour spec (navigation, scroll, hover, mobile, transitions). | Building a page, writing copy, defining props/schemas, implementing interaction. |
+| [docs/launch-plan.md](docs/launch-plan.md) | Milestones M0–M9 with exit criteria, default technical decisions, fallbacks for blocked items, open questions Q1–Q18. **Source of truth when documents disagree.** | Choosing what to build next, checking exit criteria, implementing any status, error, payment or refund rule. |
+| [docs/deregistration-user-journeys.md](docs/deregistration-user-journeys.md) | Success, failure and edge-case journeys J1–J12, plus problems found in the Zulex API spec. | Handling a failure path or edge case. |
+| [docs/domain-glossary.md](docs/domain-glossary.md) | German registration and payment terms: KBA, Teil I, Sicherheitscode, Verimi, processing fee, pre-authorization. | Meeting an unknown domain term, or naming something in code. |

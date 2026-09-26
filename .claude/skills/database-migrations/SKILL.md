@@ -60,7 +60,7 @@ Run with `npm run db:seed`. Rules:
 - **Idempotent.** Re-running produces the same database, not duplicates. Truncate-then-insert within a transaction, or upsert on a stable key.
 - **Deterministic.** Fixed IDs and a seeded RNG, so a bug found against seed data is reproducible by everyone.
 - **Obviously fake.** Security codes, VINs, plates, emails, and tokens must be recognisable as test data (`AAA111`, `example.test`). Never copy a real value from a production payload or a support ticket into seed data.
-- **Covers the states, not just the happy path.** Seed at least one application in each status the status dashboard renders: submitted, awaiting KBA, completed, rejected-correctable, rejected-final, technical error. If a developer cannot see every UI state right after `db:seed`, the seed is incomplete.
+- **Covers the states, not just the happy path.** Seed at least one application in each status the status dashboard renders: the seven customer statuses in `docs/launch-plan.md` (submitted & paid, awaiting identity verification, identity verified, submitted to KBA, completed, failed-correctable, failed-final) plus cancelled. If a developer cannot see every UI state right after `db:seed`, the seed is incomplete.
 - Seed data is not test fixtures. Jest fixtures live in `tests/fixtures/`; do not import one from the other.
 
 ## Checklist

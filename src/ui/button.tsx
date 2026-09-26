@@ -1,12 +1,13 @@
 import { Button as ButtonPrimitive } from "@base-ui/react/button"
 import { cva, type VariantProps } from "class-variance-authority"
-import { cn } from "cn"
+import { cn } from "@/src/lib/utils"
 
-// design-standard.md §4.4/§6.3 — radius-md, 48px min target, colour-only state
-// changes (no lift, no scale), focus ring grau-dark and never orange.
+// design-standard.md §4.4/§6.3 — radius-md (radius-sm icon-only), 48px min
+// target, colour-only state changes (no lift, no scale), focus ring grau-dark
+// and never orange. §3.2: labels are Kanit 400, the weight for text under 16px.
 // §5.5 sets 20px for an icon in a button; Shadcn's default is 16px.
 const buttonVariants = cva(
-  "group/button inline-flex shrink-0 items-center justify-center rounded-md border border-transparent bg-clip-padding text-xs font-semibold tracking-widest whitespace-nowrap uppercase transition-colors outline-none select-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-5",
+  "group/button inline-flex shrink-0 items-center justify-center rounded-md border border-transparent bg-clip-padding text-small font-normal tracking-widest whitespace-nowrap uppercase transition-colors outline-none select-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-5",
   {
     variants: {
       variant: {
@@ -20,14 +21,14 @@ const buttonVariants = cva(
         ghost: "text-grau-dark hover:bg-bg-blue active:bg-bg-blue-pressed",
         destructive:
           "bg-destructive text-destructive-foreground hover:bg-destructive/90",
-        link: "text-grau-dark underline underline-offset-4 hover:text-orange-dark",
+        link: "text-grau-dark underline-offset-4 hover:text-orange-dark hover:underline active:text-grau-dark",
       },
       size: {
         default: "h-12 gap-2 px-6",
         sm: "h-10 gap-1.5 px-4",
         lg: "h-12 gap-2 px-8",
-        icon: "size-12",
-        "icon-sm": "size-10",
+        icon: "size-12 rounded-sm",
+        "icon-sm": "size-10 rounded-sm",
       },
     },
     defaultVariants: {

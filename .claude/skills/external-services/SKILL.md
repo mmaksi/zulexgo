@@ -83,15 +83,18 @@ Adapters are selected in exactly one place, `src/config/container.ts`, based on 
 
 ```ts
 // src/config/container.ts
-export function createContainer(env: AppEnv): Container {
+export function createContainer(source: EnvSource = process.env): Container {
+  const env = parseEnv(source)
   return {
-    payments: env.PAYMENT_DRIVER === 'stripe'
+    env,
+    payments: env.PAYMENT_DRIVER === "stripe"
       ? new StripePaymentProvider(env.STRIPE_SECRET_KEY)
       : new FakePaymentProvider(),
     registration: /* ... */,
     mailer: /* ... */,
-    clock: /* ... */,
-  };
+    clock: new SystemClock(),
+    tokens: new CryptoTokenGenerator(),
+  }
 }
 ```
 
@@ -101,11 +104,12 @@ Use cases receive their ports as constructor arguments or function parameters. T
 
 | Port | Real adapter | Notes |
 |---|---|---|
-| `PaymentProvider` | Stripe (manual capture / pre-auth) | Hold expiry is a documented port guarantee |
-| `RegistrationGateway` | Zulex API | Also the KBA status source; see `docs/prd.md` |
-| `Mailer` | TBD (transactional email) | Status-change emails, one-time link delivery |
+| `PaymentProvider` | Stripe (manual capture for cards; SEPA Direct Debit captured at checkout) | Hold expiry is a documented port guarantee; partial refunds for the 19.99 € processing fee |
+| `RegistrationGateway` | Zulex API | Also the KBA status source; see `docs/launch-plan.md` |
+| `Mailer` | Resend | The eight status and refund emails, one-time link delivery |
 | `ApplicationRepository` | Postgres | Owns our status machine, not the vendor's |
-| `DocumentStore` | Zulex `/documents/{id}` + local cache | Returns bytes + a domain document type |
+| `DocumentStore` | Zulex `/documents/{id}` + Supabase Storage cache | Returns bytes + a domain document type |
+| `IdentityVerification` | Verimi — integration route pending (launch plan Q1–Q3) | Status 2 → 3; a failed verification leads to 5c |
 | `Clock` | System clock | Injected so polling/expiry tests are deterministic |
 | `TokenGenerator` | Crypto RNG | Injected so one-time link tests are seeded |
 

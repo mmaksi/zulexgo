@@ -37,11 +37,13 @@ Selected in the composition root (see `external-services`).
 |---|---|---|---|
 | `RegistrationGateway` (Zulex) | Fake adapter by default; integration base URL when testing the real contract | `https://integration-zulex.de/zulex-api/v1` | `https://app.zulex.de/zulex-api/v1` |
 | `PaymentProvider` | Fake, or Stripe test keys / stripe-mock | Stripe **test** keys | Stripe **live** keys |
-| `Mailer` | Console or local mail catcher — never sends | Real provider, recipients restricted to an allowlist | Real provider |
+| `Mailer` | Console or local mail catcher — never sends | Resend, recipients restricted to an allowlist | Resend |
+| `DocumentStore` | Fake | Supabase Storage (from M5) | Supabase Storage |
+| `IdentityVerification` | Fake | Fake until M5, then Verimi — details pending launch plan Q1–Q3 | Verimi |
 | Database | Local Postgres, seeded | Managed instance, migrated, not seeded | Managed instance, migrated, backed up |
-| `Clock` / `TokenGenerator` | Injectable/seeded for reproducibility | Real | Real |
+| `Clock` / `TokenGenerator` | Real — tests inject the fakes directly | Real | Real |
 
-The Zulex integration and production base URLs come from the API spec; a stage must never point at the other one's host.
+The Zulex integration and production base URLs come from the API spec. Zulex has only these two: production uses the production host, every other stage the integration host.
 
 ## Guardrails
 
@@ -49,14 +51,14 @@ These are code, not policy — each one is a startup assertion or a runtime chec
 
 - `db:seed` exits non-zero unless `APP_ENV=dev`.
 - A **live** Stripe key throws at boot unless `APP_ENV=production`; a **test** key throws in production.
-- The production Zulex base URL is rejected unless `APP_ENV=production`.
+- `ZULEX_BASE_URL` must be the production host when `APP_ENV=production` and the integration host otherwise.
 - Destructive scripts (reset, truncate, drop) refuse to run when `APP_ENV` is not `dev`.
-- Outbound email is hard-blocked in dev and allowlisted in staging, so a seeded address can never be mailed for real.
+- Outbound email is hard-blocked in dev (`MAIL_DRIVER` must be `console`) and allowlisted in staging, so a seeded address can never be mailed for real.
 - Debug output, verbose error bodies, and any dump of a request payload are `dev`-only. Security codes and status tokens are never logged in any stage (see CLAUDE.md non-negotiables).
 
 ## Secrets
 
-- `.env.local` for dev only; it is gitignored and never committed. `.env.example` lists every variable with a placeholder and a one-line comment, and is committed.
+- `.env.local` for dev only; it is gitignored and never committed. `.env.example` lists every variable — blank, or set to its dev value — under a comment saying what it is and when it is required, and is committed. Blank means unset.
 - Staging and production secrets live in the deployment platform, never in the repo, and are not shared between stages — a staging key must not work in production.
 - Rotating a secret is a config change, not a code change. If rotating requires a deploy, the config layer is wrong.
 - Any value prefixed `NEXT_PUBLIC_` is in the client bundle. The Zulex `X-Api-Key` and every Stripe secret key must never carry that prefix; only the Stripe publishable key may.

@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { ArrowRight, Menu } from "lucide-react"
+import { ArrowRight, ChevronRight, Menu } from "lucide-react"
 import { Button, buttonLink } from "@/src/ui/button"
 import {
   Sheet,
@@ -41,24 +41,28 @@ export function MobileNav({ items }: { items: readonly NavItem[] }) {
           />
         }
       >
-        <Menu aria-hidden="true" className="size-6" />
+        <Menu aria-hidden="true" className="size-6" strokeWidth={1.5} />
       </SheetTrigger>
 
-      <SheetContent side="right" className="w-[min(85vw,20rem)]">
+      <SheetContent side="right" closeLabel="Menü schließen" className="w-[min(85vw,20rem)]">
         <SheetHeader>
           <SheetTitle>Menü</SheetTitle>
         </SheetHeader>
 
-        <nav aria-label="Hauptnavigation" className="px-8">
+        <nav aria-label="Hauptnavigation" className="px-6 sm:px-8">
           <ul className="flex flex-col">
             {items.map((item) => (
               <li key={item.href} className="border-b border-border">
                 <Link
                   href={item.href}
                   onClick={close}
-                  className="flex min-h-12 items-center text-subtitle text-grau transition-colors hover:text-orange-dark"
+                  className="group/row -mx-2 flex min-h-12 items-center justify-between gap-4 rounded-sm px-2 text-subtitle text-grau transition-colors hover:bg-bg-blue focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
                 >
                   {item.label}
+                  <ChevronRight
+                    aria-hidden="true"
+                    className="size-5 shrink-0 text-grau transition-transform group-hover/row:translate-x-0.5"
+                  />
                 </Link>
               </li>
             ))}
@@ -71,7 +75,7 @@ export function MobileNav({ items }: { items: readonly NavItem[] }) {
             onClick={close}
             className={buttonLink({ className: "w-full" })}
           >
-            Abmeldung starten
+            Jetzt abmelden
             <ArrowRight aria-hidden="true" />
           </Link>
         </SheetFooter>

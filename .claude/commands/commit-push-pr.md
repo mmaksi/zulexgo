@@ -1,5 +1,5 @@
 ---
-description: Commit staged changes, push to the current branch, and open a PR with gh pr create --fill
+description: Commit staged changes, push to the current branch, and open a PR into staging
 argument-hint: "[optional extra context for the commit message]"
 allowed-tools: Bash(git status:*), Bash(git diff:*), Bash(git branch:*), Bash(git commit:*), Bash(git push:*), Bash(gh pr:*)
 ---
@@ -16,7 +16,7 @@ Run these steps in order:
 2. **`git diff --staged`** — read the actual staged changes before writing anything. Base the message on what the change *does*, not on the file names.
 3. **Write a commit message in Conventional Commits format** based on what is staged: `type(scope): summary`, where `type` is one of `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, or `revert`. Subject line in imperative mood, no trailing period, ≤ 72 chars. Add a body only when the *why* isn't obvious from the subject.
 4. **`git commit -m "<message>"`** — use a heredoc if the message has a body. If a pre-commit hook rejects the commit, report the failure and stop; do not use `--no-verify`.
-5. **`git push origin <current-branch>`** — get the branch name from `git branch --show-current` and push to exactly that branch. Never switch or create a branch. If the current branch is the repo's default branch (`main`/`master`), stop and ask the user before pushing.
-6. **`gh pr create --fill`** — this uses the commit message as the PR title and body. If a PR for this branch already exists, `gh` will say so; in that case report the existing PR URL instead of creating a new one.
+5. **`git push origin <current-branch>`** — get the branch name from `git branch --show-current` and push to exactly that branch. Never switch or create a branch. If the current branch is `staging` or `main`, stop: both are protected and the push will fail. Tell the user to start a branch with `git start <name>`.
+6. **`gh pr create --fill --base staging`** — every pull request targets `staging`; one into `main` fails the required `main accepts staging only` check. `--fill` uses the commit message as the PR title and body. If a PR for this branch already exists, `gh` will say so; in that case report the existing PR URL instead of creating a new one.
 
 Report the commit SHA and the PR URL when done.

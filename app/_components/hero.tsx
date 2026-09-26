@@ -1,7 +1,7 @@
 import { ArrowRight } from "lucide-react"
 import { buttonLink } from "@/src/ui/button"
 
-// content-model.md §1 — headline <=60, subline <=140, CTA <=25 chars, verb-first.
+// site-contract.md §2.1 — headline <=60, subline <=140, CTA <=25 chars, verb-first.
 const STATS = [
   { value: "10 Min.", label: "Ausfüllen und bezahlen" },
   { value: "0", label: "Termine bei der Behörde" },
@@ -27,7 +27,7 @@ export function Hero() {
 
         <div className="mt-8 flex flex-col gap-3 sm:mt-10 sm:flex-row sm:items-start">
           <a href="#leistungen" className={buttonLink()}>
-            Abmeldung starten
+            Jetzt abmelden
             <ArrowRight aria-hidden="true" />
           </a>
           <a href="#ablauf" className={buttonLink({ variant: "outline" })}>
@@ -38,16 +38,11 @@ export function Hero() {
         {/* §7 numeric values sit in grau-dark and are never orange */}
         <dl className="mt-12 grid gap-6 border-t border-border pt-8 sm:mt-16 sm:grid-cols-3 sm:gap-8 sm:pt-10">
           {STATS.map((stat) => (
-            <div key={stat.label}>
-              <dt className="sr-only">{stat.label}</dt>
-              <dd>
-                <span className="block text-h3 font-light text-grau-dark">
-                  {stat.value}
-                </span>
-                <span className="mt-2 block text-small text-grau-bright">
-                  {stat.label}
-                </span>
-              </dd>
+            // The term comes first in the DOM so it is announced first; the
+            // value leads visually.
+            <div key={stat.label} className="flex flex-col-reverse">
+              <dt className="mt-2 text-small text-grau-bright">{stat.label}</dt>
+              <dd className="text-h3 font-light text-grau-dark">{stat.value}</dd>
             </div>
           ))}
         </dl>
