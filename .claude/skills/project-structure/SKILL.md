@@ -28,13 +28,13 @@ src/
   core/                 The application. No framework, no SDK, no I/O. Pure TypeScript.
     domain/             Entities and value objects: LicencePlate, SecurityCode, Application, Money.
     ports/              Interfaces the core requires of the outside world. See `external-services`.
-    use-cases/          One file per business operation: submit-deregistration.ts, advance-status.ts.
+    use-cases/          One file per business operation: submit-to-kba.ts, advance-status.ts.
     errors/             Domain error types the whole app throws and maps.
   adapters/             Implementations of ports. One folder per capability, then per vendor.
     payment/stripe/     |  payment/fake/
     registration/zulex/ |  registration/fake/
     repository/postgres/ |  repository/fake/
-    mail/ storage/ clock/ tokens/
+    mail/resend/ storage/supabase/ identity/verimi/ clock/ tokens/
   config/               Env parsing (zod), the composition root, environment detection.
   ui/                   Design-system components, shared across routes. See `docs/design-standard.md`.
   hooks/                Shared React hooks (the Shadcn CLI writes here; see components.json).

@@ -3,7 +3,7 @@ import { Wedge } from "@/src/ui/wedge"
 import { Wordmark } from "@/src/ui/wordmark"
 import { CurrentYear } from "./current-year"
 
-// content-model.md §1 — the footer carries the statutory links and support contact.
+// site-contract.md §2.1 — the footer carries the statutory links and support contact.
 const LEGAL = [
   { label: "Impressum", href: "/impressum" },
   { label: "AGB", href: "/agb" },

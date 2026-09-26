@@ -1,7 +1,7 @@
 import { ArrowRight } from "lucide-react"
 import { buttonLink } from "@/src/ui/button"
 
-// content-model.md §1 — headline <=60, subline <=140, CTA <=25 chars, verb-first.
+// site-contract.md §2.1 — headline <=60, subline <=140, CTA <=25 chars, verb-first.
 const STATS = [
   { value: "10 Min.", label: "Ausfüllen und bezahlen" },
   { value: "0", label: "Termine bei der Behörde" },
