@@ -20,3 +20,8 @@ tsconfig.tsbuildinfo
 
 # OS noise
 .DS_Store
+
+# Confidential source documents: the repo is public. Keep them local; what the
+# code needs from them is restated in docs/launch-plan.md.
+/docs/zulexgo-business-logic-en.pdf
+/docs/api-1.yaml
