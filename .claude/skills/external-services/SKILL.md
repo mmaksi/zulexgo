@@ -102,16 +102,18 @@ Use cases receive their ports as constructor arguments or function parameters. T
 
 ## Ports this project needs
 
-| Port | Real adapter | Notes |
-|---|---|---|
-| `PaymentProvider` | Stripe (manual capture for cards; SEPA Direct Debit captured at checkout) | Hold expiry is a documented port guarantee; partial refunds for the 19.99 € processing fee |
-| `RegistrationGateway` | Zulex API | Also the KBA status source; see `docs/launch-plan.md` |
-| `Mailer` | Resend | The six status and refund emails (eight once Verimi is added), one-time link delivery |
-| `ApplicationRepository` | Postgres | Owns our status machine, not the vendor's |
-| `DocumentStore` | Zulex `/documents/{id}` + Supabase Storage cache | Returns bytes + a domain document type |
-| `IdentityVerification` | Verimi — added later (launch plan Q1–Q4); port and fake exist | Status 2 → 3; a failed verification leads to 5c |
-| `Clock` | System clock | Injected so polling/expiry tests are deterministic |
-| `TokenGenerator` | Crypto RNG | Injected so one-time link tests are seeded |
+| Port | Real adapter | Notes | Vendor source of truth |
+|---|---|---|---|
+| `PaymentProvider` | Stripe (manual capture for cards; SEPA Direct Debit captured at checkout) | Hold expiry is a documented port guarantee; partial refunds for the 19.99 € processing fee | Stripe MCP (docs search, API details, sandbox reads) |
+| `RegistrationGateway` | Zulex API | Also the KBA status source; see `docs/launch-plan.md` | `docs/api-1.yaml`; no MCP |
+| `Mailer` | Resend | The six status and refund emails (eight once Verimi is added), one-time link delivery | The `resend`, `react-email` and `email-best-practices` skills; no MCP connected |
+| `ApplicationRepository` | Postgres | Owns our status machine, not the vendor's | `supabase` and `supabase-postgres-best-practices` skills, Supabase MCP |
+| `DocumentStore` | Zulex `/documents/{id}` + Supabase Storage cache | Returns bytes + a domain document type | as above, per vendor |
+| `IdentityVerification` | Verimi — added later (launch plan Q1–Q4); port and fake exist | Status 2 → 3; a failed verification leads to 5c | none yet |
+| `Clock` | System clock | Injected so polling/expiry tests are deterministic | — |
+| `TokenGenerator` | Crypto RNG | Injected so one-time link tests are seeded | — |
+
+Vendor code is written against the source in the last column, never from memory. Where it names neither an MCP nor a skill, say so before writing the adapter.
 
 ## Non-determinism is a port
 

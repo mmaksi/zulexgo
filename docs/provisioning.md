@@ -120,14 +120,29 @@ Each blocks the milestone beside it; none blocks M1.
 
 | Item | Needed by | Note |
 |---|---|---|
-| Stripe keys | M4 | Two sandboxes exist: `dev` (developers' `.env.local`) and `staging` (staging Vercel project); keys never cross between them. Dev receives webhooks via `stripe listen --forward-to localhost:3000/api/webhooks/stripe`, which prints its own signing secret. Production uses the live account, whose business verification (KYC) is still pending and must finish by M8. Enable card, SEPA Direct Debit, Apple Pay, Google Pay in all three; SEPA needs extra business verification in Stripe. |
+| Stripe keys | M4 | Two test environments: the test mode of account **`G&M Gastro Event GmbH`** (`acct_1UI72AFfyXGmFLpZ`) for dev (developers' `.env.local`) and the sandbox **`G&M Gastro Event GmbH Sandbox`** (`acct_1UI72PFkTWmWhWUM`) for staging (staging Vercel project); keys never cross between them. Dev receives webhooks via `stripe listen --forward-to localhost:3000/api/webhooks/stripe`, which prints its own signing secret. Production uses the live account, whose business verification (KYC) is still pending and must finish by M8. Enable card, SEPA Direct Debit, Apple Pay, Google Pay in all three; SEPA needs extra business verification in Stripe. Claude's Stripe MCP has both: §6. |
 | Verimi contract and credentials | M5 | Only if ZulexGO integrates Verimi itself — launch plan Q1–Q4. |
 | Zulex integration key + confirmed base URL | M4 | Used by dev and staging — Zulex has one integration and one production environment. Ask the Zulex API team whether they can issue a separate integration key per stage (otherwise dev and staging share one), and, separately, for a signed status-change webhook — see the poller decision in the launch plan. |
 | Zulex production key | M8 | |
-| Resend account, verified sending domain | M4 | SPF/DKIM on the domain below. |
+| Resend sending domain verified | M4 | §7. |
 | Domain | M4 | Until then staging runs on its `*.vercel.app` URL. |
 | Vercel plan allowing per-minute Cron | M4 | The status poller's heartbeat. |
 | AGB / Impressum / Datenschutz from a lawyer | M7 | Includes the 19.99 € processing-fee clause, the right of withdrawal (Q13), and Verimi's processing of ID and selfie data. |
+
+## 6. Claude's Stripe MCP — both sandboxes in one connection
+
+The Stripe MCP holds several accounts in one session and every call names the account it acts on, so dev and staging need no second server entry. Both test environments above are connected (2026-09-28), neither in live mode. To add or remove one, ask Claude for the account-management link (the MCP's `manage_stripe_accounts`).
+
+Never add live mode to the MCP.
+
+## 7. Resend  *(needed for M4)*
+
+No Resend MCP is connected; Claude works from the installed Resend skills and you do the dashboard steps. Sending domain **`mail.gm-gastro.com`** created; staging's API key is in `zulexgo-staging`.
+
+1. Sign up at resend.com and accept the data-processing terms (GDPR).
+2. **API Keys → Create API Key**, permission **Sending access**, one key per stage. Staging's goes into the `zulexgo-staging` Vercel project as `RESEND_API_KEY` (Sensitive). Dev never gets one: `MAIL_DRIVER=resend` is refused in dev.
+3. Set staging's `MAIL_ALLOWLIST` to the inboxes that may receive staging mail.
+4. Once the domain exists: **Domains → Add Domain**, a sending subdomain such as `mail.<domain>`, region **`eu-west-1` (Ireland)** — the region cannot be changed later, and EU keeps mail data in the EU. Turn open and click tracking **off** (they rewrite the status link and track the customer). Add the SPF, DKIM and DMARC records it shows, wait for **Verified**, and tell Claude the sender address.
 
 ---
 

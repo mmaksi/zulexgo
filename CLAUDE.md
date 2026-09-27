@@ -114,6 +114,11 @@ In `.claude/skills/`; invoke by name. They carry the full instructions.
 | `user-interface-design` | ZulexGO visual identity standards. | Any UI work or React component. |
 | `supabase` | Supabase's own agent guidance for its products, CLI and MCP server. Installed from `supabase/agent-skills` (`skills-lock.json`). | Any Supabase task: the staging and production projects, connection strings, advisors, logs. |
 | `supabase-postgres-best-practices` | Supabase's Postgres rules: schema, indexes, RLS, connections, locking. Installed the same way. | Writing a migration or SQL, or diagnosing a slow query or connection problem. The project's own `database-migrations` rules still decide folder layout and seeding. |
+| `resend` | Resend's own guidance for its API and SDK: sending, idempotency keys, webhook verification, domains, logs. Installed from `resend/resend-skills` (`skills-lock.json`). | Writing or changing the Resend `Mailer` adapter, or anything that calls Resend. Resend has no connected MCP, so this skill is the source of truth for its API (see `external-services`). |
+| `react-email` | Building and rendering HTML emails with React Email components. Installed the same way. | Writing an email template or its reviewed HTML snapshot. |
+| `email-best-practices` | Deliverability (SPF/DKIM/DMARC), transactional vs marketing, compliance, accessible email. Installed the same way. | Setting up the sending domain, or deciding what an email may contain. |
+| `resend-cli` | The `resend` CLI's non-interactive flag contract. Installed the same way. | Running a `resend` command in a shell or script. Account and domain setup stays manual (`docs/provisioning.md`). |
+| `agent-email-inbox` | Security patterns for acting on inbound email. Installed the same way. | Only if ZulexGO ever receives email; the MVP only sends. |
 | `verify-app` | Verification loop mirroring CI: lint, typecheck, tests, build and canary, dev-server boot, browser check. | Before saying a change is done, committing, or opening a PR. |
 
 ## Supporting documents
