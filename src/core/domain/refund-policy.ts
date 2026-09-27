@@ -51,7 +51,7 @@ export function refundPolicy(outcome: PaymentOutcome, payment: PaymentState): Pa
   }
 }
 
-/** Capturing only the fee on a hold releases the rest (Q8, decided 2026-09-26). */
+/** Capturing only the fee on a hold releases the rest: a provisional answer to Q8, pending the founder. */
 function retainFee({ state, total }: PaymentState): PaymentDecision {
   const action: PaymentAction =
     state === "held"

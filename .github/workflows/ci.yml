@@ -76,7 +76,7 @@ jobs:
       - run: npm run typecheck
 
       # database-migrations skill: up, down, up must all succeed, through the
-      # same command the Vercel build runs.
+      # same commands the Vercel build runs; seeding twice must add nothing.
       - name: Migration rehearsal
         env:
           APP_ENV: dev
@@ -88,6 +88,8 @@ jobs:
           npm run db:migrate
           npm run db:migrate:down -- all
           npm run db:migrate
+          npm run db:seed
+          npm run db:seed
 
       - run: npm test -- --ci
         env:

@@ -1,17 +1,19 @@
 import "server-only"
 import { join } from "node:path"
 import { Migrator, readMigrations, type Migration } from "@/src/adapters/repository/postgres/migrator"
+import { PostgresApplicationRepository } from "@/src/adapters/repository/postgres/postgres-application-repository"
+import { loadSeed, seedFor } from "@/db/seed/seed"
 import { parseEnv, type EnvSource } from "./env"
 
 const MIGRATIONS_DIRECTORY = join(process.cwd(), "db", "migrations")
 
-const USAGE = "Usage: db up | db down [count | all] | db status"
+const USAGE = "Usage: db up | db down [count | all] | db status | db seed"
 
 /**
- * `npm run db:migrate`, `db:migrate:down` and `db:status`. Migrations use the
- * direct (session) connection, never the transaction pooler the app uses.
+ * `npm run db:migrate`, `db:migrate:down`, `db:status` and `db:seed`. They use
+ * the direct (session) connection, never the transaction pooler the app uses.
  * Reverting drops data, so it runs in dev only; staging and production move
- * forward with a new migration instead.
+ * forward with a new migration instead. Seeding refuses production.
  */
 export async function runDatabaseCommand([command, count]: string[], source: EnvSource = process.env): Promise<string> {
   const env = parseEnv(source)
@@ -27,6 +29,14 @@ export async function runDatabaseCommand([command, count]: string[], source: Env
   if (command === "status" && count === undefined) {
     const statuses = await (await migrator()).status()
     return statuses.map(({ name, appliedAt }) => (appliedAt ? `applied ${appliedAt.toISOString()} ${name}` : `pending ${name}`)).join("\n")
+  }
+  if (command === "seed" && count === undefined) {
+    const repository = new PostgresApplicationRepository({
+      connectionString: env.DIRECT_DATABASE_URL!,
+      encryptionKey: env.CODES_ENCRYPTION_KEY!,
+    })
+    const added = await loadSeed(repository, seedFor(env.APP_ENV))
+    return added === 0 ? "Seed already loaded." : `Seeded ${added} applications.`
   }
   if (command === "down") {
     const steps = parseSteps(count)

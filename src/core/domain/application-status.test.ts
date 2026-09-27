@@ -8,7 +8,7 @@ import {
   type ApplicationStatus,
 } from "./application-status"
 
-/** Owned by the test, not imported: business logic §1–§3 without Verimi (decided 2026-09-26). */
+/** Owned by the test, not imported: business logic §1–§3 without Verimi, which is added later. */
 const LEGAL: [ApplicationStatus, ApplicationEvent, ApplicationStatus][] = [
   ["awaiting_payment", "paymentConfirmed", "submitted_and_paid"],
   ["submitted_and_paid", "submittedToKba", "submitted_to_kba"],

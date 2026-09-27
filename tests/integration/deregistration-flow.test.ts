@@ -14,6 +14,7 @@ import { GatewayRejected } from "@/src/core/errors/gateway-rejected"
 import { GatewayUnavailable } from "@/src/core/errors/gateway-unavailable"
 import type { PaymentMethodKind } from "@/src/core/ports/payment-provider"
 import { confirmPayment } from "@/src/core/use-cases/confirm-payment"
+import { confirmRefund } from "@/src/core/use-cases/confirm-refund"
 import { pollDueApplications } from "@/src/core/use-cases/poll-due-applications"
 import { submitCheckout } from "@/src/core/use-cases/submit-checkout"
 
@@ -148,7 +149,12 @@ describe("de-registration flow on fakes", () => {
 
       expect((await stored(reference)).status).toBe("failed_final")
       expect(await payment(reference)).toMatchObject({ status: "released", captured: Money.ofCents(0) })
+      expect(emails()).toEqual(["orderConfirmation", "rejected"])
+
+      await confirmRefund(deps, reference)
+
       expect(emails()).toEqual(["orderConfirmation", "rejected", "refundIssued"])
+      expect(deps.mailer.sent.at(-1)?.template).toMatchObject({ amount: DEREGISTRATION_TOTAL })
     })
 
     it("gives each submission its own retry: a resubmitted application still gets one for a later KBA error", async () => {
@@ -208,6 +214,36 @@ describe("de-registration flow on fakes", () => {
     })
   })
 
+  describe("refund email 6, sent once the payment provider confirms the refund", () => {
+    const finalFailure = { state: "failed", error: { code: 202, details: [] }, documents: [] } as const
+
+    it.each(["card", "sepaDebit"] as const)(
+      "tells a %s customer what came back: everything but the processing fee",
+      async (method) => {
+        const { deps, emails, zulexId, poll, checkoutAndPay } = setup()
+        const reference = await checkoutAndPay(method)
+        deps.registration.setStatus(await zulexId(reference), finalFailure)
+        await poll(1)
+
+        await confirmRefund(deps, reference)
+
+        expect(emails()).toEqual(["orderConfirmation", "submittedToKba", "rejected", "refundIssued"])
+        expect(deps.mailer.sent.at(-1)?.template).toMatchObject({ amount: DEREGISTRATION_TOTAL.subtract(PROCESSING_FEE) })
+      },
+    )
+
+    it("sends nothing for an order that kept all its money", async () => {
+      const { deps, emails, zulexId, poll, checkoutAndPay } = setup()
+      const reference = await checkoutAndPay()
+      deps.registration.setStatus(await zulexId(reference), { state: "finished", documents: [] })
+      await poll(1)
+
+      await confirmRefund(deps, reference)
+
+      expect(emails()).toEqual(["orderConfirmation", "submittedToKba", "completed"])
+    })
+  })
+
   describe("J3–J5, rejections", () => {
     it("makes data refused at submission correctable straight away, leaving the payment untouched", async () => {
       const { deps, emails, stored, payment, checkoutAndPay } = setup()
@@ -228,8 +264,7 @@ describe("de-registration flow on fakes", () => {
 
       expect((await stored(reference)).status).toBe("failed_final")
       expect(await payment(reference)).toMatchObject({ status: "captured", captured: PROCESSING_FEE })
-      expect(emails()).toEqual(["orderConfirmation", "submittedToKba", "rejected", "refundIssued"])
-      expect(deps.mailer.sent.at(-1)?.template).toMatchObject({ amount: DEREGISTRATION_TOTAL.subtract(PROCESSING_FEE) })
+      expect(emails()).toEqual(["orderConfirmation", "submittedToKba", "rejected"])
     })
 
     it("completes a finished application that has a confirmation, even alongside a rejection document", async () => {

@@ -18,11 +18,11 @@ Page structure, section content, site behaviour. Business rules: [launch-plan.md
 2. Eligibility check — stops ineligible users before effort or money.
 3. Application form — exactly the API-required fields, contextually.
 4. Review & payment — confirm data, full price, 19.99 € processing-fee notice, consent, payment.
-5. Confirmation — order ID, status link, announces the identity-verification email.
+5. Confirmation — order ID, status link; announces the identity-verification email once Verimi is added.
 
 **Status dashboard (`/status/{token}`)**
 1. Vehicle summary — which application this is.
-2. Status stepper — seven customer statuses (1 → 2 → 3 → 4 → 5a | 5b | 5c), current position.
+2. Status stepper — customer statuses 1 → 4 → 5a | 5b | 5c, current position; 2 and 3 slot in when Verimi is added.
 3. Outcome block — 5a: success documents; 5b: reason, correct-or-cancel choice, fee notice; 5c/cancelled: reason, refund info, new-application CTA.
 4. Correction form (conditional) — fix and resubmit rejected data in place.
 5. Help block — lost-link recovery, support.
@@ -57,7 +57,7 @@ Per field: label ≤40, helper ≤150, locator image (where to find it), error �
 - **Certificate part 1 security code** — exactly 7 alphanumeric; masked.
 - **Rear plate security code** — exactly 3 alphanumeric.
 - **Front plate security code** — exactly 3 alphanumeric; only if plate count = 2.
-- **Email** — RFC-valid; for status updates, Verimi link, one-time status link. Consent microcopy ≤200 chars.
+- **Email** — RFC-valid; for status updates, one-time status link, and the Verimi link once Verimi is added. Consent microcopy ≤200 chars.
 
 ### 2.4 Review & Payment
 - **Order summary** — read-only echo of all fields (codes masked).
@@ -68,11 +68,11 @@ Per field: label ≤40, helper ≤150, locator image (where to find it), error �
 - **Submit CTA** — "Pay & submit" ≤25 chars; disabled-state hint ≤80 chars.
 
 ### 2.5 Confirmation
-- **Success headline** ≤60 chars; **order ID** `ZG-XXXXXX`; **status link notice** "link sent to {email}" ≤150 chars; **next-steps text** — mentions the following identity-verification email, ≤300 chars.
+- **Success headline** ≤60 chars; **order ID** `ZG-XXXXXX`; **status link notice** "link sent to {email}" ≤150 chars; **next-steps text** — mentions the following identity-verification email once Verimi is added, ≤300 chars.
 
 ### 2.6 Status Dashboard (one-time link)
 - **Vehicle summary** — plate + masked VIN only; never security codes.
-- **Status stepper** — seven customer statuses; per step: title ≤50, status line ≤50, description ≤150 chars, timestamp (our backend), state (done/current/pending/failed). Titles/status lines = the seven statuses and internal labels in `launch-plan.md` § Context; status 1 wording depends on Q7.
+- **Status stepper** — the customer statuses (five now, seven with Verimi); per step: title ≤50, status line ≤50, description ≤150 chars, timestamp (our backend), state (done/current/pending/failed). Titles/status lines = the statuses and internal labels in `launch-plan.md` § Context; status 1 wording depends on Q7.
 - **Outcome block** variants:
   - *5a* — success text ≤300 chars + documents list.
   - *5b* — reason (rewritten from `errorInfo`) ≤300; CTA "Correct data" ≤25; CTA "Cancel" ≤25 with adjacent fee notice ("19.99 € is retained, the rest is refunded") ≤150 chars.
@@ -83,7 +83,7 @@ Per field: label ≤40, helper ≤150, locator image (where to find it), error �
 - **Help block** — support email + "resend link" entry (needs email + order ID), ≤150 chars.
 
 ### 2.7 Transactional Emails
-Eight emails (trigger, subject, content): table in `launch-plan.md` § M5, plus resend-link email (launch-plan assumption). Per email: **subject** ≤70 chars incl. order ID; **body** ≤600 chars, one status statement + CTA button; no personal data beyond plate + order ID; never a security code; none during the silent automatic retry. German wording is a translation task.
+Six emails now, eight once Verimi is added (trigger, subject, content): table in `launch-plan.md` § M5, plus resend-link email (launch-plan assumption). Per email: **subject** ≤70 chars incl. order ID; **body** ≤600 chars, one status statement + CTA button; no personal data beyond plate + order ID; never a security code; none during the silent automatic retry. German wording is a translation task.
 
 ### 2.8 Content gaps (open in the launch plan)
 1. **Identity-verification content (status 2–3, emails 2–3)** — depends on who integrates Verimi and whether de-registration needs it (Q1–Q4); Verimi deadline wording on Q14.

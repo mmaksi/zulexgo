@@ -3,7 +3,7 @@ import { InvalidTransition } from "@/src/core/errors/invalid-transition"
 /**
  * Our status machine, not the Zulex one: the API only knows IN_PROGRESS,
  * FINISHED and ERROR. Order is the customer's journey, so the stepper can
- * render from this list. Verimi (business logic steps 2–3) is out of the MVP;
+ * render from this list. Verimi (business logic steps 2–3) is added later;
  * when it lands, its statuses are inserted after `submitted_and_paid`.
  *
  * `awaiting_payment` is ours alone: the details are stored at checkout because

@@ -76,7 +76,7 @@ If one is already running (`.next/dev/lock` holds its PID and URL), reuse it. Th
   ```
   Add any route your change created.
 - `read_console_messages` with `onlyErrors: true`: empty. No hydration mismatch, no React key warning.
-- Logs show no security code, status token or `X-Api-Key` (CLAUDE.md Non-negotiables).
+- Logs show no security code or `X-Api-Key`, and no status token outside dev (CLAUDE.md Non-negotiables).
 
 Stop the server when you are done with it, unless the user is using it.
 

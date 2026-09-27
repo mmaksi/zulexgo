@@ -2,13 +2,14 @@
 
 ## Context
 
-ZulexGO: B2C web app for online vehicle de-registration (Außerbetriebsetzung) on the B2B Zulex API. **M0 and M1 are done.** The repo has the marketing layer (landing, legal placeholder pages, design tokens, Shadcn in `src/ui`, Jest + msw) with colocated tests, plus the foundation:
+ZulexGO: B2C web app for online vehicle de-registration (Außerbetriebsetzung) on the B2B Zulex API. **M0–M2 are done; M3 is merged.** The repo has the marketing layer (landing, legal placeholder pages, design tokens, Shadcn in `src/ui`, Jest + msw) with colocated tests, plus the foundation:
 - **Config layer:** zod-validated env in `src/config/env.ts`, selected by `APP_ENV`; five driver variables and stage guardrails as tests; composition root `src/config/container.ts`; `.env.example` committed.
-- **First ports:** `Clock` and `TokenGenerator`, each with a contract suite passed by real and fake adapter.
+- **Ports:** `Clock`, `TokenGenerator`, `ApplicationRepository`, `RegistrationGateway`, `PaymentProvider`, `Mailer`, `DocumentStore`, `IdentityVerification`, each with a contract suite passed by every adapter; the domain core, status machine, error algorithm, refund policy and the flow's use cases run end to end on the fakes (M2).
+- **Database:** in-repo migration runner, migrations `0001`–`0004`, a Postgres repository passing the same contract as the in-memory one, and the seed for dev and staging (M3).
 - **CI:** `.github/workflows/ci.yml` runs lint, typecheck, tests, build on every PR, plus the `main accepts staging only` check. ESLint boundary rule in place; a canary test proves the Zulex key never reaches the client bundle.
 - **Deployment:** GitHub remote with protected `staging` and `main`, baseline security headers in `next.config.ts`. Vercel project `zulexgo-staging` deploys `staging` (created 2026-09-27, later than M1 recorded); the production project `zulexgo` is created in M8.
 
-Not built yet (M2 onward): domain core beyond those two ports, vendor adapters, database, funnel, status page.
+Not built yet (M4 onward): vendor adapters (Zulex, Stripe, Resend, Supabase Storage, Verimi), funnel, status page, poller.
 
 Project rules (`CLAUDE.md` + `.claude/skills/`) govern *how* each arrives: test-first for domain rules, interactive behaviour, security invariants, integration boundaries and bug fixes (no tests for static presentation, tokens, or configuration); ports-and-adapters with contract tests and an in-memory fake per port; `APP_ENV`-driven stages; raw-SQL migration folders; "nothing reaches production that has not run on staging."
 
@@ -17,6 +18,7 @@ Milestones are dependency-ordered from current state to public launch. Per your 
 - **Seven customer statuses, one automated email each:** 1 application submitted & payment received → 2 waiting for identity verification (Verimi link by email; selfie + ID-card scan, ~90 s) → 3 identity verification completed → 4 submitted to KBA, processing → 5a completed | 5b failed, correction possible | 5c failed, correction not possible. Separate refund email (template 6) when a refund is issued.
 - **KBA submission follows identity verification:** step 3 = "the application can now be submitted to the KBA", step 4 = the transmission. At step 1 the application is "handed over to the Zulex API". Mapping of those two hand-overs onto Zulex API calls is open (Q1–Q3).
 - **Internal (system-side) status labels:** 1 "Payment captured" · 2 "Waiting for customer" · 3 "Forwarding to KBA" · 4 "KBA processing" · 5a "Process completed" · 5b "Correction required" · 5c "Partial refund". Customer-facing step titles are the numbered statuses above.
+- **Verimi is added later.** Statuses 2–3 and emails 2–3 wait for the founder's answers to Q1–Q4. Until then the flow runs 1 → 4 → 5a | 5b | 5c with six emails (1, 4, 5a, 5b, 5c, 6). Before status 1 the code has an internal `awaiting_payment` status: the details are stored at checkout and payment is confirmed later by webhook, so the customer never sees it and it sends no email. The `IdentityVerification` port and its fake exist but are not part of the flow yet.
 - **Error algorithm, in order:** technical error retried automatically **once**, silently → success → 5a; else classify correctable (5b) or non-correctable (5c). Core principle: the second automatic attempt **always** precedes customer notification or refund. Retry for non-technical rejections: Q18.
 - **5b:** customer corrects and resubmits (pays only the difference, if additional costs arise) or cancels (19.99 € processing fee retained, remainder refunded).
 - **5c:** completely new application required; partial refund of amount minus 19.99 €. Failed identity verification is a 5c cause.
@@ -35,7 +37,7 @@ M0 Repo hygiene & remote
  → M4 WALKING SKELETON — real Zulex (integration env) + Stripe (staging sandbox) + Mailer on staging,
       minimal funnel + status link + minimal status page
       (identity verification faked until Q1–Q3 are answered)
- → M5 Full status dashboard, all eight emails, documents, resend-link, Verimi step
+ → M5 Full status dashboard, all emails, documents, resend-link, Verimi step (once Q1–Q4 are answered)
  → M6 Error algorithm, correction & cancel options, refunds, capture/hold policy
  → M7 Legal content, security & privacy hardening
  → M8 Operational readiness & production provisioning
@@ -128,10 +130,10 @@ Funnel UI (M4 Track B) starts once M2's fakes exist, parallel to M3.
 **Why here:** Fakes let the funnel UI and use cases be built test-first while real adapters are written in parallel. The status machine is pure logic; must exist before M3 schema encodes it and M5 dashboard renders it.
 
 **How:**
-- `src/core/domain/`: `LicencePlate`, `SecurityCode` (3-char seal / 7-char certificate; `toString()` redacts), `Vin`, `Money`, `ApplicationReference` (`ZG-XXXXXX`), and **`ApplicationStatus`** — the seven customer statuses: `submitted_and_paid` (1) → `awaiting_identity_verification` (2) → `identity_verified` (3) → `submitted_to_kba` (4) → `completed` (5a) | `failed_correctable` (5b) | `failed_final` (5c), plus `cancelled` for the 5b cancel option. The one silent retry is an internal attempt counter on the application, not a customer status (customer not notified). Pure `advance(status, event)` with every transition tested; unknown Zulex status tag keeps `submitted_to_kba`. **Events for 1 → 2 and 2 → 3 undefined (Q1–Q3)**; modelled as abstract domain events so the machine doesn't depend on the answer.
+- `src/core/domain/`: `LicencePlate`, `SecurityCode` (3-char seal / 7-char certificate; `toString()` redacts), `Vin`, `Money`, `ApplicationReference` (`ZG-XXXXXX`), and **`ApplicationStatus`** — `awaiting_payment` (internal, never shown: stored at checkout until the webhook confirms payment) → `submitted_and_paid` (1) → `submitted_to_kba` (4) → `completed` (5a) | `failed_correctable` (5b) | `failed_final` (5c), plus `cancelled` for the 5b cancel option. Verimi's `awaiting_identity_verification` (2) and `identity_verified` (3) are added later, between 1 and 4. The one silent retry is an internal attempt counter on the application, not a customer status (customer not notified). Pure `advance(status, event)` with every transition tested; unknown Zulex status tag keeps `submitted_to_kba`. **Events for 1 → 2 and 2 → 3 undefined (Q1–Q3)**; they arrive with Verimi.
 - `src/core/domain/refund-policy.ts` — pure function from outcome to Stripe action and customer amount, one test per row of §3 table.
 - `src/core/errors/`: domain errors (`ValidationError`, `GatewayRejected`, `GatewayUnavailable`, `PaymentDeclined`, `HoldExpired`, `TokenInvalid`, `IdentityVerificationFailed`…).
-- `src/core/ports/`, each with a documented guarantee list and a `*.contract.ts` suite: `ApplicationRepository`, `RegistrationGateway`, `PaymentProvider`, `Mailer`, `DocumentStore`, `IdentityVerification` (+ `Clock`, `TokenGenerator` from M1). `IdentityVerification` gets port and fake here; real adapter waits for Q1–Q3.
+- `src/core/ports/`, each with a documented guarantee list and a `*.contract.ts` suite: `ApplicationRepository`, `RegistrationGateway`, `PaymentProvider`, `Mailer`, `DocumentStore`, `IdentityVerification` (+ `Clock`, `TokenGenerator` from M1). `IdentityVerification` gets port and fake here, outside the flow until Verimi is added; real adapter waits for Q1–Q4.
 - `src/adapters/*/fake/` — one in-memory fake per port passing its contract. Fake gateway scriptable (next status, next error, 429 + `Retry-After`) to drive J3–J6; fake payment provider models hold expiry via injected `Clock`; fake mailer records sends.
 - `tests/fixtures/` + `tests/msw/` skeletons with obviously fake values (`AAA111`, `example.test`), validated by the adapters' zod schemas.
 - Dev container: `APP_ENV=dev` → all fakes until M4, when payment and registration flip to the Stripe `dev` sandbox and Zulex integration API; repository, document store and identity verification stay fake in dev, mail stays console.
@@ -150,12 +152,12 @@ Funnel UI (M4 Track B) starts once M2's fakes exist, parallel to M3.
 
 **How:**
 - In-repo migration runner (`src/adapters/repository/postgres/migrator.ts`) with `db:migrate`, `db:migrate:down [count | all]`, `db:status`: one transaction per migration, version + checksum in `schema_migrations`, an advisory lock against concurrent deploys, refuses to run if a migration that already ran was edited. `down` runs in dev only. CI runs up → down all → up through the CLI against a Postgres 17 service container (the skill's rehearsal), and again as `tests/integration/migration-rehearsal.test.ts`.
-- `db/migrations/0001_create_applications` (status as a Postgres domain over `APPLICATION_STATUSES`, AES-GCM `encrypted_security_codes` bound to the row, `idempotency_key` unique, `zulex_application_id`, `next_poll_at`, `poll_attempts`, `authority_ikfz_status`, `agb_version`, `consent_at` — consent columns now avoid an expand/contract cycle in M7 — `retry_attempts` for the one silent retry), `0002_create_payments` (`stripe_payment_intent_id`, `stripe_customer_id`, total, captured, refunded and retained-fee cents — the only Stripe data stored; customer ID and amounts stay unwritten until Q15 and Q7/Q8 are answered), `0003_create_status_history`, `0004_create_status_tokens` (SHA-256 hash for lookup, AES-GCM copy so later emails repeat the link; one row per application, so a new token revokes the old). Each folder: `up.sql`, `down.sql`, `README.md`. **No identity-verification column:** Verimi was taken out of the MVP on 2026-09-26 (commit `bdd0804`); its statuses and state arrive as a migration when it returns.
+- `db/migrations/0001_create_applications` (status as a Postgres domain over `APPLICATION_STATUSES`, AES-GCM `encrypted_security_codes` bound to the row, `idempotency_key` unique, `zulex_application_id`, `next_poll_at`, `poll_attempts`, `authority_ikfz_status`, `agb_version`, `consent_at` — consent columns now avoid an expand/contract cycle in M7 — `retry_attempts` for the one silent retry), `0002_create_payments` (`stripe_payment_intent_id`, `stripe_customer_id`, total, captured, refunded and retained-fee cents — the only Stripe data stored; customer ID and amounts stay unwritten until Q15 and Q7/Q8 are answered), `0003_create_status_history`, `0004_create_status_tokens` (SHA-256 hash for lookup, AES-GCM copy so later emails repeat the link; one row per application, so a new token revokes the old). Each folder: `up.sql`, `down.sql`, `README.md`. **No identity-verification column:** Verimi is added later (Q1–Q4); its statuses and state arrive as a migration then.
 - `src/adapters/repository/postgres/` passing the `ApplicationRepository` contract against Postgres (skipped locally without `TEST_DATABASE_URL`, mandatory in CI). The contract gained the cases a SQL mapping can break: every status, a one-plate vehicle with every optional field, history appends, changed codes. Dev never runs it; dev uses the in-memory repository.
-- `db/seed/seed.ts`: loaded into the in-memory repository by `src/config/container.ts` when `APP_ENV=dev`, so each restart starts from the same data; keyed by reference, deterministic, throws unless `APP_ENV=dev` (guardrail test); one application per `ApplicationStatus` value, each reached through the real status machine and openable by a fixed `seed-status-link-<status>` token — coverage test iterates the enum, so the M5 dashboard cannot render a state the seed lacks.
-- Staging Supabase migrated by the Vercel build (`scripts/vercel-build`, set as `buildCommand` in `vercel.json`) on production deployments of a project with `REPOSITORY_DRIVER=postgres`, before `next build`, so a failed migration fails the deploy; previews and the not-yet-configured production project skip it. Never seeded (guardrail test). Staging and production flip `REPOSITORY_DRIVER=postgres`, making `DATABASE_URL`, `DIRECT_DATABASE_URL`, `CODES_ENCRYPTION_KEY` required at boot. Click-by-click: `docs/provisioning.md` §3.
+- `db/seed/seed.ts`: the same data for dev and staging. Loaded into the in-memory repository by `src/config/container.ts` at every boot, and into staging's database by `npm run db:seed` on every staging deploy, which adds what is missing and leaves rows someone has changed alone. Keyed by reference, deterministic, throws when `APP_ENV=production` (guardrail test); one application per `ApplicationStatus` value, each reached through the real status machine and openable by a fixed `seed-status-link-<status>` token — coverage test iterates the enum, so the M5 dashboard cannot render a state the seed lacks. Seeded rows carry fake Zulex and payment ids, so on staging M4's poller and Stripe adapter must tolerate them.
+- Staging Supabase migrated by the Vercel build (`scripts/vercel-build`, set as `buildCommand` in `vercel.json`) on production deployments of a project with `REPOSITORY_DRIVER=postgres`, before `next build`, so a failed migration fails the deploy; staging then runs `npm run db:seed`. Previews and the not-yet-configured production project skip both. Production is never seeded (guardrail test). Staging and production flip `REPOSITORY_DRIVER=postgres`, making `DATABASE_URL`, `DIRECT_DATABASE_URL`, `CODES_ENCRYPTION_KEY` required at boot. Click-by-click: `docs/provisioning.md` §3.
 
-**Exit criteria:** CI migration rehearsal green; Postgres adapter passes the same contract file as the fake; enum-coverage seed test green; loading the seed with `APP_ENV=staging` throws.
+**Exit criteria:** CI migration rehearsal green; Postgres adapter passes the same contract file as the fake; enum-coverage seed test green; loading the seed with `APP_ENV=production` throws.
 
 ---
 
@@ -176,7 +178,7 @@ Funnel UI (M4 Track B) starts once M2's fakes exist, parallel to M3.
 - Use cases: `check-eligibility` (prefix → `ikfzStatus` → processing-time expectation), `submit-checkout` (persist encrypted → create PaymentIntent → confirm in Payment Element), `start-application` (from Stripe webhook: status 1 → issue token → email 1 → hand over to identity verification), `submit-to-kba` (on identity verified: create Zulex application with `X-Idempotency-Key` → status 4; technical error retried once silently, then to M6's error algorithm), `advance-status` (one GET per *due* row, reschedule with the decisions-section backoff table; never logs codes or tokens), `get-status-by-token`.
 - `app/api/internal/poll/route.ts` behind `CRON_SECRET`; `vercel.json` cron every minute. Backoff schedule is a pure function (`nextPollAt(status, ikfzStatus, attempts, retryAfter, now)`) tested on every branch, so API load is a table, not behaviour scattered through the poller.
 - If the Zulex webhook exists by now: `app/api/webhooks/zulex/route.ts`, signature-verified, replay-protected, calls `advance-status` for the one application; cron drops to reconciler cadence. Same use case, second trigger.
-- Integration tests: `deregistration-checkout.test.ts` (checkout → webhook → status 1 → fake verification → status 4; unsigned webhook rejected), `status-polling.test.ts`, plus the required assertion that codes and tokens are absent from captured logs and rendered status HTML.
+- Integration tests: `deregistration-checkout.test.ts` (checkout → webhook → status 1 → fake verification → status 4; unsigned webhook rejected), `status-polling.test.ts`, plus the required assertion that codes and tokens are absent from rendered status HTML. The log half exists since M3: `tests/integration/secrets-absent-from-logs.test.ts`.
 
 **Track B — minimal funnel and status page (starts after M2, parallel to M3):**
 - `app/(funnel)/deregister/`: progress indicator; eligibility (plate count, documents check, prefix → availability notice); application form (plate, VIN, codes with contextual front code, email, locator-image placeholders); review & pay (masked summary, total price, T&Cs + right-of-withdrawal consent, **19.99 € processing-fee notice visible before the pay button**, Stripe Payment Element, sticky mobile CTA); confirmation (order ID, "your status link is on its way to {email}").
@@ -197,13 +199,13 @@ Funnel UI (M4 Track B) starts once M2's fakes exist, parallel to M3.
 **Goal:** A paying customer follows every step by email and dashboard, verifies identity, and downloads the official confirmation when finished.
 
 **How:**
-- The eight emails of business-logic document §5, as reviewed HTML snapshots (the one snapshot case `CLAUDE.md` permits), with no security codes and no token beyond the status link:
+- The emails of business-logic document §5 (six now, eight once Verimi is added), as reviewed HTML snapshots (the one snapshot case `CLAUDE.md` permits), with no security codes and no token beyond the status link:
 
   | # | Trigger | Subject | Content |
   |---|---|---|---|
   | 1 | After payment | Your ZulexGO application has been received | Confirmation, order ID, status link |
-  | 2 | Verimi step | Please verify your identity | Verimi link, instructions, deadline |
-  | 3 | Identity verified | Identity verification successful ✓ | Confirmation, next step |
+  | 2 | Verimi step (added later) | Please verify your identity | Verimi link, instructions, deadline |
+  | 3 | Identity verified (added later) | Identity verification successful ✓ | Confirmation, next step |
   | 4 | Submitted to KBA | Your application is with the KBA | Status update, expected processing time |
   | 5a | Successful | Done! Your application is complete ✓ | Congratulations, documents |
   | 5b | Error – correctable | Your application requires a correction | Error reason, correction link, cancel option + fee notice |
@@ -211,10 +213,10 @@ Funnel UI (M4 Track B) starts once M2's fakes exist, parallel to M3.
   | 6 | Refund | Your refund is on its way | Amount, timeframe (3–5 business days) |
 
   German wording is a translation task, not in the document. 5a's "plate shipping info" applies to registrations only; omitted for de-registration.
-- **[plan assumption]** A "resend my link" email beyond the eight (see resend flow below); not in the document.
-- **Verimi step (status 2 → 3):** real `IdentityVerification` adapter, email 2, the 2 → 3 transition. Shape depends entirely on Q1–Q3; can't be broken down further until answered.
+- **[plan assumption]** A "resend my link" email beyond these (see resend flow below); not in the document.
+- **Verimi step (status 2 → 3), added later:** real `IdentityVerification` adapter, email 2, the 2 → 3 transition. Shape depends entirely on Q1–Q4; can't be broken down further until answered.
 - `src/adapters/storage/supabase/` — Supabase Storage cache of Zulex documents — passing the `DocumentStore` contract; `UNKNOWN` → "Dokument". Staging and production flip `STORAGE_DRIVER=supabase`, making `SUPABASE_STORAGE_*` required at boot.
-- Dashboard: seven-step stepper with timestamps from `status_history`, each step showing the document's status line (e.g. "Waiting for customer" at step 2, "KBA processing" at step 4), outcome block (5a success + downloads / 5b reason + correct or cancel / 5c reason + refund info + start a new application), help block, **"Resend my link"** (email + reference → send to the *stored* address only; constant-time response; rate-limited; token rotated on resend), revalidation on focus/interval, stepper pulse while polling.
+- Dashboard: stepper (five steps now, seven with Verimi) with timestamps from `status_history`, each step showing the document's status line (e.g. "Waiting for customer" at step 2, "KBA processing" at step 4), outcome block (5a success + downloads / 5b reason + correct or cancel / 5c reason + refund info + start a new application), help block, **"Resend my link"** (email + reference → send to the *stored* address only; constant-time response; rate-limited; token rotated on resend), revalidation on focus/interval, stepper pulse while polling.
 - Token lifecycle: ≥128-bit, revocable, rate-limited lookups.
 
 **Exit criteria:** `status-notifications.test.ts` drives the fakes through every transition, asserting exactly one email per transition — none during the silent retry — with no code in any body; staging drops non-allowlisted recipients (test); a fixture document downloads through the token-guarded route.
@@ -250,7 +252,7 @@ Funnel UI (M4 Track B) starts once M2's fakes exist, parallel to M3.
 **Why here:** consent capture needs M3's columns and M4's checkout; CSP needs the final third-party script set; retention needs M5's terminal states.
 
 **How:**
-- Lawyer-reviewed AGB/Impressum/Datenschutz replace placeholders. AGB carry the 19.99 € processing-fee clause for cancellation and non-correctable failure, stating what it covers (Zulex API fee and administration); Datenschutz covers Verimi's processing of ID and selfie data. AGB version + right-of-withdrawal consent stored per application (tests: checkout impossible without them). Right of withdrawal vs 19.99 € fee: Q13.
+- Lawyer-reviewed AGB/Impressum/Datenschutz replace placeholders. AGB carry the 19.99 € processing-fee clause for cancellation and non-correctable failure, stating what it covers (Zulex API fee and administration); Datenschutz covers Verimi's processing of ID and selfie data once Verimi is added. AGB version + right-of-withdrawal consent stored per application (tests: checkout impossible without them). Right of withdrawal vs 19.99 € fee: Q13.
 - PAngV price from `src/config/pricing.ts`; VAT and authority fee itemised.
 - `next.config.ts` CSP (Stripe domains), `frame-ancestors`, permissions policy — asserted in route tests.
 - Rate limiting on status lookup, resend, eligibility, checkout (per IP + per token), with tests.
@@ -271,7 +273,7 @@ Funnel UI (M4 Track B) starts once M2's fakes exist, parallel to M3.
 - Production Vercel project + production Supabase (Frankfurt), `APP_ENV=production`, live Stripe keys (business verification of the live account complete), Zulex production key, `https://app.zulex.de/zulex-api/v1`. Deploy pipeline runs guardrail tests against each stage's real config (production rejects a test key; staging rejects the production URL).
 - Domain, TLS, SPF/DKIM/DMARC for the mail domain.
 - Monitoring: error tracking; uptime on `/` and the status route; poller-lag alert (`next_poll_at` overdue); Zulex-call-volume alert (GETs/hour above expected envelope = backoff broken); stuck-application alert (in `submitted_to_kba` beyond authority SLA); Stripe webhook failure alert; capture/refund anomaly alert; daily reconciliation (Stripe captures vs applications); monthly email volume vs Resend tier (3,000 free emails/month).
-- `docs/runbooks/`: stuck application, failed refund (re-triggered via the app's own tooling — document forbids manual refunds in the Stripe dashboard), hold expiring, Zulex outage, key rotation (config change, no deploy), rollback incl. `down.sql` rehearsal on staging, restore from Supabase PITR.
+- `docs/runbooks/`: stuck application, failed refund (re-triggered via the app's own tooling — document forbids manual refunds in the Stripe dashboard), hold expiring, Zulex outage, key rotation (config change and redeploy, no code change), rollback incl. `down.sql` rehearsal on staging, restore from Supabase PITR.
 - Backup drill: restore staging to a scratch project, verify migration status.
 - Load/rate-limit rehearsal: poller under sustained 429 honours backoff; status endpoint under brute force returns 429 without timing leaks.
 - Go/no-go checklist from PRD §6 success criteria + guardrails.
@@ -299,7 +301,7 @@ Funnel UI (M4 Track B) starts once M2's fakes exist, parallel to M3.
 | Item | Plumbing lands in | Fallback |
 |---|---|---|
 | Zulex error-code catalogue | M6 | unknown → 5b + support alert |
-| Verimi integration route (Q1–Q3) | M5 | none — status 2 → 3 cannot ship without it; blocks launch |
+| Verimi integration route (Q1–Q4) | added later | whether launch waits for it depends on the founder's answer to Q4 |
 | Euro Plate web licence | M7 | existing `plate-text` Kanit fallback, checked in browser — not tested, presentation |
 | Semantic colour sign-off | M7 | ship the derived palette already in `app/globals.css` |
 | Icon library decision | resolved in M0 | lucide; §5.5 amended, no sign-off outstanding |
@@ -334,7 +336,7 @@ Funnel UI (M4 Track B) starts once M2's fakes exist, parallel to M3.
 
 ## Open questions (business logic v1.0)
 
-Nothing below is decided here. Numbers are stable — milestones refer to them.
+Nothing below is decided here. Numbers are stable — milestones refer to them. Where the code needed an answer to move on, it carries a provisional one, marked **Provisional answer in code**, until the founder confirms or overrules it.
 
 **Which answers are needed first:**
 
@@ -362,6 +364,7 @@ Nothing below is decided here. Numbers are stable — milestones refer to them.
 
 5. **When is the application "handed over to the Zulex API"?** Step 1 (after payment) or step 3 (after verification)? Per the spec, a create call at step 1 would submit to the KBA immediately, contradicting step 4 coming after step 3.
    **Blocks:** M2 (status transitions), M4 (which use case calls Zulex — skeleton can't run end to end without it).
+   **Provisional answer in code (not approved by the founder):** step 1, right after payment (`src/core/use-cases/submit-to-kba.ts`).
 
 **Payment and capture**
 
@@ -371,6 +374,7 @@ Nothing below is decided here. Numbers are stable — milestones refer to them.
    **Blocks:** M4 (capture call in Stripe adapter), M5 (status 1 label and email 1 wording), M6 (hold policy), M8 ("hold expiring" runbook).
 8. **How is "refund minus 19.99 €" executed when the payment was only authorised?** Verified in Stripe's docs, both possible: partial capture of 19.99 € automatically releases the rest, or full capture then partial refund. Most payments allow only one capture, so partial capture is final. Customer sees a different bank statement in each case — a business choice.
    **Blocks:** M2 (Stripe action returned by `refund-policy.ts`), M3 (payment columns), M6 (refund execution).
+   **Provisional answer in code (not approved by the founder):** capture only the 19.99 € fee, which releases the rest (`src/core/domain/refund-policy.ts`).
 12. **SEPA Direct Debit timing:** verified in Stripe's docs, SEPA Direct Debit has no manual capture and is a delayed-notification method: charged at checkout, `processing` for several business days before `succeeded` or `payment_failed`. Does a SEPA order start its application at `processing` and risk a later failed debit, or wait days for `succeeded`? Refund-relevant: SEPA refunds possible for 180 days; a customer can dispute a SEPA debit with their bank for up to 13 months with no appeal, so a refunded SEPA payment can still be disputed.
    **Blocks:** M4 (payment methods offered and webhook handling), M6 (refunds and disputes on SEPA orders).
 15. **Stripe Customer object:** document says store the Stripe Customer ID. Customer created per order or reused per email address, given no accounts?
@@ -382,12 +386,15 @@ Nothing below is decided here. Numbers are stable — milestones refer to them.
 
 9. **What counts as a "technical error on our side" (100 % refund) vs a "technical API error" (5b, correctable)?** The two rows overlap.
    **Blocks:** M2 (error algorithm), M6 (refund amount for technical failures).
+   **Provisional answer in code (not approved by the founder):** a submission that still cannot reach the service after its silent retry counts as our side: 5c with a full refund. A KBA error the catalogue does not know gets one silent retry, then 5b (`src/core/domain/error-algorithm.ts`).
 10. **Which de-registration failures are correctable and which not?** E.g. wrong security code, VIN mismatch, already-used plate seals. Document's examples don't cover de-registration.
    **Blocks:** M5 (content of emails 5b and 5c), M6 (rejection catalogue).
 11. **Can a correction ever cost more for de-registration?** If not, the "pay the difference" PaymentIntent isn't needed for the MVP.
    **Blocks:** M6 (5b option A).
+   **Provisional answer in code (not approved by the founder):** no; `src/core/use-cases/settle-payment.ts` throws if a correction would cost more.
 18. **Scope of the automatic retry:** core principle says a second attempt is "ALWAYS" made before notifying or refunding, but step 1 limits the retry to technical errors. Does a KBA data rejection (e.g. wrong security code) also get retried once, though the same data would fail again?
    **Blocks:** M2 (error algorithm), M6 (retry behaviour).
+   **Provisional answer in code (not approved by the founder):** no; a data rejection (a 400 or a rejection document) goes straight to 5b. The one silent retry is per submission, so an application resubmitted after a technical error still gets one for a later KBA error.
 
 **Legal**
 

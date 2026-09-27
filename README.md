@@ -44,6 +44,10 @@ itself; the script it calls, `scripts/git-start`, is checked in.
 | `npm run typecheck` | `next typegen && tsc --noEmit` |
 | `npm test` | Jest (jsdom + node projects) |
 | `npm run test:watch` | Jest in watch mode |
+| `npm run db:migrate` | Apply pending migrations (needs `REPOSITORY_DRIVER=postgres`) |
+| `npm run db:migrate:down -- [count \| all]` | Revert the latest migrations; dev only |
+| `npm run db:status` | List each migration as applied or pending |
+| `npm run db:seed` | Load the seed into the database, adding only what is missing; never in production |
 | `git start <branch>` | Branch off the current `origin/staging` (see Getting started) |
 
 ## Stages

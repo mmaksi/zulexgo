@@ -1,0 +1,106 @@
+import { FAKE_REQUEST } from "@/tests/fixtures/applications"
+import { FakeClock } from "@/src/adapters/clock/fake/fake-clock"
+import { ConsoleMailer } from "@/src/adapters/mail/console/console-mailer"
+import { FakePaymentProvider } from "@/src/adapters/payment/fake/fake-payment-provider"
+import { FakeRegistrationGateway } from "@/src/adapters/registration/fake/fake-registration-gateway"
+import { InMemoryApplicationRepository } from "@/src/adapters/repository/fake/in-memory-application-repository"
+import { InMemoryDocumentStore } from "@/src/adapters/storage/fake/in-memory-document-store"
+import { FakeTokenGenerator } from "@/src/adapters/tokens/fake/fake-token-generator"
+import { GatewayUnavailable } from "@/src/core/errors/gateway-unavailable"
+import { confirmPayment } from "@/src/core/use-cases/confirm-payment"
+import { confirmRefund } from "@/src/core/use-cases/confirm-refund"
+import { pollDueApplications } from "@/src/core/use-cases/poll-due-applications"
+import { submitCheckout } from "@/src/core/use-cases/submit-checkout"
+
+/**
+ * CLAUDE.md non-negotiable: security codes never reach a log, in any stage.
+ * Status tokens may appear only in dev, where the console mailer prints the
+ * link so a developer can open the status page; every other stage keeps them
+ * out, since its logs outlive the request.
+ */
+const CODES = Object.values(FAKE_REQUEST.codes)
+const CONSOLE_METHODS = ["log", "info", "warn", "error", "debug"] as const
+
+function captureConsole() {
+  const lines: string[] = []
+  const spies = CONSOLE_METHODS.map((method) =>
+    jest.spyOn(console, method).mockImplementation((...args: unknown[]) => {
+      lines.push(args.map((arg) => (arg instanceof Error ? `${arg.name}: ${arg.message}` : String(arg))).join(" "))
+    }),
+  )
+  return { output: () => lines.join("\n"), restore: () => spies.forEach((spy) => spy.mockRestore()) }
+}
+
+/** Every path that logs: each email, a silent retry, a final failure with its refund, and a rejected checkout. */
+async function runEveryPath(revealStatusLinks: boolean): Promise<string[]> {
+  const clock = new FakeClock(new Date("2026-03-01T09:00:00.000Z"))
+  const deps = {
+    repository: new InMemoryApplicationRepository(),
+    registration: new FakeRegistrationGateway(),
+    payments: new FakePaymentProvider(clock),
+    mailer: new ConsoleMailer({ revealStatusLinks }),
+    documents: new InMemoryDocumentStore(),
+    clock,
+    tokens: new FakeTokenGenerator(),
+    statusLink: (token: string) => `https://zulexgo.example.test/status/${token}`,
+    errorCatalogue: { 202: "final" as const },
+  }
+  const poll = (minutes: number) => {
+    clock.advance(minutes * 60_000)
+    return pollDueApplications(deps, 50)
+  }
+  const checkoutAndPay = async () => {
+    const { reference } = await submitCheckout(deps, { request: FAKE_REQUEST, email: "customer@example.test" })
+    await deps.payments.customerPays((await deps.repository.get(reference))!.payment.id, "card")
+    await confirmPayment(deps, reference)
+    return reference
+  }
+  const zulexId = async (reference: Awaited<ReturnType<typeof checkoutAndPay>>) =>
+    (await deps.repository.get(reference))!.zulexApplicationId!
+
+  deps.registration.failNext("submit", new GatewayUnavailable())
+  const completed = await checkoutAndPay()
+  await poll(1)
+  deps.registration.setStatus(await zulexId(completed), { state: "finished", documents: [] })
+  await poll(2)
+
+  const rejected = await checkoutAndPay()
+  deps.registration.setStatus(await zulexId(rejected), { state: "failed", error: { code: 202, details: [] }, documents: [] })
+  await poll(5)
+  await confirmRefund(deps, rejected)
+
+  const badCodes = { ...FAKE_REQUEST, codes: { ...FAKE_REQUEST.codes, certificate: `${FAKE_REQUEST.codes.certificate}X` } }
+  await submitCheckout(deps, { request: badCodes, email: "customer@example.test" }).catch((error) => console.error(error))
+
+  return Promise.all([completed, rejected].map(async (reference) => (await deps.repository.getStatusToken(reference))!))
+}
+
+describe("secrets in logs", () => {
+  it.each([
+    ["dev", true],
+    ["staging and production", false],
+  ])("never logs a security code (%s)", async (_, revealStatusLinks) => {
+    const console = captureConsole()
+    await runEveryPath(revealStatusLinks)
+    console.restore()
+
+    expect(console.output()).toContain("[mail]")
+    for (const code of CODES) expect(console.output()).not.toContain(code)
+  })
+
+  it("keeps status tokens out of the log outside dev", async () => {
+    const console = captureConsole()
+    const tokens = await runEveryPath(false)
+    console.restore()
+
+    for (const token of tokens) expect(console.output()).not.toContain(token)
+  })
+
+  it("prints the status link in dev, where it is the only way to open the status page", async () => {
+    const console = captureConsole()
+    const tokens = await runEveryPath(true)
+    console.restore()
+
+    for (const token of tokens) expect(console.output()).toContain(token)
+  })
+})

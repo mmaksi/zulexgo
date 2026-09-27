@@ -1,12 +1,16 @@
 #!/usr/bin/env bash
 # Vercel's build command (vercel.json). A stage's own deploy migrates its
 # database before the new code is built, so that code never runs on an older
-# schema and a failed migration fails the deploy. Previews carry no database
-# credentials, and a stage still on the in-memory repository has no database.
+# schema and a failed migration fails the deploy. Staging then tops up its seed
+# data; production is never seeded. Previews carry no database credentials, and
+# a stage still on the in-memory repository has no database.
 set -euo pipefail
 
 if [ "${VERCEL_ENV:-}" = "production" ] && [ "${REPOSITORY_DRIVER:-}" = "postgres" ]; then
   npm run db:migrate
+  if [ "${APP_ENV:-}" = "staging" ]; then
+    npm run db:seed
+  fi
 fi
 
 npm run build
