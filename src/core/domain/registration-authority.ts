@@ -4,3 +4,8 @@
  * Anything but `online` means manual processing, which can take days.
  */
 export type IkfzStatus = "online" | "unavailable" | "offline"
+
+export interface RegistrationAuthority {
+  readonly kreiscode: string
+  readonly ikfzStatus: IkfzStatus
+}
