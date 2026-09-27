@@ -34,5 +34,4 @@ export async function handleFailure(
   const settled = await settlePayment(deps, application, outcome)
   const failed = await deps.repository.update(applyEvent(stopped, "failedFinal", now))
   await mailCustomer(deps, failed, "rejected", { refund: settled.returned })
-  await deps.mailer.send({ to: failed.email, template: { name: "refundIssued", reference: failed.reference, amount: settled.returned } })
 }

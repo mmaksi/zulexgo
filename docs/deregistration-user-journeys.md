@@ -2,7 +2,7 @@
 
 Scope: B2C MVP on `POST /deregistration-applications`, `GET /deregistration-applications/{id}`, `PATCH /deregistration-applications/{id}`, `POST /applications/{id}/retry`, `GET /documents/{id}`.
 
-Business logic: [launch-plan.md](launch-plan.md) is source of truth; open points are its Q1–Q18. Statuses: 1 submitted & paid → 2 waiting for identity verification → 3 identity verified → 4 submitted to KBA → 5a completed | 5b failed, correctable | 5c failed, not correctable. Email numbers are the launch plan's.
+Business logic: [launch-plan.md](launch-plan.md) is source of truth; open points are its Q1–Q18. Statuses: 1 submitted & paid → 2 waiting for identity verification → 3 identity verified → 4 submitted to KBA → 5a completed | 5b failed, correctable | 5c failed, not correctable. Verimi (2, 3 and their emails) is added later (launch plan Q1–Q4); until then 1 leads straight to 4. Email numbers are the launch plan's.
 
 ## Data the customer must provide
 
@@ -54,12 +54,12 @@ Double-click / refresh on "Pay & submit": idempotency key makes API call safe; S
 `GET /registration-authorities?licencePlatePrefix=…` before payment. `online` → normal expectations ("usually minutes to hours"). `unavailable`/`offline` → **manual processing**: tell customer before payment it may take days. Always use this endpoint in the eligibility step.
 
 ### J10 — Status tracking, lost link, unknown status
-One-time link → personal status dashboard (no account) with seven customer statuses and documents. Lost link → "Resend my link" by email + order ID (launch-plan assumption; send to stored address only — never reveal data on-page from an email guess). Unknown status tag from API (spec explicitly warns of new statuses) → render generic "In progress" step, don't break.
+One-time link → personal status dashboard (no account) with the customer statuses (seven once Verimi is added) and documents. Lost link → "Resend my link" by email + order ID (launch-plan assumption; send to stored address only — never reveal data on-page from an email guess). Unknown status tag from API (spec explicitly warns of new statuses) → render generic "In progress" step, don't break.
 
 ### J11 — Special plates (edge case)
 Seasonal (Saisonkennzeichen), electric (E), historic (H) plates: deregistration request has **no `licencePlateAttributes`** (other flows do). If KBA needs E/H suffix, these vehicles may be rejected. Clarify with API provider; until then exclude them in eligibility check or expect J4/J5 outcomes.
 
-### J12 — Identity verification (Verimi)
+### J12 — Identity verification (Verimi), added later
 After status 1: email 2 with Verimi link; selfie + ID-card scan (~90 s). Success → status 3, email 3, then KBA submission. Failure → 5c (refund minus 19.99 €). Email 2 names a deadline; its length, any reminder, outcome when it passes: open (Q14). Who integrates Verimi, who sends the link, how ZulexGO learns the result: open (Q1–Q3).
 
 ---

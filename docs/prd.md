@@ -20,8 +20,8 @@ Out of scope for MVP: fleet managers, dealers (served by B2B), legal entities.
 - Full client-side validation matching API patterns before payment
 - Online payment with the full price and the processing-fee notice shown before paying
 - Order confirmation with order ID and status link
-- Identity verification (Verimi)
-- Account-free status dashboard via one-time link, showing the seven customer statuses, with an email on every status change and on every refund
+- Identity verification (Verimi), added later: open questions to the founder (launch plan Q1–Q4)
+- Account-free status dashboard via one-time link, showing the customer statuses (five until Verimi is added, then seven), with an email on every status change and on every refund
 - Automatic, silent retry of technical errors before the customer is told anything
 - Correction flow for correctable failures, with the option to cancel instead
 - Clear end states: success with the official confirmation PDF, correctable failure, non-correctable failure with refund

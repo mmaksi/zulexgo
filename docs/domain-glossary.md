@@ -18,7 +18,7 @@
 - **Saison- / E- / H-Kennzeichen** — Seasonal, electric, historic plate variants. Not representable in the de-registration request — open API question.
 - **Wiederzulassung (reactivation)** — Re-registering a de-registered vehicle. Future service, natural follow-up to de-registration.
 - **Pre-authorization (Vorautorisierung)** — Stripe payment hold (manual capture): funds reserved at checkout, captured later. Cards only; SEPA Direct Debit can't be held, captured at checkout. Card hold lasts 7 days (Visa, Mastercard), then Stripe releases it. When a hold is captured: open (launch plan Q7).
-- **Verimi** — Identity-verification provider. Customer gets Verimi link by email, verifies with selfie + ID-card scan (~90 s); status 2 → 3, before KBA submission. Who integrates it, and whether de-registration needs it: open (launch plan Q1–Q4).
+- **Verimi** — Identity-verification provider, added later. Customer gets Verimi link by email, verifies with selfie + ID-card scan (~90 s); status 2 → 3, before KBA submission. Who integrates it, and whether de-registration needs it: open (launch plan Q1–Q4).
 - **Bearbeitungsgebühr (processing fee)** — 19.99 €, fixed regardless of service type; covers Zulex API fee and administration. Retained when customer cancels after correctable failure (5b) or application can't be corrected (5c); rest refunded. Must be shown before payment.
 - **Status 5a / 5b / 5c** — The three outcomes: completed; failed, correction possible (customer corrects or cancels); failed, correction not possible (new application, refund minus 19.99 €).
 - **Stornierung (cancellation)** — Customer's option at 5b to stop instead of correcting. 19.99 € retained, rest refunded; later resubmission is a new order at full price.

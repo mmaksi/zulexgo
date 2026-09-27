@@ -11,10 +11,10 @@ B2C web app for German vehicle registration services, built on the B2B Zulex API
 - **Next.js 16.3.5** (App Router, `app/`) · **React 19.2** · **TypeScript 5** · **Tailwind CSS v4** · **ESLint 9**
 - Next.js 16 and Tailwind v4 differ from most training data. Read `node_modules/next/dist/docs/` before writing framework code (see `AGENTS.md`). Tailwind is configured CSS-first via `@theme` in `app/globals.css`; there is no `tailwind.config.js`.
 - **All Zulex API calls are server-side only.** The `X-Api-Key` is a merchant credential and must never reach the browser; the app calls the API through its own route handlers/server actions.
-- **No vendor is imported outside its own adapter.** Stripe, the Zulex API, email, storage and identity verification (Verimi) sit behind ports in `src/core/ports/`, wired in one composition root. Stripe is the first payment adapter, not a core dependency. See the `external-services` skill.
+- **No vendor is imported outside its own adapter.** Stripe, the Zulex API, email, storage and identity verification (Verimi, added later) sit behind ports in `src/core/ports/`, wired in one composition root. Stripe is the first payment adapter, not a core dependency. See the `external-services` skill.
 - Stages `dev`, `staging`, `production`, selected by `APP_ENV`, never `NODE_ENV`.
 - Cards use manual capture (pre-authorization); SEPA Direct Debit cannot be held and is captured at checkout.
-- Business logic and integration constraints (the seven statuses, error algorithm, polling, idempotency, payment and refunds, GDPR and German consumer law) are in `docs/launch-plan.md`, which wins when documents disagree. Do not re-derive them here.
+- Business logic and integration constraints (the statuses, error algorithm, polling, idempotency, payment and refunds, GDPR and German consumer law) are in `docs/launch-plan.md`, which wins when documents disagree. Do not re-derive them here.
 - **Shadcn** for all UI components; build a custom component only when Shadcn has none. Shared styling lives in `app/globals.css`.
 
 ## Branching
@@ -86,7 +86,7 @@ Core flows end to end across module boundaries, with Zulex and Stripe stubbed at
 
 ### Non-negotiables
 
-- **Security codes and status tokens never appear in test output, snapshots, or fixtures committed as real values.** Asserting their absence from logs and rendered status pages is itself a required test.
+- **Security codes and status tokens never appear in test output, snapshots, or fixtures committed as real values.** Security codes are never logged in any stage; status tokens only in dev, where the console mailer prints the status link so a developer can open it. Asserting this for logs and rendered status pages is itself a required test.
 - The `X-Api-Key` must never be reachable from a jsdom-environment test; a test proving client bundles cannot see it is a feature test.
 - Test behaviour, not implementation: assert what the user or caller observes. Snapshots only for stable, reviewed output (e.g. generated email HTML); never whole component trees.
 - A bug fix starts with a failing test that reproduces it. Never fix, then test.
@@ -109,9 +109,11 @@ In `.claude/skills/`; invoke by name. They carry the full instructions.
 | `cleaning-up-codebases` | Cleanup that asks "should this exist?" first; removal over refactoring. | Reviewing for dead code, cruft, scope creep, architectural drift. |
 | `project-structure` | Folder tree, folder purposes, dependency rules between layers. | Creating a file or deciding where code belongs. |
 | `external-services` | Ports and adapters for every third party: domain-language interfaces, one folder per vendor, contract tests. | Integrating, calling or replacing an outside service. |
-| `database-migrations` | One folder per migration with up/down SQL, plus the idempotent dev-only seed. | Changing the schema or adding mock data. |
+| `database-migrations` | One folder per migration with up/down SQL, plus the idempotent seed for dev and staging. | Changing the schema or adding mock data. |
 | `environments` | What each stage is for, which adapters it wires, guardrails between them. | Reading config, adding an env var, choosing a base URL. |
 | `user-interface-design` | ZulexGO visual identity standards. | Any UI work or React component. |
+| `supabase` | Supabase's own agent guidance for its products, CLI and MCP server. Installed from `supabase/agent-skills` (`skills-lock.json`). | Any Supabase task: the staging and production projects, connection strings, advisors, logs. |
+| `supabase-postgres-best-practices` | Supabase's Postgres rules: schema, indexes, RLS, connections, locking. Installed the same way. | Writing a migration or SQL, or diagnosing a slow query or connection problem. The project's own `database-migrations` rules still decide folder layout and seeding. |
 | `verify-app` | Verification loop mirroring CI: lint, typecheck, tests, build and canary, dev-server boot, browser check. | Before saying a change is done, committing, or opening a PR. |
 
 ## Supporting documents

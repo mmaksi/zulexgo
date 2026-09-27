@@ -24,7 +24,11 @@ describe("runDatabaseCommand", () => {
     await expect(runDatabaseCommand(["down"], onPostgres(staging))).rejects.toThrow(/only in dev, not staging/)
   })
 
-  it.each([["drop"], [], ["down", "-1"]])("rejects the unknown command %p with its usage", async (...args) => {
+  it("refuses to seed without a database, naming the driver", async () => {
+    await expect(runDatabaseCommand(["seed"], { APP_ENV: "dev" })).rejects.toThrow(/REPOSITORY_DRIVER/)
+  })
+
+  it.each([["drop"], [], ["down", "-1"], ["seed", "1"]])("rejects the unknown command %p with its usage", async (...args) => {
     await expect(runDatabaseCommand(args, onPostgres({}))).rejects.toThrow(/Usage/)
   })
 })
@@ -47,6 +51,15 @@ describeWithPostgres("runDatabaseCommand on a database", () => {
     )
     expect(await run("up")).toBe("Nothing to apply.")
     expect(await run("status")).toMatch(/^applied .* 0001_create_applications$/m)
+  })
+
+  it("seeds a migrated database once, however often it runs, so a staging redeploy adds nothing twice", async () => {
+    await run("up")
+
+    expect(await run("seed")).toBe("Seeded 7 applications.")
+    expect(await run("seed")).toBe("Seed already loaded.")
+    expect(await database.query("SELECT count(*)::int AS n FROM applications")).toEqual([{ n: 7 }])
+    expect(await database.query("SELECT count(*)::int AS n FROM status_tokens")).toEqual([{ n: 7 }])
   })
 
   it("reverts one migration by default, or all of them", async () => {

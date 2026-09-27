@@ -12,7 +12,7 @@ Three stages, three purposes. Code is identical in all three; only configuration
 | Stage | Purpose | Data | Money |
 |---|---|---|---|
 | **dev** | Build and debug locally. Fast and disposable. | In-memory, seeded at boot, gone on restart | None — Stripe `dev` sandbox |
-| **staging** | Rehearse production. Verify a release against real external systems before it ships. | Real-shaped, non-production; never seeded | Stripe **test** mode only |
+| **staging** | Rehearse production. Verify a release against real external systems before it ships. | Real-shaped, non-production; seeded with the same fake applications as dev | Stripe **test** mode only |
 | **production** | Serve real customers. | Real personal data — GDPR applies | Real charges |
 
 **Core principle:** staging exists to be the last place a mistake is cheap. If a change has not run on staging, it does not go to production.
@@ -39,8 +39,8 @@ Selected in the composition root (see `external-services`).
 | `PaymentProvider` | Stripe sandbox `dev` (from M4) | Stripe sandbox `staging` | Stripe **live** account |
 | `Mailer` | Console or local mail catcher — never sends | Resend, recipients restricted to an allowlist | Resend |
 | `DocumentStore` | In-memory fake | Supabase Storage, staging project (from M5) | Supabase Storage, production project |
-| `IdentityVerification` | Fake | Fake until M5, then Verimi — details pending launch plan Q1–Q3 | Verimi |
-| `ApplicationRepository` (database) | In-memory fake, seeded at boot | Supabase Postgres, staging project: migrated, not seeded | Supabase Postgres, production project: migrated, backed up |
+| `IdentityVerification` | Fake | Fake; Verimi is added later (launch plan Q1–Q4) | Verimi |
+| `ApplicationRepository` (database) | In-memory fake, seeded at boot | Supabase Postgres, staging project: migrated and seeded by every deploy | Supabase Postgres, production project: migrated, backed up |
 | `Clock` / `TokenGenerator` | Real — tests inject the fakes directly | Real | Real |
 
 Before M4 the Stripe and Zulex adapters don't exist, so every stage except production runs their fakes. The fakes stay available as driver values outside production (e.g. to force a 5b or a 429 locally) and are what tests use.
@@ -51,18 +51,18 @@ The Zulex integration and production base URLs come from the API spec. Zulex has
 
 These are code, not policy — each one is a startup assertion or a runtime check with a test:
 
-- The seed loads only when `APP_ENV=dev`; seeding any other stage throws.
+- The seed never loads in production; seeding production throws.
 - A **live** Stripe key throws at boot unless `APP_ENV=production`; a **test** key throws in production.
 - `ZULEX_BASE_URL` must be the production host when `APP_ENV=production` and the integration host otherwise.
 - Destructive scripts (reset, truncate, drop) refuse to run when `APP_ENV` is not `dev`.
 - Outbound email is hard-blocked in dev (`MAIL_DRIVER` must be `console`) and allowlisted in staging, so a seeded address can never be mailed for real.
-- Debug output, verbose error bodies, and any dump of a request payload are `dev`-only. Security codes and status tokens are never logged in any stage (see CLAUDE.md non-negotiables).
+- Debug output, verbose error bodies, and any dump of a request payload are `dev`-only. Security codes are never logged in any stage. Status tokens are logged only in dev, where the console mailer prints the status link; everywhere else it masks them (see CLAUDE.md non-negotiables).
 
 ## Secrets
 
 - `.env.local` for dev only; it is gitignored and never committed. `.env.example` lists every variable — blank, or set to its dev value — under a comment saying what it is and when it is required, and is committed. Blank means unset.
 - Staging and production secrets live in the deployment platform, never in the repo, and are not shared between stages — a staging key must not work in production.
-- Rotating a secret is a config change, not a code change. If rotating requires a deploy, the config layer is wrong.
+- Rotating a secret is a config change, not a code change.
 - Any value prefixed `NEXT_PUBLIC_` is in the client bundle. The Zulex `X-Api-Key` and every Stripe secret key must never carry that prefix; only the Stripe publishable key may.
 
 ## Adding an environment variable

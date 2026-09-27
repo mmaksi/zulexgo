@@ -1,15 +1,26 @@
 import type { Mailer, MailMessage } from "@/src/core/ports/mailer"
 
+const MASKED_TOKEN = "[status token hidden outside dev]"
+
 /**
- * Dev's mailer (`MAIL_DRIVER=console`): every address there is seeded, so none
- * is mailed for real. Prints the status link on purpose — it is the only way to
- * open the status page locally. Templates carry no security code to print.
+ * `MAIL_DRIVER=console`: prints instead of sending. In dev it prints the status
+ * link on purpose, since that is the only way to open the status page locally.
+ * Any other stage masks the token: its logs are kept by the platform, and a
+ * status token there is a live key to a customer's order. Templates carry no
+ * security code to print.
  */
 export class ConsoleMailer implements Mailer {
-  constructor(private readonly log: (line: string) => void = console.info) {}
+  private readonly revealStatusLinks: boolean
+  private readonly log: (line: string) => void
+
+  constructor({ revealStatusLinks, log = console.info }: { revealStatusLinks: boolean; log?: (line: string) => void }) {
+    this.revealStatusLinks = revealStatusLinks
+    this.log = log
+  }
 
   async send({ to, template }: MailMessage): Promise<void> {
     const { name, ...data } = template
+    if ("statusLink" in data && !this.revealStatusLinks) data.statusLink = data.statusLink.replace(/[^/]+$/, MASKED_TOKEN)
     this.log(`[mail] ${name} → ${to} ${JSON.stringify(data)}`)
   }
 }
