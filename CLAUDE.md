@@ -94,6 +94,10 @@ Core flows end to end across module boundaries, with Zulex and Stripe stubbed at
 - A test that cannot fail is worse than none. Prove a new guard catches what it guards against before keeping it.
 - Delete tests that no longer protect anything. Coverage is not the target: an untested presentational component is fine, an untested domain rule is not.
 
+## Verification
+
+Nothing is done until the `verify-app` loop has run green on the final code: diff scope, lint, typecheck, tests, the CI build with its secret canary, a clean dev-server boot, and a browser check for UI. Run it before every commit and pull request, and report what passed, failed or was skipped.
+
 ## Skills
 
 In `.claude/skills/`; invoke by name. They carry the full instructions.
@@ -108,6 +112,7 @@ In `.claude/skills/`; invoke by name. They carry the full instructions.
 | `database-migrations` | One folder per migration with up/down SQL, plus the idempotent dev-only seed. | Changing the schema or adding mock data. |
 | `environments` | What each stage is for, which adapters it wires, guardrails between them. | Reading config, adding an env var, choosing a base URL. |
 | `user-interface-design` | ZulexGO visual identity standards. | Any UI work or React component. |
+| `verify-app` | Verification loop mirroring CI: lint, typecheck, tests, build and canary, dev-server boot, browser check. | Before saying a change is done, committing, or opening a PR. |
 
 ## Supporting documents
 
