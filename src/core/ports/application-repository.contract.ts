@@ -100,16 +100,28 @@ export function applicationRepositoryContract(name: string, makeSubject: () => A
         expect(await repository.findByStatusToken("token-for-contract-test-000000000000000000b")).toEqual(created)
       })
 
+      it("reads back the current token, so later emails can carry the same status link", async () => {
+        const created = await repository.create(anApplication())
+        await repository.setStatusToken(created.reference, "token-for-contract-test-000000000000000000a")
+        await repository.setStatusToken(created.reference, "token-for-contract-test-000000000000000000b")
+
+        expect(await repository.getStatusToken(created.reference)).toBe("token-for-contract-test-000000000000000000b")
+        expect(await repository.getStatusToken(anApplication().reference)).toBeUndefined()
+      })
+
       it("finds nothing for an unknown token", async () => {
         expect(await repository.findByStatusToken("token-for-contract-test-00000000000000000000")).toBeUndefined()
       })
     })
 
     describe("findDueForPolling", () => {
-      it("returns only applications at the KBA whose poll is due, soonest first, up to the limit", async () => {
+      it("returns only applications whose KBA check or silent resubmission is due, soonest first, up to the limit", async () => {
         const atKba = (nextPollAt: Date) => anApplication({ status: "submitted_to_kba", polling: { nextPollAt, attempts: 1 } })
         const dueLater = await repository.create(atKba(minutes(-1)))
         const dueFirst = await repository.create(atKba(minutes(-10)))
+        const resubmission = await repository.create(
+          anApplication({ status: "submitted_and_paid", polling: { nextPollAt: minutes(-5), attempts: 0 } }),
+        )
         const dueNow = await repository.create(atKba(NOW))
         await repository.create(atKba(minutes(5)))
         await repository.create(anApplication({ status: "completed", polling: { nextPollAt: minutes(-20), attempts: 3 } }))
@@ -120,6 +132,7 @@ export function applicationRepositoryContract(name: string, makeSubject: () => A
 
         expect(due.map((application) => application.reference)).toEqual([
           dueFirst.reference,
+          resubmission.reference,
           dueLater.reference,
           dueNow.reference,
         ])
