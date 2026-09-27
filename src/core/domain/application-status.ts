@@ -69,4 +69,7 @@ export function advance(status: ApplicationStatus, event: ApplicationEvent): App
   return next
 }
 
-export const isTerminal = (status: ApplicationStatus): boolean => Object.keys(TRANSITIONS[status]).length === 0
+/** Checked on a schedule: at the KBA, or waiting for a silent resubmission after a technical error. */
+export const POLLED_STATUSES: readonly ApplicationStatus[] = ["submitted_and_paid", "submitted_to_kba"]
+
+export const isTerminal =(status: ApplicationStatus): boolean => Object.keys(TRANSITIONS[status]).length === 0

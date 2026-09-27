@@ -1,4 +1,7 @@
-import { anApplication } from "@/tests/fixtures/applications"
+import { anApplication, FAKE_REQUEST } from "@/tests/fixtures/applications"
+import { applyEvent } from "@/src/core/domain/application"
+import { APPLICATION_STATUSES } from "@/src/core/domain/application-status"
+import { parseDeregistrationRequest } from "@/src/core/domain/deregistration-request"
 import { DuplicateApplication } from "@/src/core/errors/duplicate-application"
 import { StaleApplication } from "@/src/core/errors/stale-application"
 import type { ApplicationRepository } from "./application-repository"
@@ -25,6 +28,39 @@ export function applicationRepositoryContract(name: string, makeSubject: () => A
         expect(stored).toEqual({ ...application, version: 1 })
         expect(stored?.request.codes.certificate.reveal()).toBe(application.request.codes.certificate.reveal())
         expect(stored?.payment.total.equals(application.payment.total)).toBe(true)
+      })
+
+      it.each(APPLICATION_STATUSES)("stores an application in status %s", async (status) => {
+        const created = await repository.create(anApplication({ status, history: [{ status, at: NOW }] }))
+
+        expect((await repository.get(created.reference))?.status).toBe(status)
+      })
+
+      it("round-trips a one-plate vehicle and every optional field", async () => {
+        const application = anApplication({
+          status: "submitted_to_kba",
+          history: [
+            { status: "awaiting_payment", at: minutes(-30) },
+            { status: "submitted_and_paid", at: minutes(-20) },
+            { status: "submitted_to_kba", at: minutes(-10) },
+          ],
+          request: parseDeregistrationRequest({
+            ...FAKE_REQUEST,
+            plateCount: 1,
+            codes: { rearPlate: "AA1", certificate: "AAAAAA1" },
+          }),
+          ikfzStatus: "offline",
+          zulexApplicationId: "fake-zulex-application-1",
+          retryAttempts: 1,
+          polling: { nextPollAt: minutes(5), attempts: 2 },
+        })
+
+        await repository.create(application)
+        const stored = await repository.get(application.reference)
+
+        expect(stored).toEqual({ ...application, version: 1 })
+        expect(stored?.request.codes.frontPlate).toBeUndefined()
+        expect(stored?.request.codes.rearPlate.reveal()).toBe("AA1")
       })
 
       it("returns undefined for an unknown reference", async () => {
@@ -66,6 +102,29 @@ export function applicationRepositoryContract(name: string, makeSubject: () => A
 
         expect(updated.version).toBe(2)
         expect(await repository.get(created.reference)).toEqual(updated)
+      })
+
+      it("appends new status changes to the history, in order", async () => {
+        const created = await repository.create(anApplication())
+        const paid = applyEvent(created, "paymentConfirmed", minutes(1))
+        const atKba = applyEvent(await repository.update(paid), "submittedToKba", minutes(2))
+
+        await repository.update(atKba)
+
+        expect((await repository.get(created.reference))?.history).toEqual([
+          ...created.history,
+          { status: "submitted_and_paid", at: minutes(1) },
+          { status: "submitted_to_kba", at: minutes(2) },
+        ])
+      })
+
+      it("stores changed security codes, as a correction resubmits them", async () => {
+        const created = await repository.create(anApplication())
+        const corrected = parseDeregistrationRequest({ ...FAKE_REQUEST, codes: { ...FAKE_REQUEST.codes, certificate: "AAAAAA9" } })
+
+        await repository.update({ ...created, request: corrected })
+
+        expect((await repository.get(created.reference))?.request.codes.certificate.reveal()).toBe("AAAAAA9")
       })
 
       it("rejects a stale version and keeps what is stored, so two writers cannot both win", async () => {

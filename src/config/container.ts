@@ -1,8 +1,12 @@
 import "server-only"
 import { SystemClock } from "@/src/adapters/clock/system/system-clock"
+import { InMemoryApplicationRepository } from "@/src/adapters/repository/fake/in-memory-application-repository"
+import { PostgresApplicationRepository } from "@/src/adapters/repository/postgres/postgres-application-repository"
 import { CryptoTokenGenerator } from "@/src/adapters/tokens/crypto/crypto-token-generator"
+import type { ApplicationRepository } from "@/src/core/ports/application-repository"
 import type { Clock } from "@/src/core/ports/clock"
 import type { TokenGenerator } from "@/src/core/ports/token-generator"
+import { devSeed } from "@/db/seed/seed"
 import { parseEnv, type Env, type EnvSource } from "./env"
 
 /**
@@ -18,14 +22,28 @@ export interface Container {
   env: Env
   clock: Clock
   tokens: TokenGenerator
+  repository: ApplicationRepository
 }
 
 export function createContainer(source: EnvSource = process.env): Container {
+  const env = parseEnv(source)
   return {
-    env: parseEnv(source),
+    env,
     clock: new SystemClock(),
     tokens: new CryptoTokenGenerator(),
+    repository: createRepository(env),
   }
+}
+
+/** Dev starts from the seed on every boot; a deployed stage on the fake starts empty. */
+function createRepository(env: Env): ApplicationRepository {
+  if (env.REPOSITORY_DRIVER === "fake") {
+    return new InMemoryApplicationRepository(env.APP_ENV === "dev" ? devSeed(env.APP_ENV) : [])
+  }
+  return new PostgresApplicationRepository({
+    connectionString: env.DATABASE_URL!,
+    encryptionKey: env.CODES_ENCRYPTION_KEY!,
+  })
 }
 
 let container: Container | undefined
