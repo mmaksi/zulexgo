@@ -13,16 +13,19 @@ import type { ApplicationReference } from "@/src/core/domain/application-referen
  *   poller and a webhook can therefore never both advance one application.
  * - Security codes, money and dates round-trip unchanged; what is returned is a
  *   copy, so mutating it never changes the store.
- * - A status token is stored so that it can be matched but never read back.
- *   Setting a new one revokes the old one.
- * - `findDueForPolling` returns only applications at the KBA whose poll is due,
- *   soonest first.
+ * - A status token can be matched and read back, so every email can carry the
+ *   same link; adapters that persist it keep it encrypted and look it up by
+ *   hash. Setting a new one revokes the old one.
+ * - `findDueForPolling` returns applications whose next check is due, soonest
+ *   first: a status check at the KBA, or a silent resubmission after a
+ *   technical failure.
  */
 export interface ApplicationRepository {
   create(application: Application): Promise<Application>
   get(reference: ApplicationReference): Promise<Application | undefined>
   update(application: Application): Promise<Application>
   setStatusToken(reference: ApplicationReference, token: string): Promise<void>
+  getStatusToken(reference: ApplicationReference): Promise<string | undefined>
   findByStatusToken(token: string): Promise<Application | undefined>
   findDueForPolling(now: Date, limit: number): Promise<Application[]>
 }
