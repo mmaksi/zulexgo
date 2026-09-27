@@ -26,29 +26,34 @@ Two Vercel **projects**, not two branches of one: secrets are scoped per project
 
 ---
 
-## 1. Vercel — staging  *(needed for M1)*
+## 1. Vercel — staging  *(needed for M1; not created yet as of 2026-09-27)*
 
-1. New Project → import `mmaksi/zulexgo` → name it **`zulexgo-staging`**.
-2. Framework preset: Next.js. Root directory: repository root.
-3. Production Branch: **`staging`**. Every merge to `staging` deploys here.
-4. Settings → Functions → Region: **Frankfurt (fra1)**. Already pinned by `vercel.json`; just check it.
-5. Settings → Environment Variables, Production scope of *this project*:
+Do §3 first: step 5 needs the database values.
+
+1. Sign up at vercel.com with **Continue with GitHub**. Hobby is enough to start staging, but it is for non-commercial use only; move to Pro before real customers (and before M4's per-minute poller cron).
+2. **Add New → Project → Import Git Repository.** Install the Vercel GitHub app when asked, granting it `mmaksi/zulexgo` only. Import it and name the project **`zulexgo-staging`**. Framework preset Next.js, root directory `./`; leave the build command alone (`vercel.json` sets it). Add no environment variables here: at import they apply to every environment. Deploy. This first deployment builds `main` and errors at runtime; that is expected.
+3. **Settings → Environments → Production → Branch Tracking** → **`staging`** → Save. Every merge to `staging` now deploys here.
+4. **Settings → Environment Variables**: check that **Enable access to System Environment Variables** is on; `scripts/vercel-build` reads `VERCEL_ENV`.
+5. Add these with environment **Production** only (not Preview or Development), marking every secret **Sensitive**:
 
    ```
    APP_ENV=staging
-   APP_BASE_URL=https://<the URL Vercel assigns>
-   CRON_SECRET=<openssl rand -base64 32>
+   APP_BASE_URL=https://zulexgo-staging.vercel.app   # the domain under Settings → Domains
+   CRON_SECRET=<openssl rand -base64 32>             # Sensitive
    PAYMENT_DRIVER=fake
    REGISTRATION_DRIVER=fake
    MAIL_DRIVER=console
-   REPOSITORY_DRIVER=fake
    STORAGE_DRIVER=fake
+   REPOSITORY_DRIVER=postgres
+   DATABASE_URL=<§3, transaction pooler>             # Sensitive
+   DIRECT_DATABASE_URL=<§3, session pooler>          # Sensitive
+   CODES_ENCRYPTION_KEY=<openssl rand -base64 32>    # Sensitive
    ```
 
-   Fakes because vendor credentials do not exist yet and staging must deploy before they do. Each `fake` flips to its real driver in the milestone that earns it (M3 repository, M4 payment/registration/mail, M5 storage); the app refuses to boot if a driver is flipped without its key.
+   Payment, registration, mail and storage stay fake because those vendors come later: M4 flips payment, registration and mail, M5 storage. The app refuses to boot if a driver is flipped without its key.
 
-6. Deploy. The marketing site must serve at the assigned URL.
-7. Set `APP_BASE_URL` to that URL and redeploy — it is unknown until the project exists.
+6. **Deployments → Create Deployment** → branch `staging`. The marketing site must serve at `APP_BASE_URL`. Once M3 is merged, the build log also shows the migrations running.
+7. Region needs nothing: `vercel.json` pins Frankfurt (`fra1`).
 
 ## 2. Vercel — production  *(needed for M8, create it now if convenient)*
 
@@ -62,10 +67,27 @@ Leave its environment variables empty until M8; a half-configured production pro
 
 One project per stage, region **Frankfurt (eu-central-1)** — EU residency is a GDPR requirement, not a preference.
 
-- **Staging** — exists. `DATABASE_URL` (Supavisor pooler, *transaction* mode) and `DIRECT_DATABASE_URL` (direct connection, migrations only) go into the staging Vercel project in **M3**, when the schema lands, with `REPOSITORY_DRIVER=postgres` and a `CODES_ENCRYPTION_KEY`.
-- **Production** — create in M8. Never share a connection string between stages.
+- **Staging** — exists: **`zulexgo-staging`**, ref `nkojumzoqtqmkzxbpmil`, Postgres 17.
+- **Production** — create in M8, the same way. Never share a connection string or key between stages.
 
 No Supabase Auth (no accounts by design), no client-side Supabase SDK, no RLS-based access: the app is the database's only client, server-side only.
+
+### Connecting a stage to its database  *(M3 for staging, M8 for production)*
+
+1. **Turn off the Data API**: Integrations → Data API → Overview → **Enable Data API** off. Supabase otherwise serves `public` tables over REST to anyone holding the anon key, and grants every new `public` table to `anon`, `authenticated` and `service_role` by default. Every table also has row-level security on with no policy, so the app (the table owner) is the only reader either way; the switch removes the endpoint altogether, including for the service-role key M5 adds for Storage, which bypasses RLS.
+2. **Set a database password you hold**: Project Settings → Database → **Reset database password**, using `openssl rand -hex 24` (letters and digits only, so the connection string needs no URL-encoding). Supabase never shows it again, so save it in your password manager first.
+3. **Copy two connection strings** from the dashboard's **Connect** button and replace `[YOUR-PASSWORD]` in each. Vercel is IPv4-only and the direct host `db.<ref>.supabase.co` is IPv6-only (unless the paid IPv4 add-on is on), so neither variable uses the direct connection:
+
+   | Variable | Connect → | Port | Used by |
+   |---|---|---|---|
+   | `DATABASE_URL` | Transaction pooler | 6543 | the app, per request |
+   | `DIRECT_DATABASE_URL` | Session pooler | 5432 | `npm run db:migrate` during the Vercel build |
+
+4. **Generate the encryption key**: `openssl rand -base64 32` → `CODES_ENCRYPTION_KEY`. Store a copy in your password manager: without it, every stored security code and status link is unreadable. A new key per stage.
+5. **Set them in the stage's Vercel project** (Production scope), together with `REPOSITORY_DRIVER=postgres`, **before** merging the change that should run on Postgres. The next deploy runs `scripts/vercel-build`, which migrates the database and then builds; a failed migration fails the deploy and the previous one keeps serving.
+6. **Check it**: the build log lists `Applied 0001_create_applications` … on the first deploy, `Nothing to apply.` afterwards. The database's Table Editor shows `applications`, `payments`, `status_history`, `status_tokens` and `schema_migrations`, all empty. Staging is never seeded.
+
+Migrations only move forward on staging and production: `db:migrate:down` refuses to run outside dev. A bad migration is fixed with a new one.
 
 ## 4. GitHub
 

@@ -1,17 +1,22 @@
 import type { Application } from "@/src/core/domain/application"
 import type { ApplicationReference } from "@/src/core/domain/application-reference"
-import type { ApplicationStatus } from "@/src/core/domain/application-status"
+import { POLLED_STATUSES } from "@/src/core/domain/application-status"
 import { DuplicateApplication } from "@/src/core/errors/duplicate-application"
 import { StaleApplication } from "@/src/core/errors/stale-application"
 import type { ApplicationRepository } from "@/src/core/ports/application-repository"
-
-/** At the KBA, or waiting for a silent resubmission. */
-const CHECKED: ApplicationStatus[] = ["submitted_and_paid", "submitted_to_kba"]
 
 /** Codes stay in plaintext here: nothing leaves the process. The Postgres adapter encrypts them. */
 export class InMemoryApplicationRepository implements ApplicationRepository {
   private readonly applications = new Map<ApplicationReference, Application>()
   private readonly tokens = new Map<string, ApplicationReference>()
+
+  /** Loads seed data keyed by reference, so the same entry twice is stored once. */
+  constructor(seed: readonly { application: Application; statusToken?: string }[] = []) {
+    for (const { application, statusToken } of seed) {
+      this.store({ ...application, version: 1 })
+      if (statusToken) this.tokens.set(statusToken, application.reference)
+    }
+  }
 
   async create(application: Application): Promise<Application> {
     if (this.applications.has(application.reference)) throw new DuplicateApplication("reference")
@@ -48,7 +53,7 @@ export class InMemoryApplicationRepository implements ApplicationRepository {
 
   async findDueForPolling(now: Date, limit: number): Promise<Application[]> {
     return this.all()
-      .filter(({ status, polling }) => CHECKED.includes(status) && polling.nextPollAt && polling.nextPollAt <= now)
+      .filter(({ status, polling }) => POLLED_STATUSES.includes(status) && polling.nextPollAt && polling.nextPollAt <= now)
       .sort((a, b) => a.polling.nextPollAt!.getTime() - b.polling.nextPollAt!.getTime())
       .slice(0, limit)
       .map(copy)
