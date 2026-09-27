@@ -96,6 +96,15 @@ describeWithPostgres("Migrator", () => {
     expect(await tables()).toEqual(["first", "second"])
   })
 
+  it("lets two deploys migrate at once: the second waits, then finds nothing left to apply", async () => {
+    await addMigration("0001_create_slowly", { "up.sql": "SELECT pg_sleep(0.3); CREATE TABLE slow (id integer);" })
+
+    const runs = await Promise.all([(await migrator()).up(), (await migrator()).up()])
+
+    expect(runs.map((applied) => applied.length).sort()).toEqual([0, 1])
+    expect(await tables()).toEqual(["slow"])
+  })
+
   it("applies only the migrations added since the last run", async () => {
     await addMigration("0001_create_first", table("first"))
     await (await migrator()).up()
