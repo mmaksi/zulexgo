@@ -10,6 +10,7 @@ import {
 
 /** Owned by the test, not imported: business logic §1–§3 without Verimi (decided 2026-09-26). */
 const LEGAL: [ApplicationStatus, ApplicationEvent, ApplicationStatus][] = [
+  ["awaiting_payment", "paymentConfirmed", "submitted_and_paid"],
   ["submitted_and_paid", "submittedToKba", "submitted_to_kba"],
   ["submitted_and_paid", "failedCorrectable", "failed_correctable"],
   ["submitted_and_paid", "failedFinal", "failed_final"],
