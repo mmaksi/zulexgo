@@ -1,5 +1,7 @@
 import { APPLICATION_STATUSES } from "@/src/core/domain/application-status"
 import { InMemoryApplicationRepository } from "@/src/adapters/repository/fake/in-memory-application-repository"
+import { anApplication } from "@/tests/fixtures/applications"
+import { JOURNEYS, seededApplications } from "./data/applications"
 import { loadSeed, seedFor } from "./seed"
 
 describe("seedFor", () => {
@@ -64,5 +66,26 @@ describe("loadSeed", () => {
     await loadSeed(repository, [first])
 
     expect(await repository.get(first.application.reference)).toEqual(changed)
+  })
+
+  it("survives a status added mid-journey: every application keeps its reference and its status link", async () => {
+    const before = Object.fromEntries(Object.entries(JOURNEYS).filter(([status]) => status !== "submitted_and_paid"))
+    const repository = new InMemoryApplicationRepository()
+    await loadSeed(repository, seededApplications(before))
+
+    const seed = seedFor("staging")
+    await loadSeed(repository, seed)
+
+    for (const { application, statusToken } of seed) {
+      expect((await repository.findByStatusToken(statusToken))?.status).toBe(application.status)
+    }
+  })
+
+  it("stops when a seeded idempotency key belongs to another order, rather than linking to the wrong one", async () => {
+    const [first] = seedFor("staging")
+    const repository = new InMemoryApplicationRepository()
+    await repository.create(anApplication({ idempotencyKey: first.application.idempotencyKey }))
+
+    await expect(loadSeed(repository, [first])).rejects.toThrow(/idempotencyKey/)
   })
 })

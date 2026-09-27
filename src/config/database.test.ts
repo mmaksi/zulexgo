@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto"
 import { createTestDatabase, describeWithPostgres, type TestDatabase } from "@/src/adapters/repository/postgres/test-database"
+import { SEEDED_APPLICATIONS } from "@/db/seed/data/applications"
 import { runDatabaseCommand } from "./database"
 
 const UNREACHABLE = "postgres://nobody:nothing@127.0.0.1:1/none"
@@ -56,10 +57,12 @@ describeWithPostgres("runDatabaseCommand on a database", () => {
   it("seeds a migrated database once, however often it runs, so a staging redeploy adds nothing twice", async () => {
     await run("up")
 
-    expect(await run("seed")).toBe("Seeded 7 applications.")
+    const n = SEEDED_APPLICATIONS.length
+
+    expect(await run("seed")).toBe(`Seeded ${n} applications.`)
     expect(await run("seed")).toBe("Seed already loaded.")
-    expect(await database.query("SELECT count(*)::int AS n FROM applications")).toEqual([{ n: 7 }])
-    expect(await database.query("SELECT count(*)::int AS n FROM status_tokens")).toEqual([{ n: 7 }])
+    expect(await database.query("SELECT count(*)::int AS n FROM applications")).toEqual([{ n }])
+    expect(await database.query("SELECT count(*)::int AS n FROM status_tokens")).toEqual([{ n }])
   })
 
   it("reverts one migration by default, or all of them", async () => {

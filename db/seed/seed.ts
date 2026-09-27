@@ -25,7 +25,7 @@ export async function loadSeed(repository: ApplicationRepository, seed: readonly
       await repository.create(application)
       added += 1
     } catch (error) {
-      if (!(error instanceof DuplicateApplication)) throw error
+      if (!(error instanceof DuplicateApplication && error.field === "reference")) throw error
     }
     await repository.setStatusToken(application.reference, statusToken)
   }
