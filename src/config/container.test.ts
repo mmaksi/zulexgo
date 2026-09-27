@@ -1,9 +1,15 @@
+import { randomBytes } from "node:crypto"
+import { join } from "node:path"
+import { anApplication } from "@/tests/fixtures/applications"
+import { Migrator, readMigrations } from "@/src/adapters/repository/postgres/migrator"
+import { createTestDatabase, describeWithPostgres, type TestDatabase } from "@/src/adapters/repository/postgres/test-database"
 import { clockContract } from "@/src/core/ports/clock.contract"
 import { tokenGeneratorContract } from "@/src/core/ports/token-generator.contract"
 import { ZULEX_BASE_URLS } from "./env"
 import { createContainer } from "./container"
 
 const dev = { APP_ENV: "dev" }
+const staging = { APP_ENV: "staging", APP_BASE_URL: "https://zulexgo-staging.vercel.app", CRON_SECRET: "x" }
 
 describe("createContainer", () => {
   it("boots a dev container from nothing but APP_ENV", () => {
@@ -35,6 +41,43 @@ describe("createContainer", () => {
         ZULEX_API_KEY: "k",
       })
     ).toThrow(/ZULEX_BASE_URL/)
+  })
+})
+
+describe("container repository", () => {
+  it("serves the dev seed from the moment the server starts", async () => {
+    const seeded = await createContainer(dev).repository.findByStatusToken("seed-status-link-completed")
+
+    expect(seeded?.status).toBe("completed")
+  })
+
+  it("is never seeded on staging, even on the in-memory repository", async () => {
+    expect(await createContainer(staging).repository.findByStatusToken("seed-status-link-completed")).toBeUndefined()
+  })
+})
+
+describeWithPostgres("container repository on Postgres", () => {
+  let database: TestDatabase
+
+  beforeAll(async () => {
+    database = await createTestDatabase()
+    await new Migrator(database.url, await readMigrations(join(process.cwd(), "db", "migrations"))).up()
+  })
+  afterAll(() => database.drop())
+
+  it("stores applications in the database the environment names, readable by every server instance", async () => {
+    const encryptionKey = randomBytes(32).toString("base64")
+    const container = () =>
+      createContainer({
+        ...staging,
+        REPOSITORY_DRIVER: "postgres",
+        DATABASE_URL: database.url,
+        DIRECT_DATABASE_URL: database.url,
+        CODES_ENCRYPTION_KEY: encryptionKey,
+      })
+    const created = await container().repository.create(anApplication())
+
+    expect((await container().repository.get(created.reference))?.status).toBe(created.status)
   })
 })
 

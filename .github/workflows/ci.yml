@@ -46,6 +46,21 @@ jobs:
       STORAGE_DRIVER: fake
       ZULEX_API_KEY: ci-canary-zulex-api-key-must-not-ship
 
+    # Same major version as Supabase. Rehearses every migration and runs the
+    # Postgres contract suite, which fails here if TEST_DATABASE_URL is unset.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
     steps:
       - uses: actions/checkout@v4
 
@@ -60,7 +75,23 @@ jobs:
 
       - run: npm run typecheck
 
+      # database-migrations skill: up, down, up must all succeed, through the
+      # same command the Vercel build runs.
+      - name: Migration rehearsal
+        env:
+          APP_ENV: dev
+          REPOSITORY_DRIVER: postgres
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
+          DIRECT_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
+          CODES_ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+        run: |
+          npm run db:migrate
+          npm run db:migrate:down -- all
+          npm run db:migrate
+
       - run: npm test -- --ci
+        env:
+          TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
 
       - run: npm run build
 

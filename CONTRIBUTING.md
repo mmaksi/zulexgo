@@ -77,4 +77,17 @@ normal state between promotions:
 npm run lint && npm run typecheck && npm test && npm run build
 ```
 
-That is exactly what CI runs. Running it locally first saves a round trip.
+That is what CI runs, except for the Postgres suites (the migration runner, the
+Postgres repository and the migration rehearsal): without `TEST_DATABASE_URL`
+they are skipped locally, while CI always runs them against Postgres 17. To run
+them before CI does:
+
+```bash
+docker run -d --rm --name zulexgo-test-pg -e POSTGRES_PASSWORD=postgres -p 55432:5432 postgres:17
+```
+
+```bash
+TEST_DATABASE_URL=postgres://postgres:postgres@localhost:55432/postgres npm test
+```
+
+Each suite creates and drops its own database on that server.

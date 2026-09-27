@@ -60,8 +60,20 @@ The dev composition root loads the seed into the in-memory repository at boot, s
 - **Idempotent.** Loading twice produces the same data, not duplicates: upsert on a stable key.
 - **Deterministic.** Fixed IDs and a seeded RNG, so a bug found against seed data is reproducible by everyone.
 - **Obviously fake.** Security codes, VINs, plates, emails, and tokens must be recognisable as test data (`AAA111`, `example.test`). Never copy a real value from a production payload or a support ticket into seed data.
-- **Covers the states, not just the happy path.** Seed at least one application in each status the status dashboard renders: the seven customer statuses in `docs/launch-plan.md` (submitted & paid, awaiting identity verification, identity verified, submitted to KBA, completed, failed-correctable, failed-final) plus cancelled. If a developer cannot see every UI state right after starting the dev server, the seed is incomplete.
+- **Covers the states, not just the happy path.** Seed at least one application in every value of `APPLICATION_STATUSES` (`src/core/domain/application-status.ts`); `db/seed/seed.test.ts` iterates the list, and the seed's journey table is a `Record` over it, so a new status fails to compile until it is seeded. If a developer cannot see every UI state right after starting the dev server, the seed is incomplete.
 - Seed data is not test fixtures. Jest fixtures live in `tests/fixtures/`; do not import one from the other.
+
+## Running migrations
+
+The runner is `src/adapters/repository/postgres/migrator.ts`; the commands read the environment through `src/config/`:
+
+| Command | Does |
+|---|---|
+| `npm run db:migrate` | Applies every pending migration, in order, one transaction each. Refuses to run if a migration that already ran has changed on disk. |
+| `npm run db:migrate:down -- [count \| all]` | Reverts the latest one (or `count`, or all). **Dev only**: it refuses on staging and production. |
+| `npm run db:status` | Lists each migration as applied (with its time) or pending. |
+
+They connect over `DIRECT_DATABASE_URL` and need `REPOSITORY_DRIVER=postgres`. A stage's Vercel build runs `db:migrate` before `next build` (`scripts/vercel-build`), so a deployed stage is always migrated by its own deploy, never by hand.
 
 ## Checklist
 
