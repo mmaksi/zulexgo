@@ -23,9 +23,17 @@ export class SecurityCode {
     this.#value = value
   }
 
+  /** For composing into larger schemas, such as a whole de-registration request. */
+  static schema(kind: SecurityCodeKind) {
+    return z
+      .string()
+      .trim()
+      .regex(new RegExp(`^[0-9A-Za-z]{${LENGTHS[kind]}}$`))
+      .transform((value) => new SecurityCode(kind, value))
+  }
+
   static parse(kind: SecurityCodeKind, input: unknown): SecurityCode {
-    const schema = z.string().trim().regex(new RegExp(`^[0-9A-Za-z]{${LENGTHS[kind]}}$`))
-    return new SecurityCode(kind, validate(schema, input, kind))
+    return validate(SecurityCode.schema(kind), input, kind)
   }
 
   reveal(): string {

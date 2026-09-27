@@ -4,9 +4,14 @@ import { InvalidTransition } from "@/src/core/errors/invalid-transition"
  * Our status machine, not the Zulex one: the API only knows IN_PROGRESS,
  * FINISHED and ERROR. Order is the customer's journey, so the stepper can
  * render from this list. Verimi (business logic steps 2–3) is out of the MVP;
- * when it lands, its statuses are inserted between the first two.
+ * when it lands, its statuses are inserted after `submitted_and_paid`.
+ *
+ * `awaiting_payment` is ours alone: the details are stored at checkout because
+ * Stripe confirms payment later, by webhook. The customer never sees it — the
+ * status link is only issued once payment is confirmed — and it sends no email.
  */
 export const APPLICATION_STATUSES = [
+  "awaiting_payment",
   "submitted_and_paid",
   "submitted_to_kba",
   "completed",
@@ -22,6 +27,7 @@ export type ApplicationStatus = (typeof APPLICATION_STATUSES)[number]
  * is not an event: the customer sees nothing until the error algorithm decides.
  */
 export const APPLICATION_EVENTS = [
+  "paymentConfirmed",
   "submittedToKba",
   "kbaProcessing",
   "kbaCompleted",
@@ -34,6 +40,9 @@ export const APPLICATION_EVENTS = [
 export type ApplicationEvent = (typeof APPLICATION_EVENTS)[number]
 
 const TRANSITIONS: Record<ApplicationStatus, Partial<Record<ApplicationEvent, ApplicationStatus>>> = {
+  awaiting_payment: {
+    paymentConfirmed: "submitted_and_paid",
+  },
   submitted_and_paid: {
     submittedToKba: "submitted_to_kba",
     failedCorrectable: "failed_correctable",
