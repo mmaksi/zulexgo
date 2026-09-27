@@ -38,6 +38,9 @@ export class InMemoryApplicationRepository implements ApplicationRepository {
   }
 
   async setStatusToken(reference: ApplicationReference, token: string): Promise<void> {
+    if (!this.applications.has(reference)) throw new Error(`InMemoryApplicationRepository: unknown application ${reference}`)
+    const holder = this.tokens.get(token)
+    if (holder && holder !== reference) throw new Error("InMemoryApplicationRepository: status token already held by another application")
     for (const [existing, owner] of this.tokens) if (owner === reference) this.tokens.delete(existing)
     this.tokens.set(token, reference)
   }

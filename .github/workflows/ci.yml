@@ -89,7 +89,7 @@ jobs:
           npm run db:migrate:down -- all
           npm run db:migrate
           npm run db:seed
-          npm run db:seed
+          npm run --silent db:seed | grep -Fx "Seed already loaded."
 
       - run: npm test -- --ci
         env:

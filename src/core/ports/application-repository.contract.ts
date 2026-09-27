@@ -171,6 +171,22 @@ export function applicationRepositoryContract(name: string, makeSubject: () => A
       it("finds nothing for an unknown token", async () => {
         expect(await repository.findByStatusToken("token-for-contract-test-00000000000000000000")).toBeUndefined()
       })
+
+      it("refuses a token for an application that does not exist", async () => {
+        const missing = anApplication().reference
+
+        await expect(repository.setStatusToken(missing, "token-for-contract-test-000000000000000000a")).rejects.toThrow()
+        expect(await repository.findByStatusToken("token-for-contract-test-000000000000000000a")).toBeUndefined()
+      })
+
+      it("refuses a token another application holds, so one link never opens two orders", async () => {
+        const holder = await repository.create(anApplication())
+        const other = await repository.create(anApplication())
+        await repository.setStatusToken(holder.reference, "token-for-contract-test-000000000000000000a")
+
+        await expect(repository.setStatusToken(other.reference, "token-for-contract-test-000000000000000000a")).rejects.toThrow()
+        expect(await repository.findByStatusToken("token-for-contract-test-000000000000000000a")).toEqual(holder)
+      })
     })
 
     describe("findDueForPolling", () => {
