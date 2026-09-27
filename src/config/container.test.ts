@@ -1,10 +1,11 @@
 import { randomBytes } from "node:crypto"
 import { join } from "node:path"
-import { anApplication } from "@/tests/fixtures/applications"
+import { anApplication, FAKE_REQUEST } from "@/tests/fixtures/applications"
 import { Migrator, readMigrations } from "@/src/adapters/repository/postgres/migrator"
 import { createTestDatabase, describeWithPostgres, type TestDatabase } from "@/src/adapters/repository/postgres/test-database"
 import { clockContract } from "@/src/core/ports/clock.contract"
 import { tokenGeneratorContract } from "@/src/core/ports/token-generator.contract"
+import { submitCheckout } from "@/src/core/use-cases/submit-checkout"
 import { ZULEX_BASE_URLS } from "./env"
 import { createContainer } from "./container"
 
@@ -44,6 +45,49 @@ describe("createContainer", () => {
   })
 })
 
+describe("container ports", () => {
+  it("wires a fake for every port in dev, so the whole flow runs locally", async () => {
+    const container = createContainer(dev)
+
+    const { reference, clientSecret } = await submitCheckout(container, { request: FAKE_REQUEST, email: "customer@example.test" })
+
+    expect(clientSecret).toEqual(expect.any(String))
+    expect((await container.repository.get(reference))?.status).toBe("awaiting_payment")
+    expect(await container.documents.list(reference)).toEqual([])
+    expect((await container.identity.start({ reference, email: (await container.repository.get(reference))!.email })).link).toMatch(/^https:/)
+  })
+
+  it("builds status links on the stage's own origin", () => {
+    expect(createContainer(staging).statusLink("t")).toBe("https://zulexgo-staging.vercel.app/status/t")
+  })
+
+  it.each([
+    ["dev", dev, true],
+    ["staging", staging, false],
+  ] as const)("prints status tokens to the log only in dev (%s)", async (_, stage, printed) => {
+    const log = jest.spyOn(console, "info").mockImplementation(() => {})
+    const { reference, email } = anApplication()
+    const statusLink = "https://zulexgo.example.test/status/faketoken-container-log-test-000000000001"
+
+    await createContainer(stage).mailer.send({ to: email, template: { name: "orderConfirmation", reference, statusLink } })
+
+    expect(log.mock.calls.flat().join("\n").includes("faketoken-container-log-test")).toBe(printed)
+    log.mockRestore()
+  })
+
+  it("refuses a driver whose real adapter does not exist yet, instead of quietly running a fake", () => {
+    expect(() =>
+      createContainer({
+        ...staging,
+        PAYMENT_DRIVER: "stripe",
+        STRIPE_SECRET_KEY: "sk_test_placeholder",
+        STRIPE_WEBHOOK_SECRET: "whsec_placeholder",
+        NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: "pk_test_placeholder",
+      }),
+    ).toThrow(/PAYMENT_DRIVER=stripe/)
+  })
+})
+
 describe("container repository", () => {
   it("serves the dev seed from the moment the server starts", async () => {
     const seeded = await createContainer(dev).repository.findByStatusToken("seed-status-link-completed")
@@ -51,8 +95,8 @@ describe("container repository", () => {
     expect(seeded?.status).toBe("completed")
   })
 
-  it("is never seeded on staging, even on the in-memory repository", async () => {
-    expect(await createContainer(staging).repository.findByStatusToken("seed-status-link-completed")).toBeUndefined()
+  it("serves the same seed on staging when it runs on the in-memory repository", async () => {
+    expect((await createContainer(staging).repository.findByStatusToken("seed-status-link-completed"))?.status).toBe("completed")
   })
 })
 

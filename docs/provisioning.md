@@ -17,8 +17,8 @@ Nothing here belongs in code; no value from here belongs in git.
 | Zulex | integration host (from M4) | integration host (from M4) | production host |
 | Stripe | sandbox `dev` (from M4) | sandbox `staging` (from M4) | live account (business verification pending) |
 | Mail | console | Resend, allowlisted recipients | Resend |
-| Identity (Verimi) | fake | fake until M5, then Verimi | Verimi |
-| Database | in-memory, seeded at boot | Supabase project (Frankfurt) | separate Supabase project (Frankfurt) |
+| Identity (Verimi, added later) | fake | fake until Verimi is added | Verimi |
+| Database | in-memory, seeded at boot | Supabase project (Frankfurt), seeded on deploy | separate Supabase project (Frankfurt), never seeded |
 | Document storage | in-memory | Storage in the staging Supabase project (from M5) | Storage in the production Supabase project |
 | Money | none | none | real |
 
@@ -26,7 +26,7 @@ Two Vercel **projects**, not two branches of one: secrets are scoped per project
 
 ---
 
-## 1. Vercel — staging  *(needed for M1; not created yet as of 2026-09-27)*
+## 1. Vercel — staging  *(needed for M1; created 2026-09-27)*
 
 Do §3 first: step 5 needs the database values.
 
@@ -84,8 +84,8 @@ No Supabase Auth (no accounts by design), no client-side Supabase SDK, no RLS-ba
    | `DIRECT_DATABASE_URL` | Session pooler | 5432 | `npm run db:migrate` during the Vercel build |
 
 4. **Generate the encryption key**: `openssl rand -base64 32` → `CODES_ENCRYPTION_KEY`. Store a copy in your password manager: without it, every stored security code and status link is unreadable. A new key per stage.
-5. **Set them in the stage's Vercel project** (Production scope), together with `REPOSITORY_DRIVER=postgres`, **before** merging the change that should run on Postgres. The next deploy runs `scripts/vercel-build`, which migrates the database and then builds; a failed migration fails the deploy and the previous one keeps serving.
-6. **Check it**: the build log lists `Applied 0001_create_applications` … on the first deploy, `Nothing to apply.` afterwards. The database's Table Editor shows `applications`, `payments`, `status_history`, `status_tokens` and `schema_migrations`, all empty. Staging is never seeded.
+5. **Set them in the stage's Vercel project** (Production scope), together with `REPOSITORY_DRIVER=postgres`, **before** merging the change that should run on Postgres. The next deploy runs `scripts/vercel-build`, which migrates the database, seeds it on staging, and then builds; a failed migration fails the deploy and the previous one keeps serving.
+6. **Check it**: the build log lists `Applied 0001_create_applications` … on the first deploy, `Nothing to apply.` afterwards. On staging it then shows `Seeded 7 applications.` the first time and `Seed already loaded.` after. The database's Table Editor shows `applications`, `payments`, `status_history`, `status_tokens` and `schema_migrations`: seven seeded applications on staging, empty on production, which is never seeded.
 
 Migrations only move forward on staging and production: `db:migrate:down` refuses to run outside dev. A bad migration is fixed with a new one.
 

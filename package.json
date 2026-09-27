@@ -12,7 +12,8 @@
     "test:watch": "jest --watch",
     "db:migrate": "tsx --conditions=react-server scripts/db.ts up",
     "db:migrate:down": "tsx --conditions=react-server scripts/db.ts down",
-    "db:status": "tsx --conditions=react-server scripts/db.ts status"
+    "db:status": "tsx --conditions=react-server scripts/db.ts status",
+    "db:seed": "tsx --conditions=react-server scripts/db.ts seed"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",

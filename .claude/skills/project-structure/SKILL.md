@@ -42,7 +42,7 @@ src/
 
 db/
   migrations/           One folder per migration. See `database-migrations`.
-  seed/                 Dev-only mock data. See `database-migrations`.
+  seed/                 Mock data for dev and staging, never production. See `database-migrations`.
 
 tests/
   integration/          Cross-module flow tests, named for the flow.

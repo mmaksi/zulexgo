@@ -1,6 +1,6 @@
 ---
 name: database-migrations
-description: Use when changing the database schema or seeding data - every migration gets its own folder with up/down SQL, and dev data comes from the idempotent seed loaded into the in-memory repository, never from hand-edited rows
+description: Use when changing the database schema or seeding data - every migration gets its own folder with up/down SQL, and dev and staging data come from the idempotent seed, never from hand-edited rows
 ---
 
 # Database Migrations and Seeding
@@ -48,16 +48,16 @@ A migration folder with no `down.sql` does not pass review.
 
 ```
 db/seed/
-  seed.ts          # entry point — loads the data into the in-memory repository
+  seed.ts          # entry point — the data for dev and staging, and loadSeed() for a database
   data/
     applications.ts
     documents.ts
 ```
 
-The dev composition root loads the seed into the in-memory repository at boot, so every restart starts from the same data. Rules:
+The composition root loads the seed into the in-memory repository at every boot, so every restart starts from the same data. Staging, which runs on Postgres, gets it from `npm run db:seed` on every deploy. Rules:
 
-- **Dev only.** `seed.ts` throws unless `APP_ENV` is `dev`. Staging and production are never seeded — see the `environments` skill.
-- **Idempotent.** Loading twice produces the same data, not duplicates: upsert on a stable key.
+- **Dev and staging only.** `seed.ts` throws when `APP_ENV` is `production`, which is never seeded — see the `environments` skill.
+- **Idempotent.** Loading twice produces the same data, not duplicates: keyed by reference. On a database, a seeded row that already exists is left alone, so changes made while testing on staging survive the next deploy.
 - **Deterministic.** Fixed IDs and a seeded RNG, so a bug found against seed data is reproducible by everyone.
 - **Obviously fake.** Security codes, VINs, plates, emails, and tokens must be recognisable as test data (`AAA111`, `example.test`). Never copy a real value from a production payload or a support ticket into seed data.
 - **Covers the states, not just the happy path.** Seed at least one application in every value of `APPLICATION_STATUSES` (`src/core/domain/application-status.ts`); `db/seed/seed.test.ts` iterates the list, and the seed's journey table is a `Record` over it, so a new status fails to compile until it is seeded. If a developer cannot see every UI state right after starting the dev server, the seed is incomplete.
@@ -72,8 +72,9 @@ The runner is `src/adapters/repository/postgres/migrator.ts`; the commands read 
 | `npm run db:migrate` | Applies every pending migration, in order, one transaction each. Refuses to run if a migration that already ran has changed on disk. |
 | `npm run db:migrate:down -- [count \| all]` | Reverts the latest one (or `count`, or all). **Dev only**: it refuses on staging and production. |
 | `npm run db:status` | Lists each migration as applied (with its time) or pending. |
+| `npm run db:seed` | Loads the seed, adding only the applications that are missing. Refuses production. |
 
-They connect over `DIRECT_DATABASE_URL` and need `REPOSITORY_DRIVER=postgres`. A stage's Vercel build runs `db:migrate` before `next build` (`scripts/vercel-build`), so a deployed stage is always migrated by its own deploy, never by hand.
+They connect over `DIRECT_DATABASE_URL` and need `REPOSITORY_DRIVER=postgres`. A stage's Vercel build runs `db:migrate` before `next build` (`scripts/vercel-build`), and staging's also runs `db:seed`, so a deployed stage is always migrated and seeded by its own deploy, never by hand.
 
 ## Checklist
 
