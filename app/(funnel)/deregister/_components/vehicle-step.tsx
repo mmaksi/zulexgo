@@ -1,0 +1,117 @@
+"use client"
+
+import { useState, type FormEvent } from "react"
+import { Button } from "@/src/ui/button"
+import { TextField } from "./text-field"
+import { fieldsFor, validateVehicle, type PlateCount, type VehicleData, type VehicleField } from "./vehicle-data"
+
+const MODERN_VIN_LENGTH = 17
+
+const fieldId = (field: VehicleField) => `vehicle-${field}`
+
+/** site-contract §2.3: exactly the fields the API needs, the front code only for two plates. */
+export function VehicleStep({
+  plateCount,
+  initial,
+  onNext,
+}: {
+  plateCount: PlateCount
+  initial: VehicleData
+  onNext: (data: VehicleData) => void
+}) {
+  const [data, setData] = useState(initial)
+  const [errors, setErrors] = useState<Partial<Record<VehicleField, string>>>({})
+
+  const bind = (field: VehicleField, { upper = true } = {}) => ({
+    id: fieldId(field),
+    value: data[field],
+    error: errors[field],
+    onChange: (event: { target: { value: string } }) => {
+      const value = upper ? event.target.value.toUpperCase() : event.target.value
+      setData((current) => ({ ...current, [field]: value }))
+      setErrors((current) => ({ ...current, [field]: undefined }))
+    },
+    autoComplete: "off",
+    spellCheck: false,
+  })
+
+  function submit(event: FormEvent) {
+    event.preventDefault()
+    const found = validateVehicle(data, plateCount)
+    setErrors(found)
+    const firstInvalid = fieldsFor(plateCount).find((field) => found[field])
+    if (firstInvalid) {
+      document.getElementById(fieldId(firstInvalid))?.focus()
+      return
+    }
+    onNext(data)
+  }
+
+  const vinWarning =
+    data.vin && data.vin.length !== MODERN_VIN_LENGTH
+      ? "Die FIN neuerer Fahrzeuge hat 17 Stellen. Bei älteren Fahrzeugen kann sie kürzer sein."
+      : undefined
+
+  return (
+    <form onSubmit={submit} noValidate className="flex flex-col gap-(--field-gap)">
+      <fieldset className="flex flex-col gap-3">
+        <legend className="mb-2 text-small font-normal text-grau-dark">Kennzeichen</legend>
+        <div className="grid grid-cols-[1fr_1fr_1.4fr] gap-3 sm:max-w-md">
+          <TextField {...bind("prefix")} label="Ortskürzel" maxLength={3} inputClassName="plate-text" />
+          <TextField {...bind("letters")} label="Buchstaben" maxLength={2} inputClassName="plate-text" />
+          <TextField {...bind("numbers")} label="Ziffern" maxLength={4} inputMode="numeric" inputClassName="plate-text" />
+        </div>
+      </fieldset>
+
+      <TextField
+        {...bind("vin")}
+        label="Fahrzeug-Identifizierungsnummer (FIN)"
+        helper="Feld E im Fahrzeugschein."
+        warning={vinWarning}
+        maxLength={MODERN_VIN_LENGTH}
+        className="sm:max-w-md"
+      />
+
+      <CodeField {...bind("rearPlate")} label="Sicherheitscode hinteres Kennzeichen" length={3} where="Unter dem Rubbelfeld der Plakette auf dem hinteren Kennzeichen." />
+      {plateCount === 2 ? (
+        <CodeField {...bind("frontPlate")} label="Sicherheitscode vorderes Kennzeichen" length={3} where="Unter dem Rubbelfeld der Plakette auf dem vorderen Kennzeichen." />
+      ) : null}
+      <CodeField
+        {...bind("certificate")}
+        label="Sicherheitscode Fahrzeugschein"
+        length={7}
+        where="Unter dem Rubbelfeld auf der Vorderseite des Fahrzeugscheins (Teil I)."
+        type="password"
+      />
+
+      <TextField
+        {...bind("email", { upper: false })}
+        label="E-Mail-Adresse"
+        helper="Hierhin schicken wir Ihren persönlichen Statuslink und jede Neuigkeit zu Ihrem Antrag."
+        type="email"
+        inputMode="email"
+        autoComplete="email"
+        className="sm:max-w-md"
+      />
+
+      <div>
+        <Button type="submit">Weiter</Button>
+      </div>
+    </form>
+  )
+}
+
+/** design-standard §7: one centred box per code, paired with where to find it (photo placeholder until M7). */
+function CodeField({
+  length,
+  where,
+  ...field
+}: Parameters<typeof TextField>[0] & { length: number; where: string }) {
+  return (
+    <TextField {...field} helper={where} maxLength={length} className="max-w-60" inputClassName="code-input" data-1p-ignore>
+      <div aria-hidden="true" className="flex h-16 max-w-60 items-center justify-center rounded-sm bg-bg-blue text-small text-grau-bright">
+        Foto: wo der Code steht
+      </div>
+    </TextField>
+  )
+}

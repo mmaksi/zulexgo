@@ -1,3 +1,4 @@
+import Link from "next/link"
 import { ArrowRight } from "lucide-react"
 import { Badge } from "@/src/ui/badge"
 import { buttonLink } from "@/src/ui/button"
@@ -85,13 +86,13 @@ export function ServiceSelection() {
                   {service.available ? (
                     // The link stretches over the card, so the whole card is
                     // the click target its hover state promises (§5.3).
-                    <a
-                      href="#ablauf"
+                    <Link
+                      href="/deregister"
                       className={buttonLink({ className: "w-full after:absolute after:inset-0" })}
                     >
                       Jetzt abmelden
                       <ArrowRight aria-hidden="true" />
-                    </a>
+                    </Link>
                   ) : (
                     <Badge variant="secondary">Bald verfügbar</Badge>
                   )}

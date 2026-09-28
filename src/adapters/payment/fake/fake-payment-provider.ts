@@ -1,12 +1,17 @@
+import { createHmac, timingSafeEqual } from "node:crypto"
 import type { ApplicationReference } from "@/src/core/domain/application-reference"
 import { Money } from "@/src/core/domain/money"
 import { HoldExpired } from "@/src/core/errors/hold-expired"
+import { NotificationRejected } from "@/src/core/errors/notification-rejected"
 import type { Clock } from "@/src/core/ports/clock"
-import type { Payment, PaymentMethodKind, PaymentProvider } from "@/src/core/ports/payment-provider"
+import type { Payment, PaymentMethodKind, PaymentNotification, PaymentProvider } from "@/src/core/ports/payment-provider"
 
 /** Stripe's validity for an online card authorisation (verified via the Stripe docs MCP, 2026-09-27). */
 const HOLD_VALIDITY_MS = 7 * 24 * 60 * 60 * 1000
 const NOTHING = Money.ofCents(0)
+const SIGNING_SECRET = "fake-payment-notification-secret"
+
+const sign = (payload: string) => createHmac("sha256", SIGNING_SECRET).update(payload).digest("hex")
 
 type Stored = { -readonly [Key in keyof Payment]: Payment[Key] } & { reference: ApplicationReference }
 
@@ -33,6 +38,22 @@ export class FakePaymentProvider implements PaymentProvider {
       status: "held",
       holdExpiresAt: new Date(this.clock.now().getTime() + HOLD_VALIDITY_MS),
     })
+  }
+
+  /** What the provider would send once the customer has paid. */
+  notificationOfPayment(paymentId: string): { payload: string; signature: string } {
+    const { reference } = this.find(paymentId)
+    const payload = JSON.stringify({ id: `fake-event-${paymentId}`, type: "paymentReady", reference })
+    return { payload, signature: sign(payload) }
+  }
+
+  readNotification(payload: string, signature: string | null): PaymentNotification {
+    const expected = Buffer.from(sign(payload))
+    const given = Buffer.from(signature ?? "")
+    if (given.length !== expected.length || !timingSafeEqual(given, expected)) throw new NotificationRejected()
+
+    const { id, type, reference } = JSON.parse(payload)
+    return type === "paymentReady" ? { kind: "paymentReady", eventId: id, reference } : { kind: "ignored", eventId: id }
   }
 
   async getPayment(paymentId: string): Promise<Payment> {

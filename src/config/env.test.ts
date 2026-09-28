@@ -21,6 +21,7 @@ const production = {
   ZULEX_API_KEY: "zulex-placeholder",
   MAIL_DRIVER: "resend",
   RESEND_API_KEY: "re_placeholder",
+  MAIL_FROM: "ZulexGO <status@mail.example.test>",
   REPOSITORY_DRIVER: "postgres",
   DATABASE_URL: "postgresql://pooler.example.test/zulexgo",
   DIRECT_DATABASE_URL: "postgresql://direct.example.test/zulexgo",
@@ -176,9 +177,15 @@ describe("mail", () => {
 
   it("parses the allowlist as a comma-separated list", () => {
     expect(
-      parseEnv({ ...staging, MAIL_DRIVER: "resend", RESEND_API_KEY: "re_x", MAIL_ALLOWLIST: "a@example.test, b@example.test" })
+      parseEnv({ ...staging, MAIL_DRIVER: "resend", RESEND_API_KEY: "re_x", MAIL_FROM: "z@example.test", MAIL_ALLOWLIST: "a@example.test, b@example.test" })
         .MAIL_ALLOWLIST
     ).toEqual(["a@example.test", "b@example.test"])
+  })
+
+  it("requires a sender address once MAIL_DRIVER is resend", () => {
+    expect(() => parseEnv({ ...staging, MAIL_DRIVER: "resend", RESEND_API_KEY: "re_x", MAIL_ALLOWLIST: "a@example.test" })).toThrow(
+      /MAIL_FROM/
+    )
   })
 
   it("requires the provider key once MAIL_DRIVER is resend", () => {

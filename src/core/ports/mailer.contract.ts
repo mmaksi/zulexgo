@@ -18,7 +18,7 @@ export const EVERY_TEMPLATE: EmailTemplate[] = [
 export function mailerContract(name: string, makeSubject: () => Mailer) {
   describe(`Mailer contract: ${name}`, () => {
     it.each(EVERY_TEMPLATE.map((template) => [template.name, template] as const))("sends %s", async (_, template) => {
-      await expect(makeSubject().send({ to: email, template })).resolves.toBeUndefined()
+      await expect(makeSubject().send({ to: email, template, idempotencyKey: `contract/${template.name}` })).resolves.toBeUndefined()
     })
   })
 }
