@@ -4,6 +4,7 @@ import { FakeIdentityVerification } from "@/src/adapters/identity/fake/fake-iden
 import { ConsoleMailer } from "@/src/adapters/mail/console/console-mailer"
 import { FakePaymentProvider } from "@/src/adapters/payment/fake/fake-payment-provider"
 import { FakeRegistrationGateway } from "@/src/adapters/registration/fake/fake-registration-gateway"
+import { ZulexRegistrationGateway } from "@/src/adapters/registration/zulex/zulex-registration-gateway"
 import { InMemoryApplicationRepository } from "@/src/adapters/repository/fake/in-memory-application-repository"
 import { PostgresApplicationRepository } from "@/src/adapters/repository/postgres/postgres-application-repository"
 import { InMemoryDocumentStore } from "@/src/adapters/storage/fake/in-memory-document-store"
@@ -39,7 +40,10 @@ export function createContainer(source: EnvSource = process.env): Container {
     clock,
     tokens: new CryptoTokenGenerator(),
     repository: createRepository(env),
-    registration: env.REGISTRATION_DRIVER === "fake" ? new FakeRegistrationGateway() : notBuiltYet("REGISTRATION_DRIVER=zulex", "M4"),
+    registration:
+      env.REGISTRATION_DRIVER === "fake"
+        ? new FakeRegistrationGateway()
+        : new ZulexRegistrationGateway({ baseUrl: env.ZULEX_BASE_URL!, apiKey: env.ZULEX_API_KEY! }),
     payments: env.PAYMENT_DRIVER === "fake" ? new FakePaymentProvider(clock) : notBuiltYet("PAYMENT_DRIVER=stripe", "M4"),
     mailer: env.MAIL_DRIVER === "console" ? new ConsoleMailer({ revealStatusLinks: env.APP_ENV === "dev" }) : notBuiltYet("MAIL_DRIVER=resend", "M4"),
     documents: env.STORAGE_DRIVER === "fake" ? new InMemoryDocumentStore() : notBuiltYet("STORAGE_DRIVER=supabase", "M5"),
