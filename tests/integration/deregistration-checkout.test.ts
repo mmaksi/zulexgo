@@ -10,6 +10,9 @@ import { webhookRequest, withVendorsAtTheNetwork } from "./network-harness"
  */
 const { world, stored, emails } = withVendorsAtTheNetwork()
 
+/** PaymentIntent, PaymentMethod, Charge, Customer, Refund, Payment, Source, Card, SetupIntent, Event. */
+const STRIPE_OBJECT_ID = /\b(?:pi|pm|ch|cus|re|py|src|card|seti|evt)_[A-Za-z0-9]+/g
+
 async function checkout() {
   const { reference, clientSecret } = await submitCheckout(world.deps, { request: FAKE_REQUEST, email: "customer@example.test" })
   const paymentId = (await stored(reference)).payment.id
@@ -36,6 +39,17 @@ describe("de-registration checkout", () => {
     })
     expect(emails()).toEqual(["orderConfirmation", "submittedToKba"])
     expect(await world.deps.repository.getStatusToken(reference)).toEqual(expect.any(String))
+  })
+
+  it("keeps the PaymentIntent id and nothing else of Stripe's in the application record", async () => {
+    const { reference, clientSecret, paymentId } = await checkout()
+    world.stripe.customerPays(paymentId, "card")
+
+    await handlePaymentNotification(world.deps, webhookRequest(world.stripe.event("payment_intent.amount_capturable_updated", paymentId)))
+
+    const record = JSON.stringify(await stored(reference))
+    expect(record.match(STRIPE_OBJECT_ID)).toEqual([paymentId])
+    expect(record).not.toContain(clientSecret)
   })
 
   it("sends Zulex the vehicle the customer entered, with our idempotency key", async () => {
