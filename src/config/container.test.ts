@@ -79,12 +79,12 @@ describe("container ports", () => {
     expect(() =>
       createContainer({
         ...staging,
-        PAYMENT_DRIVER: "stripe",
-        STRIPE_SECRET_KEY: "sk_test_placeholder",
-        STRIPE_WEBHOOK_SECRET: "whsec_placeholder",
-        NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: "pk_test_placeholder",
+        STORAGE_DRIVER: "supabase",
+        SUPABASE_STORAGE_URL: "https://storage.example.test",
+        SUPABASE_STORAGE_BUCKET: "documents",
+        SUPABASE_STORAGE_SERVICE_KEY: "placeholder",
       }),
-    ).toThrow(/PAYMENT_DRIVER=stripe/)
+    ).toThrow(/STORAGE_DRIVER=supabase/)
   })
 })
 

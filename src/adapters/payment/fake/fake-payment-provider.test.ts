@@ -14,7 +14,11 @@ function movableClock(start: Date) {
 
 paymentProviderContract("FakePaymentProvider", () => {
   const provider = new FakePaymentProvider(movableClock(new Date("2026-03-01T09:00:00.000Z")).clock)
-  return { provider, customerPays: (id, method) => provider.customerPays(id, method) }
+  return {
+    provider,
+    customerPays: (id, method) => provider.customerPays(id, method),
+    notificationOfPayment: async (id) => provider.notificationOfPayment(id),
+  }
 })
 
 const DAY = 24 * 60 * 60 * 1000
