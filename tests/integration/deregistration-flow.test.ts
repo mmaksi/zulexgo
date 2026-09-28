@@ -113,6 +113,35 @@ describe("de-registration flow on fakes", () => {
       expect(deps.registration.submissions).toHaveLength(1)
     })
 
+    it("resumes on the provider's retry when email 1 failed, keeping the status link it already issued", async () => {
+      const { deps, emails, stored } = setup()
+      const { reference } = await submitCheckout(deps, { request: FAKE_REQUEST, email: "customer@example.test" })
+      await deps.payments.customerPays((await stored(reference)).payment.id, "card")
+      jest.spyOn(deps.mailer, "send").mockRejectedValueOnce(new Error("Resend refused the message"))
+
+      await expect(confirmPayment(deps, reference)).rejects.toThrow("Resend refused the message")
+      const issued = await deps.repository.getStatusToken(reference)
+      await confirmPayment(deps, reference)
+
+      expect(emails()).toEqual(["orderConfirmation", "submittedToKba"])
+      expect((await stored(reference)).status).toBe("submitted_to_kba")
+      expect(await deps.repository.getStatusToken(reference)).toBe(issued)
+      expect(deps.mailer.sent[0].template).toMatchObject({ statusLink: expect.stringMatching(new RegExp(`/${issued}$`)) })
+    })
+
+    it("leaves a submission that died after payment was recorded for the poller to resume", async () => {
+      const { deps, emails, stored, poll } = setup()
+      const { reference } = await submitCheckout(deps, { request: FAKE_REQUEST, email: "customer@example.test" })
+      await deps.payments.customerPays((await stored(reference)).payment.id, "card")
+      deps.registration.failNext("submit", new Error("the process died"))
+
+      await expect(confirmPayment(deps, reference)).rejects.toThrow("the process died")
+      await poll(0)
+
+      expect((await stored(reference)).status).toBe("submitted_to_kba")
+      expect(emails()).toEqual(["orderConfirmation", "submittedToKba"])
+    })
+
     it("does nothing until the customer has actually paid", async () => {
       const { deps, emails, stored } = setup()
       const { reference } = await submitCheckout(deps, { request: FAKE_REQUEST, email: "customer@example.test" })
