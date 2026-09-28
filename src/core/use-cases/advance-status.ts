@@ -19,8 +19,10 @@ export async function advanceStatus(deps: Dependencies, application: Application
   try {
     status = await deps.registration.getStatus(application.zulexApplicationId!)
   } catch (error) {
-    if (!(error instanceof GatewayUnavailable)) throw error
-    await deps.repository.update(scheduleNextPoll(deps, application, error.retryAfterMs))
+    // Back off on any failure, not just an outage: an id the service rejects would otherwise be asked about every tick.
+    const unavailable = error instanceof GatewayUnavailable
+    await deps.repository.update(scheduleNextPoll(deps, application, unavailable ? error.retryAfterMs : undefined))
+    if (!unavailable) throw error
     return
   }
 

@@ -1,5 +1,6 @@
 import { handlePaymentNotification } from "@/app/api/webhooks/stripe/handle"
 import { handlePoll } from "@/app/api/internal/poll/handle"
+import { seedFor } from "@/db/seed/seed"
 import { FAKE_REQUEST } from "@/tests/fixtures/applications"
 import { pollDueApplications } from "@/src/core/use-cases/poll-due-applications"
 import { submitCheckout } from "@/src/core/use-cases/submit-checkout"
@@ -59,6 +60,19 @@ describe("status polling", () => {
     expect(status).toBe("submitted_to_kba")
     expect(polling.nextPollAt!.getTime() - world.clock.now().getTime()).toBe(600_000)
     expect(world.zulex.requests.filter((request) => request.path.endsWith(zulexId))).toHaveLength(1)
+  })
+
+  it("backs off from an application Zulex has never heard of, like the seed's on staging, instead of asking every tick", async () => {
+    const { application } = seedFor("staging").find(({ application }) => application.status === "submitted_to_kba")!
+    await world.deps.repository.create(application)
+    const statusChecks = () => world.zulex.requests.filter((request) => request.path.endsWith(application.zulexApplicationId!)).length
+
+    expect(await (await heartbeat(0)).json()).toEqual({ checked: 1, failed: 1 })
+    await heartbeat(1)
+
+    expect(statusChecks()).toBe(1)
+    expect((await stored(application.reference)).status).toBe("submitted_to_kba")
+    expect(emails()).toEqual([])
   })
 
   it("refuses a heartbeat without the cron secret", async () => {

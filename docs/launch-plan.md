@@ -2,14 +2,15 @@
 
 ## Context
 
-ZulexGO: B2C web app for online vehicle de-registration (Außerbetriebsetzung) on the B2B Zulex API. **M0–M2 are done; M3 is merged.** The repo has the marketing layer (landing, legal placeholder pages, design tokens, Shadcn in `src/ui`, Jest + msw) with colocated tests, plus the foundation:
+ZulexGO: B2C web app for online vehicle de-registration (Außerbetriebsetzung) on the B2B Zulex API. **M0–M2 are done; M3 and M4's code are merged. M4's exit criterion, a real run on staging, waits for the Zulex API, which is down.** The repo has the marketing layer (landing, legal placeholder pages, design tokens, Shadcn in `src/ui`, Jest + msw) with colocated tests, plus the foundation:
 - **Config layer:** zod-validated env in `src/config/env.ts`, selected by `APP_ENV`; five driver variables and stage guardrails as tests; composition root `src/config/container.ts`; `.env.example` committed.
 - **Ports:** `Clock`, `TokenGenerator`, `ApplicationRepository`, `RegistrationGateway`, `PaymentProvider`, `Mailer`, `DocumentStore`, `IdentityVerification`, each with a contract suite passed by every adapter; the domain core, status machine, error algorithm, refund policy and the flow's use cases run end to end on the fakes (M2).
 - **Database:** in-repo migration runner, migrations `0001`–`0004`, a Postgres repository passing the same contract as the in-memory one, and the seed for dev and staging (M3).
 - **CI:** `.github/workflows/ci.yml` runs lint, typecheck, tests, build on every PR, plus the `main accepts staging only` check. ESLint boundary rule in place; a canary test proves the Zulex key never reaches the client bundle.
 - **Deployment:** GitHub remote with protected `staging` and `main`, baseline security headers in `next.config.ts`. Vercel project `zulexgo-staging` deploys `staging` (created 2026-09-27, later than M1 recorded); the production project `zulexgo` is created in M8.
+- **Walking skeleton (M4 code):** Zulex, Stripe and Resend adapters, each passing its port's contract; the Zulex adapter is written from `docs/api-1.yaml` and tested against an msw double of that spec, never yet against the live API. Signed Stripe webhook at `app/api/webhooks/stripe/`, poll route at `app/api/internal/poll/` behind `CRON_SECRET`, funnel at `/deregister`, status page at `/status/[token]`, and the M4 integration tests.
 
-Not built yet (M4 onward): vendor adapters (Zulex, Stripe, Resend, Supabase Storage, Verimi), funnel, status page, poller.
+Not built yet: the Supabase Storage and Verimi adapters (M5); the Zulex spike (no captured fixtures, and `docs/deregistration-user-journeys.md` has no findings from the live API); a schedule for the poll route (`docs/provisioning.md` §5); the staging run that closes M4.
 
 Project rules (`CLAUDE.md` + `.claude/skills/`) govern *how* each arrives: test-first for domain rules, interactive behaviour, security invariants, integration boundaries and bug fixes (no tests for static presentation, tokens, or configuration); ports-and-adapters with contract tests and an in-memory fake per port; `APP_ENV`-driven stages; raw-SQL migration folders; "nothing reaches production that has not run on staging."
 
