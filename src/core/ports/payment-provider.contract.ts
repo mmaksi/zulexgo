@@ -1,15 +1,18 @@
 import { anApplication } from "@/tests/fixtures/applications"
 import { Money } from "@/src/core/domain/money"
 import { HoldExpired } from "@/src/core/errors/hold-expired"
+import { NotificationRejected } from "@/src/core/errors/notification-rejected"
 import type { PaymentMethodKind, PaymentProvider } from "./payment-provider"
 
 const TOTAL = Money.ofCents(6999)
 const FEE = Money.ofCents(1999)
 
-/** What the customer does in the browser, which the server cannot: the adapter's test supplies it. */
+/** What the customer does in the browser, and what the provider then sends, which the server cannot: the adapter's test supplies both. */
 export interface PaymentProviderSubject {
   provider: PaymentProvider
   customerPays(paymentId: string, method: PaymentMethodKind): Promise<void>
+  /** The signed notification the provider sends once a payment can start its application. */
+  notificationOfPayment(paymentId: string): Promise<{ payload: string; signature: string }>
 }
 
 /** Every PaymentProvider adapter must pass this, including the fake. */
@@ -94,6 +97,30 @@ export function paymentProviderContract(name: string, makeSubject: () => Payment
       await provider.release(paymentId)
 
       expect(await provider.release(paymentId)).toMatchObject({ status: "released", captured: Money.ofCents(0) })
+    })
+
+    describe("notifications", () => {
+      it("reads a signed notification that a payment is ready, naming the order it belongs to", async () => {
+        const { reference, email } = anApplication()
+        const { paymentId } = await provider.createPayment({ reference, amount: TOTAL, email })
+        await subject.customerPays(paymentId, "card")
+        const { payload, signature } = await subject.notificationOfPayment(paymentId)
+
+        expect(provider.readNotification(payload, signature)).toMatchObject({ kind: "paymentReady", reference })
+      })
+
+      it("rejects a notification whose payload was changed after signing", async () => {
+        const paymentId = await paid("card")
+        const { payload, signature } = await subject.notificationOfPayment(paymentId)
+
+        expect(() => provider.readNotification(payload.replace("ZG-", "ZG-X"), signature)).toThrow(NotificationRejected)
+      })
+
+      it("rejects an unsigned notification", async () => {
+        const { payload } = await subject.notificationOfPayment(await paid("card"))
+
+        expect(() => provider.readNotification(payload, null)).toThrow(NotificationRejected)
+      })
     })
 
     describe("refund", () => {

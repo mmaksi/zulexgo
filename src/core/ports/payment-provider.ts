@@ -21,6 +21,15 @@ export interface Payment {
 }
 
 /**
+ * What a provider notification means for an application. `paymentReady`: the
+ * money is held, or taken where it cannot be held, so the application may
+ * start. Everything else is not acted on yet.
+ */
+export type PaymentNotification =
+  | { readonly kind: "paymentReady"; readonly eventId: string; readonly reference: ApplicationReference }
+  | { readonly kind: "ignored"; readonly eventId: string }
+
+/**
  * Takes the customer's money. The customer confirms in the browser; the server
  * only creates, captures, releases and refunds.
  *
@@ -33,6 +42,9 @@ export interface Payment {
  * - `release` is safe to call twice.
  * - `refund` needs captured money and never exceeds captured minus refunded.
  *   The same idempotency key refunds once, however often it is sent.
+ * - `readNotification` trusts only a payload signed by the provider; anything
+ *   unsigned or altered throws `NotificationRejected`. The same notification
+ *   may arrive twice, so acting on it must be safe to repeat.
  */
 export interface PaymentProvider {
   createPayment(input: {
@@ -44,4 +56,5 @@ export interface PaymentProvider {
   capture(paymentId: string, amount: Money): Promise<Payment>
   release(paymentId: string): Promise<Payment>
   refund(paymentId: string, amount: Money, idempotencyKey: string): Promise<Payment>
+  readNotification(payload: string, signature: string | null): PaymentNotification
 }

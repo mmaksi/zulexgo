@@ -2,8 +2,11 @@ import "server-only"
 import { SystemClock } from "@/src/adapters/clock/system/system-clock"
 import { FakeIdentityVerification } from "@/src/adapters/identity/fake/fake-identity-verification"
 import { ConsoleMailer } from "@/src/adapters/mail/console/console-mailer"
+import { ResendMailer } from "@/src/adapters/mail/resend/resend-mailer"
 import { FakePaymentProvider } from "@/src/adapters/payment/fake/fake-payment-provider"
+import { StripePaymentProvider } from "@/src/adapters/payment/stripe/stripe-payment-provider"
 import { FakeRegistrationGateway } from "@/src/adapters/registration/fake/fake-registration-gateway"
+import { ZulexRegistrationGateway } from "@/src/adapters/registration/zulex/zulex-registration-gateway"
 import { InMemoryApplicationRepository } from "@/src/adapters/repository/fake/in-memory-application-repository"
 import { PostgresApplicationRepository } from "@/src/adapters/repository/postgres/postgres-application-repository"
 import { InMemoryDocumentStore } from "@/src/adapters/storage/fake/in-memory-document-store"
@@ -29,19 +32,38 @@ import { parseEnv, type Env, type EnvSource } from "./env"
 export interface Container extends Dependencies {
   readonly env: Env
   readonly identity: IdentityVerification
+  /**
+   * Only on the fake payment provider, which has no browser to pay in: plays
+   * the customer paying, so the funnel runs end to end without Stripe keys.
+   */
+  readonly simulateCustomerPayment?: (paymentId: string) => Promise<void>
 }
 
 export function createContainer(source: EnvSource = process.env): Container {
   const env = parseEnv(source)
   const clock = new SystemClock()
+  const fakePayments = env.PAYMENT_DRIVER === "fake" ? new FakePaymentProvider(clock) : undefined
   return {
     env,
     clock,
     tokens: new CryptoTokenGenerator(),
     repository: createRepository(env),
-    registration: env.REGISTRATION_DRIVER === "fake" ? new FakeRegistrationGateway() : notBuiltYet("REGISTRATION_DRIVER=zulex", "M4"),
-    payments: env.PAYMENT_DRIVER === "fake" ? new FakePaymentProvider(clock) : notBuiltYet("PAYMENT_DRIVER=stripe", "M4"),
-    mailer: env.MAIL_DRIVER === "console" ? new ConsoleMailer({ revealStatusLinks: env.APP_ENV === "dev" }) : notBuiltYet("MAIL_DRIVER=resend", "M4"),
+    registration:
+      env.REGISTRATION_DRIVER === "fake"
+        ? new FakeRegistrationGateway()
+        : new ZulexRegistrationGateway({ baseUrl: env.ZULEX_BASE_URL!, apiKey: env.ZULEX_API_KEY! }),
+    payments:
+      fakePayments ??
+      new StripePaymentProvider({ secretKey: env.STRIPE_SECRET_KEY!, webhookSecret: env.STRIPE_WEBHOOK_SECRET! }),
+    simulateCustomerPayment: fakePayments && ((paymentId) => fakePayments.customerPays(paymentId, "card")),
+    mailer:
+      env.MAIL_DRIVER === "console"
+        ? new ConsoleMailer({ revealStatusLinks: env.APP_ENV === "dev" })
+        : new ResendMailer({
+            apiKey: env.RESEND_API_KEY!,
+            from: env.MAIL_FROM!,
+            allowlist: env.APP_ENV === "staging" ? env.MAIL_ALLOWLIST : undefined,
+          }),
     documents: env.STORAGE_DRIVER === "fake" ? new InMemoryDocumentStore() : notBuiltYet("STORAGE_DRIVER=supabase", "M5"),
     identity: new FakeIdentityVerification(),
     statusLink: (token) => new URL(`/status/${token}`, env.APP_BASE_URL).toString(),

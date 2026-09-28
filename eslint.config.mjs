@@ -21,6 +21,14 @@ const VENDORS = [
   sdk: { ...vendor.sdk, message: `Import the ${vendor.port} port; the SDK lives in ${vendor.folder}/ only.` },
 }));
 
+// Stripe's browser SDKs are UI, so they cannot live in an adapter; they get one
+// folder of their own in the funnel instead.
+const STRIPE_UI_FOLDER = "app/(funnel)/deregister/_components/stripe";
+const STRIPE_UI = {
+  group: ["@stripe/*"],
+  message: `Stripe's browser SDK lives in ${STRIPE_UI_FOLDER}/ only.`,
+};
+
 // A relative path climbing out of its folder would slip past every alias-based
 // pattern below, so cross-folder imports must go through `@/`.
 const PARENT_IMPORTS = {
@@ -37,11 +45,11 @@ const CONCRETE_ADAPTERS = {
   message: "Depend on a port from src/core/ports/. Adapters are chosen in src/config/container.ts and nowhere else.",
 };
 
-function restrict({ paths = [], patterns = [], allowSdk } = {}) {
+function restrict({ paths = [], patterns = [], allowSdk, allowStripeUi = false } = {}) {
   const sdks = VENDORS.filter((vendor) => vendor !== allowSdk).map((vendor) => vendor.sdk);
   return ["error", {
     paths: [...sdks.filter((sdk) => sdk.name), ...paths],
-    patterns: [...sdks.filter((sdk) => sdk.group), PARENT_IMPORTS, ...patterns],
+    patterns: [...sdks.filter((sdk) => sdk.group), ...(allowStripeUi ? [] : [STRIPE_UI]), PARENT_IMPORTS, ...patterns],
   }];
 }
 
@@ -113,6 +121,12 @@ const eslintConfig = defineConfig([
     files: ["app/**/*.{ts,tsx}"],
     rules: {
       "no-restricted-imports": restrict({ paths: [RAW_CN], patterns: [CONCRETE_ADAPTERS] }),
+    },
+  },
+  {
+    files: [`${STRIPE_UI_FOLDER}/**/*.{ts,tsx}`],
+    rules: {
+      "no-restricted-imports": restrict({ paths: [RAW_CN], patterns: [CONCRETE_ADAPTERS], allowStripeUi: true }),
     },
   },
   {

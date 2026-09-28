@@ -21,5 +21,7 @@ export async function mailCustomer(
       : name === "rejected"
         ? { name, ...common, refund: extra.refund! }
         : { name, ...common }
-  await deps.mailer.send({ to: application.email, template })
+  // The history length names the transition, so an email repeated by a later transition (a correction back at the KBA) is still sent.
+  const idempotencyKey = `${application.reference}/${name}/${application.history.length}`
+  await deps.mailer.send({ to: application.email, template, idempotencyKey })
 }

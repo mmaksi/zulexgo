@@ -104,3 +104,11 @@ describe("secrets in logs", () => {
     for (const token of tokens) expect(console.output()).toContain(token)
   })
 })
+
+describe("the framework's own logs", () => {
+  it("keeps Next's dev log of Server Function arguments off: the checkout action's arguments are the security codes", async () => {
+    const { default: nextConfig } = await import("@/next.config")
+
+    expect(nextConfig.logging).toMatchObject({ serverFunctions: false })
+  })
+})
