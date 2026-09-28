@@ -13,6 +13,10 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // Next logs every Server Function call with its arguments in development.
+  // The checkout action's arguments are the security codes, which are never
+  // logged in any stage.
+  logging: { serverFunctions: false },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },
