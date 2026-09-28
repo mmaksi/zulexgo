@@ -29,11 +29,14 @@ export type EmailTemplate =
 export interface MailMessage {
   readonly to: Email
   readonly template: EmailTemplate
+  /** One per email the customer should get: a retried send with the same key is delivered once. */
+  readonly idempotencyKey: string
 }
 
 /**
  * Sends one customer email. Guarantees every adapter must honour:
  * - Every template can be sent.
+ * - A message whose idempotency key was already sent is not delivered again.
  * - `send` resolves only once the message is accepted for delivery, or, where a
  *   stage forbids real mail (dev) or the recipient is not allowed (staging), once
  *   it is deliberately dropped. It never silently fails.

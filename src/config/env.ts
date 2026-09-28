@@ -44,6 +44,7 @@ const schema = z
     ZULEX_API_KEY: secret,
 
     RESEND_API_KEY: secret,
+    MAIL_FROM: z.string().min(1).optional(),
     MAIL_ALLOWLIST: z
       .string()
       .default("")
@@ -154,7 +155,7 @@ function checkRegistration(env: Parsed, ctx: Ctx, isProduction: boolean) {
 
 function checkMail(env: Parsed, ctx: Ctx, isProduction: boolean) {
   if (env.MAIL_DRIVER === "resend") {
-    requireAll(ctx, env, ["RESEND_API_KEY"], "when MAIL_DRIVER is resend")
+    requireAll(ctx, env, ["RESEND_API_KEY", "MAIL_FROM"], "when MAIL_DRIVER is resend")
   }
 
   const sendsRealMail = env.MAIL_DRIVER !== "console"

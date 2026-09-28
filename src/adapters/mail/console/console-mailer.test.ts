@@ -14,6 +14,7 @@ describe("ConsoleMailer", () => {
     await new ConsoleMailer({ revealStatusLinks, log: (line) => lines.push(line) }).send({
       to: email,
       template: { name: "orderConfirmation", reference, statusLink },
+      idempotencyKey: "k",
     })
     return lines.join("\n")
   }

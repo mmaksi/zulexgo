@@ -69,7 +69,7 @@ describe("container ports", () => {
     const { reference, email } = anApplication()
     const statusLink = "https://zulexgo.example.test/status/faketoken-container-log-test-000000000001"
 
-    await createContainer(stage).mailer.send({ to: email, template: { name: "orderConfirmation", reference, statusLink } })
+    await createContainer(stage).mailer.send({ to: email, template: { name: "orderConfirmation", reference, statusLink }, idempotencyKey: "k" })
 
     expect(log.mock.calls.flat().join("\n").includes("faketoken-container-log-test")).toBe(printed)
     log.mockRestore()

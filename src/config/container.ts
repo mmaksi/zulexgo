@@ -2,6 +2,7 @@ import "server-only"
 import { SystemClock } from "@/src/adapters/clock/system/system-clock"
 import { FakeIdentityVerification } from "@/src/adapters/identity/fake/fake-identity-verification"
 import { ConsoleMailer } from "@/src/adapters/mail/console/console-mailer"
+import { ResendMailer } from "@/src/adapters/mail/resend/resend-mailer"
 import { FakePaymentProvider } from "@/src/adapters/payment/fake/fake-payment-provider"
 import { StripePaymentProvider } from "@/src/adapters/payment/stripe/stripe-payment-provider"
 import { FakeRegistrationGateway } from "@/src/adapters/registration/fake/fake-registration-gateway"
@@ -55,7 +56,14 @@ export function createContainer(source: EnvSource = process.env): Container {
       fakePayments ??
       new StripePaymentProvider({ secretKey: env.STRIPE_SECRET_KEY!, webhookSecret: env.STRIPE_WEBHOOK_SECRET! }),
     simulateCustomerPayment: fakePayments && ((paymentId) => fakePayments.customerPays(paymentId, "card")),
-    mailer: env.MAIL_DRIVER === "console" ? new ConsoleMailer({ revealStatusLinks: env.APP_ENV === "dev" }) : notBuiltYet("MAIL_DRIVER=resend", "M4"),
+    mailer:
+      env.MAIL_DRIVER === "console"
+        ? new ConsoleMailer({ revealStatusLinks: env.APP_ENV === "dev" })
+        : new ResendMailer({
+            apiKey: env.RESEND_API_KEY!,
+            from: env.MAIL_FROM!,
+            allowlist: env.APP_ENV === "staging" ? env.MAIL_ALLOWLIST : undefined,
+          }),
     documents: env.STORAGE_DRIVER === "fake" ? new InMemoryDocumentStore() : notBuiltYet("STORAGE_DRIVER=supabase", "M5"),
     identity: new FakeIdentityVerification(),
     statusLink: (token) => new URL(`/status/${token}`, env.APP_BASE_URL).toString(),

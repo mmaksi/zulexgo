@@ -15,5 +15,9 @@ export async function confirmRefund(deps: Dependencies, reference: ApplicationRe
   const payment = await deps.payments.getPayment(application.payment.id)
   const returned = payment.amount.subtract(payment.captured.subtract(payment.refunded))
 
-  await deps.mailer.send({ to: application.email, template: { name: "refundIssued", reference, amount: returned } })
+  await deps.mailer.send({
+    to: application.email,
+    template: { name: "refundIssued", reference, amount: returned },
+    idempotencyKey: `${reference}/refundIssued`,
+  })
 }
