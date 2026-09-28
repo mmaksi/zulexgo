@@ -126,7 +126,7 @@ Each blocks the milestone beside it; none blocks M1.
 | Zulex production key | M8 | |
 | Resend sending domain verified | M4 | §7. |
 | Domain | M4 | Until then staging runs on its `*.vercel.app` URL. |
-| Vercel plan allowing per-minute Cron | M4 | The status poller's heartbeat. |
+| Vercel plan allowing per-minute Cron | once the Zulex API is back | The status poller's heartbeat. Until then nothing schedules `/api/internal/poll`. |
 | AGB / Impressum / Datenschutz from a lawyer | M7 | Includes the 19.99 € processing-fee clause, the right of withdrawal (Q13), and Verimi's processing of ID and selfie data. |
 
 ## 6. Claude's Stripe MCP — both sandboxes in one connection
@@ -143,6 +143,32 @@ No Resend MCP is connected; Claude works from the installed Resend skills and yo
 2. **API Keys → Create API Key**, permission **Sending access**, one key per stage. Staging's goes into the `zulexgo-staging` Vercel project as `RESEND_API_KEY` (Sensitive). Dev never gets one: `MAIL_DRIVER=resend` is refused in dev.
 3. Set staging's `MAIL_ALLOWLIST` to the inboxes that may receive staging mail.
 4. Once the domain exists: **Domains → Add Domain**, a sending subdomain such as `mail.<domain>`, region **`eu-west-1` (Ireland)** — the region cannot be changed later, and EU keeps mail data in the EU. Turn open and click tracking **off** (they rewrite the status link and track the customer). Add the SPF, DKIM and DMARC records it shows, wait for **Verified**, and tell Claude the sender address.
+
+## 8. Switching staging to Stripe and Resend  *(M4)*
+
+Registration stays `REGISTRATION_DRIVER=fake` while the Zulex API is down; payment and mail can switch now.
+
+**Stripe, in the `G&M Gastro Event GmbH Sandbox`:**
+
+1. **Developers → API keys**: copy the publishable key (`pk_test_…`) and the secret key (`sk_test_…`).
+2. **Developers → Webhooks → Add endpoint**: URL `https://zulexgo-staging.vercel.app/api/webhooks/stripe`, events **`payment_intent.amount_capturable_updated`** and **`payment_intent.succeeded`** only. Copy its signing secret (`whsec_…`).
+3. **Settings → Payment methods**: cards on. For Apple Pay, **Payment method domains → Add** `zulexgo-staging.vercel.app`. SEPA Direct Debit stays off: the app does not offer it.
+
+**Vercel, project `zulexgo-staging`, environment Production** (secrets Sensitive):
+
+```
+PAYMENT_DRIVER=stripe
+STRIPE_SECRET_KEY=sk_test_…                       # Sensitive
+STRIPE_WEBHOOK_SECRET=whsec_…                     # Sensitive
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_…
+MAIL_DRIVER=resend
+MAIL_FROM=ZulexGO <status@mail.gm-gastro.com>
+MAIL_ALLOWLIST=<the inboxes staging may mail, comma-separated>
+```
+
+`RESEND_API_KEY` is already set (§7). Redeploy `staging`; the app refuses to boot if one of these is missing. Mail only goes out once Resend shows `mail.gm-gastro.com` as **Verified**.
+
+**Dev** (`.env.local`), for a real Stripe checkout on a laptop: `PAYMENT_DRIVER=stripe` with the keys of the test mode of `G&M Gastro Event GmbH`, and the secret `stripe listen --forward-to localhost:3000/api/webhooks/stripe` prints as `STRIPE_WEBHOOK_SECRET`. Without them dev runs a simulated payment. Mail stays on the console.
 
 ---
 
