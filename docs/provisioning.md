@@ -185,7 +185,7 @@ The KBA's confirmation is cached in a private Supabase Storage bucket and stream
 2. Vercel → `zulexgo-staging` → Settings → Environment Variables → `SUPABASE_STORAGE_SERVICE_KEY` = that value, environment **Production** only, marked **Sensitive**.
 3. Change `STORAGE_DRIVER` from `fake` to `supabase` in the same place. **Only after step 2**: the app refuses to boot with the driver switched on and the key missing.
 4. Redeploy `staging`. The build log shows `Seeded 1 documents.` on the first deploy (the test confirmation of the seeded completed order, stored in the bucket) and `Seed already loaded.` after. A wrong key or bucket fails the deploy, so the previous one keeps serving.
-5. Check: open `https://zulexgo-staging.vercel.app/status/seed-status-link-completed` and download the test confirmation. In the Supabase dashboard, Storage → `kba-documents` holds `ZG-SEED04/9100000000000004.confirmation`.
+5. Check: open `https://zulexgo-staging.vercel.app/status/seed-status-link-completed` and download the test confirmation. In the Supabase dashboard, Storage → `kba-documents` holds `ZG-SEED04/9100000000000004.confirmation`. If the seeded link says "Link nicht gültig", someone used the resend form on the seeded order (its reference and address are in the repo); the next deploy restores it.
 
 **Production** (M8): the same in the production Supabase project, with its own bucket and its own secret key; never seeded.
 

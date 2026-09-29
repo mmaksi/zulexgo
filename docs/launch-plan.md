@@ -264,7 +264,7 @@ Funnel UI (M4 Track B) starts once M2's fakes exist, parallel to M3.
 - `next.config.ts` CSP (Stripe domains), `frame-ancestors`, permissions policy — asserted in route tests.
 - Rate limiting on eligibility and checkout, with tests, through the `RateLimiter` port. Status lookup, document downloads and "resend my link" are limited since M5 (per address, and per order for resend).
 - Log-redaction layer + required test that codes/tokens never appear in logs; `audit_log` migration for status changes and refunds.
-- Retention cron: purge security codes N days after a terminal state; anonymise after the statutory period; purge expired `rate_limits` rows; uses the `Clock` port.
+- Retention cron: purge security codes N days after a terminal state; anonymise after the statutory period; uses the `Clock` port. (The rate limiter forgets counts older than a day by itself.)
 - `/security-review` of the branch, `npm audit`, dependency pinning; short threat-model note (token brute force, IDOR on documents, webhook replay).
 - Brand items: apply approved semantic colours; Euro Plate self-hosted WOFF2 if licensed, else the existing fallback ships (checked in the browser, not tested — presentation).
 
@@ -371,7 +371,7 @@ Found on `main` @ `1ed5034`. Numbered D1–D11; D2, D5 and D11 are fixed.
 - **D9.** Write both columns at checkout (`app/(funnel)/deregister/actions.ts`, `submit-checkout.ts`, `Application`, `postgres-application-repository.ts`); test that they persist and that checkout is refused without them.
 - **D10.** `src/ui/radio-group.tsx` draws an orange dot and border on white; `docs/design-standard.md` requires an orange fill with a grau-dark mark. Presentation: checked in the browser, not tested.
 - **D2 (fixed).** A held card fires no `charge.refunded` (a release fires `payment_intent.canceled`, a fee-only capture `charge.captured`), and the webhook acts only on "payment ready", so email 6 was never sent. `handleFailure` now sends it right after the money is returned, under the key `confirmRefund` uses, so the provider's confirmation adds nothing and no new Stripe webhook event is needed.
-- **D5 (fixed).** Emails 4, 5a, 5b and 5c went out after the status was saved. Each now goes out first, keyed by its transition, so a failed send leaves the application due and the next tick sends it. To make that rerun safe, settlement recognises what it already did (`settledDecision`) and `submitToKba` finishes a failure instead of filing an application whose payment was released. A mailer that fails for good now holds an application at its old status instead of dropping the email (Q33).
+- **D5 (fixed).** Emails 4, 5a, 5b and 5c went out after the status was saved. Each now goes out first, keyed by its transition, so a failed send leaves the application due and the next tick sends it. To make that rerun safe, settlement recognises what it already did (`settledDecision`) and `submitToKba` finishes a failure instead of filing an application whose payment was released. A mailer that fails for good now holds an application at its old status instead of dropping the email (Q33); the poll log names the order and the kind of error each time it does. Zulex's application id is stored before email 4 is sent, so a failed email never makes the next tick file the application again (Q23: a replay's answer is unspecified).
 - **D11 (fixed).** The fake registration gateway numbered its ids `fake-zulex-application-1`, `-2`, … per instance, and `applications.zulex_application_id` is `UNIQUE`, so the second order to draw a taken id failed to record it and stayed at status 1; a status check on an instance that had not filed the application threw. The fake now derives the id from the submission's idempotency key (hashed), so different orders get different ids and a retry on another instance gets the same one, and it reports an application it never filed as in progress. Production is unaffected: it refuses every fake driver.
 
 ## Open questions (business logic v1.0)
@@ -493,7 +493,7 @@ Nothing below is decided here. Numbers are stable — milestones refer to them. 
 
 28. **Which documents does the customer see?** The status page lists every document stored for a finished order, and the site contract names confirmation, fee statement, rejection and unknown. Is the fee statement (`FEE`, the authority's charge, which shows what Zulex paid) meant for the customer? Should a rejection document be kept and shown at 5b and 5c?
    **Blocks:** M5 (documents list), M6 (5b/5c pages).
-   **Provisional answer in code (not approved by the founder):** documents are stored only when an order completes, all of them, and all are listed, the confirmation first; nothing is stored for a failure.
+   **Provisional answer in code (not approved by the founder):** documents are stored only when an order completes, all of them, and all are listed, the confirmation first; nothing is stored for a failure. An order Zulex reports finished with no document at all is completed anyway and never polled again.
 29. **Email 5a and the PDF:** attach the confirmation to the email, or only link to the status page?
    **Blocks:** M5 (email 5a).
    **Provisional answer in code (not approved by the founder):** link only. An attachment would put the plate and other order data into the customer's mailbox, and the link keeps the document behind the token check.
@@ -506,12 +506,12 @@ Nothing below is decided here. Numbers are stable — milestones refer to them. 
 32. **A customer at 5b before M6 exists:** the page and the email tell them to write to support to correct or cancel. Who acts on that, and how, while the app has no correct and cancel actions?
    **Blocks:** M5 (5b page and email copy), M6.
    **Provisional answer in code:** the customer is told to write to `kontakt@gm-gastro.com` with the order number; nothing in the app acts on it.
-33. **An address that cannot receive mail:** a status email is now sent before the status is saved, so an address the mailer keeps refusing holds its application at the old status, retried every minute, and a held card may lapse meanwhile. How long do we wait for the email before going on without it?
+33. **An address that cannot receive mail:** a status email is now sent before the status is saved, so an address the mailer keeps refusing holds its application at the old status, retried every minute with no backoff, and a held card may lapse meanwhile. How long do we wait for the email before going on without it?
    **Blocks:** M6 (hold policy, Q20), M8 (stuck-application alert).
    **Provisional answer in code:** we wait for ever.
 34. **Resending a link:** a resend revokes the old link, so a link in an earlier email stops working; one address may ask 5 times an hour and one order 3 times an hour. Right, or should the old link keep working?
    **Blocks:** M5 (resend flow), M7 (threat model).
-   **Provisional answer in code (not approved by the founder):** the old link is revoked, with the limits above.
+   **Provisional answer in code (not approved by the founder):** the old link is revoked, with the limits above. Two consequences: anyone who knows an order's reference can use up its three requests an hour and keep the real customer's request from being served, and on staging anyone who reads the repo can rotate the seeded links (a redeploy restores them).
 
 ## Verification
 
