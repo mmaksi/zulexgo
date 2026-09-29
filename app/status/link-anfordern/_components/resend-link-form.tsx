@@ -1,0 +1,85 @@
+"use client"
+
+import { useState, type FormEvent } from "react"
+import { TextField } from "@/app/_components/text-field"
+import type { ResendFormState } from "@/app/status/link-anfordern/resend-form-state"
+import { Alert } from "@/src/ui/alert"
+import { Button } from "@/src/ui/button"
+
+export type ResendLinkAction = (input: { reference: string; email: string }) => Promise<ResendFormState>
+
+/** site-contract §3: the recovery for a lost link; the answer never says whether the order exists. */
+export function ResendLinkForm({ action }: { action: ResendLinkAction }) {
+  const [state, setState] = useState<ResendFormState>()
+  const [pending, setPending] = useState(false)
+  const errors = state?.status === "invalid" ? state.errors : {}
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (pending) return
+    const data = new FormData(event.currentTarget)
+    setPending(true)
+    try {
+      setState(await action({ reference: String(data.get("reference") ?? ""), email: String(data.get("email") ?? "") }))
+    } catch {
+      setState({ status: "unavailable" })
+    } finally {
+      setPending(false)
+    }
+  }
+
+  return (
+    <form noValidate onSubmit={submit} className="measure flex flex-col gap-6">
+      <TextField
+        id="resend-reference"
+        name="reference"
+        label="Auftragsnummer"
+        helper="Sie steht in Ihrer E-Mail von ZulexGO, zum Beispiel ZG-ABC123."
+        error={errors.reference}
+        autoComplete="off"
+        autoCapitalize="characters"
+        spellCheck={false}
+      />
+      <TextField
+        id="resend-email"
+        name="email"
+        type="email"
+        inputMode="email"
+        label="E-Mail-Adresse"
+        helper="Die Adresse, die Sie beim Antrag angegeben haben."
+        error={errors.email}
+        autoComplete="email"
+      />
+      <Button type="submit" disabled={pending} className="self-start">
+        {pending ? "Wird gesendet …" : "Link senden"}
+      </Button>
+      <Outcome state={state} />
+    </form>
+  )
+}
+
+function Outcome({ state }: { state?: ResendFormState }) {
+  if (state?.status === "accepted") {
+    return (
+      <Alert role="status">
+        Wenn Auftragsnummer und E-Mail-Adresse zusammenpassen, ist ein neuer Link unterwegs. Schauen Sie auch im Spam-Ordner nach. Der
+        bisherige Link ist dann nicht mehr gültig.
+      </Alert>
+    )
+  }
+  if (state?.status === "limited") {
+    return (
+      <Alert variant="warning" role="alert">
+        Zu viele Versuche. Bitte warten Sie {state.retryAfterMinutes} Minuten und versuchen Sie es dann erneut.
+      </Alert>
+    )
+  }
+  if (state?.status === "unavailable") {
+    return (
+      <Alert variant="error" role="alert">
+        Das hat nicht geklappt. Bitte versuchen Sie es in einigen Minuten erneut.
+      </Alert>
+    )
+  }
+  return null
+}
