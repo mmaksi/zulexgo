@@ -10,6 +10,31 @@ registrationGatewayContract("FakeRegistrationGateway", () => new FakeRegistratio
 
 const request = parseDeregistrationRequest(FAKE_REQUEST)
 
+describe("FakeRegistrationGateway on staging, where each Vercel instance holds its own fake", () => {
+  it("gives orders filed on different instances different ids", async () => {
+    const first = await new FakeRegistrationGateway().submitDeregistration(request, "order-a")
+    const second = await new FakeRegistrationGateway().submitDeregistration(request, "order-b")
+
+    expect(first.applicationId).not.toEqual(second.applicationId)
+  })
+
+  it("answers a submission retried on another instance with the id it already has", async () => {
+    const instanceA = new FakeRegistrationGateway()
+    await instanceA.submitDeregistration(request, "order-a")
+    const filed = await instanceA.submitDeregistration(request, "order-b")
+
+    const retried = await new FakeRegistrationGateway().submitDeregistration(request, "order-b")
+
+    expect(retried).toEqual(filed)
+  })
+
+  it("reports an application another instance filed as in progress", async () => {
+    const { applicationId } = await new FakeRegistrationGateway().submitDeregistration(request, "order-a")
+
+    expect(await new FakeRegistrationGateway().getStatus(applicationId)).toEqual({ state: "inProgress" })
+  })
+})
+
 describe("FakeRegistrationGateway scripting, which the use-case tests rely on", () => {
   let gateway: FakeRegistrationGateway
   let applicationId: string

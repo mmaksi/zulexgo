@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto"
 import type { DeregistrationRequest } from "@/src/core/domain/deregistration-request"
 import type { RegistrationAuthority } from "@/src/core/domain/registration-authority"
 import type { Correction, GatewayStatus, RegistrationGateway } from "@/src/core/ports/registration-gateway"
@@ -7,7 +8,11 @@ type Operation = "submit" | "getStatus" | "retry" | "correct"
 const ONLINE: RegistrationAuthority[] = [{ kreiscode: "00000", ikfzStatus: "online" }]
 const IN_PROGRESS: GatewayStatus = { state: "inProgress" }
 
-/** Scriptable stand-in for Zulex: set a status, fail the next call, inspect what was sent. */
+/**
+ * Scriptable stand-in for Zulex: set a status, fail the next call, inspect what was sent.
+ * Staging runs one per Vercel instance, so ids come from the idempotency key and an
+ * application this instance never filed reports in progress, as it does on the one that did.
+ */
 export class FakeRegistrationGateway implements RegistrationGateway {
   readonly submissions: { request: DeregistrationRequest; idempotencyKey: string; applicationId: string }[] = []
   readonly retries: string[] = []
@@ -43,7 +48,7 @@ export class FakeRegistrationGateway implements RegistrationGateway {
     const earlier = this.submissions.find((submission) => submission.idempotencyKey === idempotencyKey)
     if (earlier) return { applicationId: earlier.applicationId }
 
-    const applicationId = `fake-zulex-application-${this.submissions.length + 1}`
+    const applicationId = `fake-zulex-application-${createHash("sha256").update(idempotencyKey).digest("hex").slice(0, 16)}`
     this.submissions.push({ request, idempotencyKey, applicationId })
     this.statuses.set(applicationId, IN_PROGRESS)
     return { applicationId }
@@ -51,9 +56,7 @@ export class FakeRegistrationGateway implements RegistrationGateway {
 
   async getStatus(applicationId: string): Promise<GatewayStatus> {
     this.throwIfScripted("getStatus")
-    const status = this.statuses.get(applicationId)
-    if (!status) throw new Error(`FakeRegistrationGateway: unknown application ${applicationId}`)
-    return status
+    return this.statuses.get(applicationId) ?? IN_PROGRESS
   }
 
   async retry(applicationId: string): Promise<void> {

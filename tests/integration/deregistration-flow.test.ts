@@ -357,7 +357,8 @@ describe("de-registration flow on fakes", () => {
     const { deps, stored, zulexId, poll, checkoutAndPay } = setup()
     const broken = await checkoutAndPay()
     const healthy = await checkoutAndPay()
-    deps.registration.setStatus(await zulexId(broken), undefined as never)
+    const unreadable = { get state(): never { throw new Error("unexpected vendor payload") } } as never
+    deps.registration.setStatus(await zulexId(broken), unreadable)
     deps.registration.setStatus(await zulexId(healthy), { state: "finished", documents: [] })
 
     const result = await poll(1)
