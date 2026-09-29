@@ -44,24 +44,49 @@ describe("getStatusByToken", () => {
     await expect(getStatusByToken(deps, token)).rejects.toBeInstanceOf(TokenInvalid)
   })
 
-  it("lists the documents stored for the order, the confirmation first, and none of another order's", async () => {
-    const stranger = anApplication()
-    const stored = new Map<ApplicationReference, DocumentRef[]>([
-      [application.reference, [{ id: "8", kind: "fee" }, { id: "9", kind: "confirmation" }, { id: "7", kind: "unknown" }]],
-      [stranger.reference, [{ id: "6", kind: "confirmation" }]],
-    ])
+  describe("the documents", () => {
+    const finished = anApplication({ status: "completed" })
+    const finishedRepository = { findByStatusToken: async () => finished }
 
-    const view = await getStatusByToken({ repository, documents: storeOf(stored), payments }, TOKEN)
+    it("lists those stored for a finished order, the confirmation first, and none of another order's", async () => {
+      const stranger = anApplication()
+      const stored = new Map<ApplicationReference, DocumentRef[]>([
+        [finished.reference, [{ id: "8", kind: "fee" }, { id: "9", kind: "confirmation" }, { id: "7", kind: "unknown" }]],
+        [stranger.reference, [{ id: "6", kind: "confirmation" }]],
+      ])
 
-    expect(view.documents).toEqual([
-      { id: "9", kind: "confirmation" },
-      { id: "8", kind: "fee" },
-      { id: "7", kind: "unknown" },
-    ])
-  })
+      const view = await getStatusByToken({ repository: finishedRepository, documents: storeOf(stored), payments }, TOKEN)
 
-  it("lists no documents for an order that has none", async () => {
-    expect((await getStatusByToken(deps, TOKEN)).documents).toEqual([])
+      expect(view.documents).toEqual([
+        { id: "9", kind: "confirmation" },
+        { id: "8", kind: "fee" },
+        { id: "7", kind: "unknown" },
+      ])
+    })
+
+    it("lists none for a finished order that has none", async () => {
+      expect((await getStatusByToken({ repository: finishedRepository, documents: storeOf(), payments }, TOKEN)).documents).toEqual([])
+    })
+
+    it("does not ask the store about an order that is still in progress, which has nothing to download", async () => {
+      const list = jest.fn(async () => [])
+
+      const view = await getStatusByToken({ repository, documents: { list }, payments }, TOKEN)
+
+      expect(view.documents).toEqual([])
+      expect(list).not.toHaveBeenCalled()
+    })
+
+    it("still shows the page when the store cannot be read, so a storage outage never takes every status page down", async () => {
+      const error = jest.spyOn(console, "error").mockImplementation(() => {})
+      const broken = { list: async () => Promise.reject(new Error("Supabase Storage list failed (500)")) }
+
+      const view = await getStatusByToken({ repository: finishedRepository, documents: broken, payments }, TOKEN)
+
+      expect(view.documents).toEqual([])
+      expect(error.mock.calls.flat().join(" ")).toContain("[status]")
+      error.mockRestore()
+    })
   })
 
   describe("what comes back to the customer", () => {

@@ -39,17 +39,31 @@ export async function getStatusByToken(
   if (!application) throw new TokenInvalid()
 
   const { reference, status, request } = application
-  const documents = await deps.documents.list(reference)
   return {
     reference,
     status,
     licencePlate: request.licencePlate,
     vinEnding: request.vin.slice(-VIN_VISIBLE),
     steps: customerSteps(application),
-    documents: [...documents].sort(
-      (a, b) => DOCUMENT_KINDS.indexOf(a.kind) - DOCUMENT_KINDS.indexOf(b.kind) || a.id.localeCompare(b.id),
-    ),
+    documents: await documentsOf(deps.documents, application),
     refund: await refundOf(deps.payments, application),
+  }
+}
+
+/**
+ * Only a finished order has documents, and only they are stored, so no other
+ * page asks the store. A store that cannot be read costs the downloads, not
+ * the page: the customer still sees where the order stands.
+ */
+async function documentsOf(store: Pick<DocumentStore, "list">, { reference, status }: Application): Promise<DocumentRef[]> {
+  if (status !== "completed") return []
+  try {
+    return [...(await store.list(reference))].sort(
+      (a, b) => DOCUMENT_KINDS.indexOf(a.kind) - DOCUMENT_KINDS.indexOf(b.kind) || a.id.localeCompare(b.id),
+    )
+  } catch (error) {
+    console.error(`[status] ${reference}: documents not listed: ${error instanceof Error ? error.name : "unknown error"}`)
+    return []
   }
 }
 
