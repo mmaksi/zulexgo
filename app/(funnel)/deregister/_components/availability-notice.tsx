@@ -1,4 +1,5 @@
 import type { IkfzStatus } from "@/src/core/domain/registration-authority"
+import { Alert } from "@/src/ui/alert"
 
 /** site-contract §2.2: the processing-time expectation, set before payment. */
 const NOTICES: Record<IkfzStatus, string> = {
@@ -11,14 +12,8 @@ const NOTICES: Record<IkfzStatus, string> = {
 export function AvailabilityNotice({ ikfzStatus }: { ikfzStatus: IkfzStatus }) {
   const manual = ikfzStatus !== "online"
   return (
-    <p
-      className={
-        manual
-          ? "measure border-l-4 border-warning bg-warning-tint p-4 text-body text-grau-dark"
-          : "measure border-l-4 border-grau bg-info-tint p-4 text-body text-grau-dark"
-      }
-    >
+    <Alert variant={manual ? "warning" : "info"} className="measure">
       {NOTICES[ikfzStatus]}
-    </p>
+    </Alert>
   )
 }

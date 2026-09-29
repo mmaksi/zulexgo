@@ -10,7 +10,7 @@ const TRUST = [
   {
     icon: Lock,
     label: "Sichere Zahlung über Stripe",
-    detail: "Belastung erst nach Übermittlung",
+    detail: "Abbuchung erst mit dem Ergebnis",
   },
   {
     icon: ListChecks,

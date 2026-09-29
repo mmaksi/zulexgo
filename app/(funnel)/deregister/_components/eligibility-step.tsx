@@ -7,6 +7,7 @@ import { RadioGroup, RadioGroupItem } from "@/src/ui/radio-group"
 import type { CheckoutActions } from "./checkout-actions"
 import { TextField } from "./text-field"
 import type { PlateCount } from "./vehicle-data"
+import { Alert } from "@/src/ui/alert"
 
 export interface Eligibility {
   plateCount: PlateCount
@@ -73,10 +74,10 @@ export function EligibilityStep({
       </fieldset>
 
       {hasDocuments === false ? (
-        <p role="status" className="measure border-l-4 border-warning bg-warning-tint p-4 text-body text-grau-dark">
+        <Alert role="status" variant="warning" className="measure">
           Ohne Fahrzeugschein und Plaketten mit Sicherheitscode ist die Online-Abmeldung nicht möglich. Sie können Ihr
           Fahrzeug aber bei Ihrer Zulassungsstelle vor Ort abmelden.
-        </p>
+        </Alert>
       ) : null}
 
       <TextField

@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react"
+import { act, render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import type { CheckoutActions } from "./checkout-actions"
 import { DeregistrationFunnel } from "./deregistration-funnel"
@@ -11,8 +11,16 @@ function setup(overrides: Partial<CheckoutActions> = {}) {
     ...overrides,
   }
   const user = userEvent.setup()
-  render(<DeregistrationFunnel payment={{ kind: "simulated" }} actions={actions} />)
-  return { actions, user }
+  const followLink = jest.fn((event: { preventDefault: () => void }) => event.preventDefault())
+  render(
+    <>
+      <a href="/impressum" onClick={followLink}>
+        Impressum
+      </a>
+      <DeregistrationFunnel payment={{ kind: "simulated" }} actions={actions} />
+    </>,
+  )
+  return { actions, user, followLink }
 }
 
 type User = ReturnType<typeof userEvent.setup>
@@ -110,6 +118,39 @@ describe("de-registration funnel", () => {
     })
   })
 
+  describe("leaving the funnel", () => {
+    it("lets a customer leave freely before anything is entered", async () => {
+      const { user, followLink } = setup()
+
+      await user.click(screen.getByRole("link", { name: "Impressum" }))
+
+      expect(followLink).toHaveBeenCalledTimes(1)
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument()
+    })
+
+    it("asks before a link away from the funnel throws away what was entered, and stays on request", async () => {
+      const { user, followLink } = setup()
+      await passEligibility(user)
+
+      await user.click(screen.getByRole("link", { name: "Impressum" }))
+
+      expect(followLink).not.toHaveBeenCalled()
+      await user.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Bleiben" }))
+      expect(screen.getByRole("heading", { level: 1, name: "Ihr Fahrzeug" })).toBeInTheDocument()
+      expect(followLink).not.toHaveBeenCalled()
+    })
+
+    it("follows the link once the customer confirms leaving", async () => {
+      const { user, followLink } = setup()
+      await passEligibility(user)
+
+      await user.click(screen.getByRole("link", { name: "Impressum" }))
+      await user.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Verlassen" }))
+
+      expect(followLink).toHaveBeenCalledTimes(1)
+    })
+  })
+
   describe("review and payment", () => {
     it("shows the processing fee and keeps payment impossible until both consents are given", async () => {
       const { user } = setup()
@@ -142,10 +183,39 @@ describe("de-registration funnel", () => {
 
       await user.click(screen.getByRole("button", { name: "Zurück" }))
 
-      expect(screen.getByLabelText("Fahrzeug-Identifizierungsnummer (FIN)")).toHaveValue("FAKEVIN0000000001")
+      expect(await screen.findByLabelText("Fahrzeug-Identifizierungsnummer (FIN)")).toHaveValue("FAKEVIN0000000001")
       expect(screen.getByLabelText("Sicherheitscode Fahrzeugschein")).toHaveValue("AAAAAA1")
       await user.click(screen.getByRole("button", { name: "Zurück" }))
-      expect(screen.getByRole("radio", { name: /^Zwei Kennzeichen/ })).toBeChecked()
+      expect(await screen.findByRole("radio", { name: /^Zwei Kennzeichen/ })).toBeChecked()
+    })
+
+    it("goes back one step with the browser's back button, keeping what was entered", async () => {
+      const { user } = setup()
+      await passEligibility(user)
+      await fillVehicle(user)
+
+      act(() => window.history.back())
+
+      expect(await screen.findByRole("heading", { level: 1, name: "Ihr Fahrzeug" })).toBeInTheDocument()
+      expect(screen.getByLabelText("Sicherheitscode Fahrzeugschein")).toHaveValue("AAAAAA1")
+    })
+
+    it("stays on the confirmation when the browser goes back after paying, so nothing is paid twice", async () => {
+      const { user } = setup()
+      await passEligibility(user)
+      await fillVehicle(user)
+      await user.click(consentBoxes()[0])
+      await user.click(consentBoxes()[1])
+      await user.click(payButton())
+      await screen.findByText("ZG-ABC123")
+
+      await act(async () => {
+        window.history.back()
+        await new Promise((resolve) => setTimeout(resolve, 10))
+      })
+
+      expect(screen.getByText("ZG-ABC123")).toBeInTheDocument()
+      expect(screen.queryByRole("button", { name: "Jetzt bezahlen" })).not.toBeInTheDocument()
     })
 
     it("pays, then confirms with the order ID and where the status link went", async () => {

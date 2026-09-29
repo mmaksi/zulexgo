@@ -23,7 +23,7 @@ const FAQ = [
   {
     question: "Wo finde ich die Sicherheitscodes?",
     answer:
-      "Der siebenstellige Code steht verdeckt auf der Zulassungsbescheinigung Teil I, die dreistelligen Codes liegen unter der Folie der Stempelplaketten. Zu jedem Feld zeigen wir ein Foto der genauen Stelle.",
+      "Der siebenstellige Code steht verdeckt auf der Zulassungsbescheinigung Teil I, die dreistelligen Codes liegen unter der Folie der Stempelplaketten.",
   },
   {
     question: "Wie lange dauert die Abmeldung?",
@@ -33,12 +33,12 @@ const FAQ = [
   {
     question: "Was passiert, wenn der Antrag abgelehnt wird?",
     answer:
-      "Sie erfahren den Grund in verständlicher Sprache. Lässt sich der Fehler korrigieren, reichen Sie die Daten ohne Zusatzkosten erneut ein. Ist die Abmeldung nicht möglich, erstatten wir den Betrag gemäß unserer Rückerstattungsregel.",
+      "Lässt sich der Fehler korrigieren, klären wir die Korrektur mit Ihnen, ohne Zusatzkosten. Ist die Abmeldung nicht möglich, erstatten wir den Betrag gemäß unserer Rückerstattungsregel.",
   },
   {
     question: "Brauche ich ein Kundenkonto?",
     answer:
-      "Nein. Nach der Zahlung erhalten Sie einen persönlichen Status-Link per E-Mail. Über diesen Link sehen Sie den Fortschritt und laden Ihre Dokumente herunter.",
+      "Nein. Nach der Zahlung erhalten Sie einen persönlichen Status-Link per E-Mail. Über diesen Link sehen Sie jederzeit, wie weit Ihr Antrag ist.",
   },
   {
     question: "Sind meine Daten sicher?",

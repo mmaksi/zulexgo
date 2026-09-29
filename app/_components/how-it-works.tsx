@@ -12,11 +12,11 @@ const STEPS = [
   },
   {
     title: "Sicher bezahlen",
-    text: "Gesamtpreis inklusive Behördengebühr. Belastet wird erst nach der Übermittlung.",
+    text: "Gesamtpreis inklusive Behördengebühr. Abgebucht wird erst mit dem Ergebnis.",
   },
   {
     title: "Bestätigung erhalten",
-    text: "Jeden Schritt im Status-Link verfolgen und die amtliche Bestätigung als PDF laden.",
+    text: "Jeden Schritt im Status-Link verfolgen, bis die Abmeldung bestätigt ist.",
   },
 ]
 

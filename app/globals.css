@@ -34,14 +34,16 @@
 
   /* §5.2 the one permitted blur */
   --color-scrim: rgb(39 40 40 / 0.5);
+  /* §7 the blue EU bar at the left of a licence plate: EU flag blue, plates only. */
+  --color-eu-blue: #003399;
 
   /* --- Type §3 ------------------------------------------------------------ */
   --font-sans: var(--font-kanit), "Helvetica Neue", Arial, sans-serif;
   --font-heading: var(--font-sans);
   --font-wordmark: var(--font-kanit-wordmark), var(--font-sans);
-  /* §3.1 Euro Plate is licensed and loaded lazily only on plate views; the
-     var() fallback keeps the stack valid until it is. */
-  --font-plate: var(--font-euro-plate, "Euro Plate"), "FE-Schrift", monospace;
+  /* §3.1 Euro Plate's web licence is still open (§8.4), so nothing loads it
+     yet: plates fall back to Kanit 600 uppercase (plate-text below). */
+  --font-plate: var(--font-euro-plate, "Euro Plate"), var(--font-sans);
 
   /*
    * §3.2. Sizes interpolate between the mobile value at 640px and the desktop
