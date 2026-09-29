@@ -96,7 +96,7 @@ Core flows end to end across module boundaries, with Zulex and Stripe stubbed at
 
 ## Verification
 
-Nothing is done until the `verify-app` loop has run green on the final code: diff scope, lint, typecheck, tests, the CI build with its secret canary, a clean dev-server boot, and a browser check for UI. Run it before every commit and pull request, and report what passed, failed or was skipped.
+Nothing is done until the `verify-app` skill has worked out the change's edges and its loop has run green on the final code: diff scope, lint, typecheck, tests, Postgres when persistence changed, the CI build with its secret canary, a clean dev-server boot, and a browser check for UI. Run it before every commit and pull request, and report what passed, failed or was skipped, and what only staging can confirm.
 
 ## Skills
 
@@ -119,7 +119,7 @@ In `.claude/skills/`; invoke by name. They carry the full instructions.
 | `email-best-practices` | Deliverability (SPF/DKIM/DMARC), transactional vs marketing, compliance, accessible email. Installed the same way. | Setting up the sending domain, or deciding what an email may contain. |
 | `resend-cli` | The `resend` CLI's non-interactive flag contract. Installed the same way. | Running a `resend` command in a shell or script. Account and domain setup stays manual (`docs/provisioning.md`). |
 | `agent-email-inbox` | Security patterns for acting on inbound email. Installed the same way. | Only if ZulexGO ever receives email; the MVP only sends. |
-| `verify-app` | Verification loop mirroring CI: lint, typecheck, tests, build and canary, dev-server boot, browser check. | Before saying a change is done, committing, or opening a PR. |
+| `verify-app` | Edge analysis of the change, then a verification loop mirroring CI: lint, typecheck, tests, Postgres, build and canary, dev-server boot, browser check. | Before saying a change is done, committing, or opening a PR. |
 
 ## Supporting documents
 
