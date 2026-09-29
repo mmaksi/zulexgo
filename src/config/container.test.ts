@@ -100,6 +100,15 @@ describe("container documents on Supabase Storage", () => {
   })
 })
 
+describe("container documents in dev", () => {
+  it("serves the seeded confirmation of the completed application from the moment the server starts", async () => {
+    const { repository, documents } = createContainer(dev)
+    const completed = (await repository.findByStatusToken("seed-status-link-completed"))!
+
+    expect(await documents.list(completed.reference)).toEqual([expect.objectContaining({ kind: "confirmation" })])
+  })
+})
+
 describe("container repository", () => {
   it("serves the dev seed from the moment the server starts", async () => {
     const seeded = await createContainer(dev).repository.findByStatusToken("seed-status-link-completed")

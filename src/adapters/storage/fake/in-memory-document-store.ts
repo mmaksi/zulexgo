@@ -5,6 +5,15 @@ import type { DocumentStore, StoredDocument } from "@/src/core/ports/document-st
 export class InMemoryDocumentStore implements DocumentStore {
   private readonly documents = new Map<ApplicationReference, Map<string, StoredDocument>>()
 
+  /** Loads seed documents, so a dev server starts with something to download. */
+  constructor(seed: readonly { reference: ApplicationReference; document: DocumentRef; bytes: Uint8Array }[] = []) {
+    for (const { reference, document, bytes } of seed) {
+      const forApplication = this.documents.get(reference) ?? new Map<string, StoredDocument>()
+      forApplication.set(document.id, { kind: document.kind, bytes: bytes.slice() })
+      this.documents.set(reference, forApplication)
+    }
+  }
+
   async put(reference: ApplicationReference, { id, kind }: DocumentRef, bytes: Uint8Array): Promise<void> {
     const forApplication = this.documents.get(reference) ?? new Map<string, StoredDocument>()
     forApplication.set(id, { kind, bytes: bytes.slice() })

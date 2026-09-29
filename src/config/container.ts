@@ -19,7 +19,7 @@ import type { Clock } from "@/src/core/ports/clock"
 import type { IdentityVerification } from "@/src/core/ports/identity-verification"
 import type { RateLimiter } from "@/src/core/ports/rate-limiter"
 import type { Dependencies } from "@/src/core/use-cases/dependencies"
-import { seedFor } from "@/db/seed/seed"
+import { seedDocumentsFor, seedFor } from "@/db/seed/seed"
 import { parseEnv, type Env, type EnvSource } from "./env"
 
 /**
@@ -72,7 +72,7 @@ export function createContainer(source: EnvSource = process.env): Container {
           }),
     documents:
       env.STORAGE_DRIVER === "fake"
-        ? new InMemoryDocumentStore()
+        ? new InMemoryDocumentStore(seedDocumentsFor(env.APP_ENV))
         : new SupabaseDocumentStore({
             url: env.SUPABASE_STORAGE_URL!,
             bucket: env.SUPABASE_STORAGE_BUCKET!,

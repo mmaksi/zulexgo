@@ -3,6 +3,9 @@ import { join } from "node:path"
 import { readMigrations } from "@/src/adapters/repository/postgres/migrator"
 import { createTestDatabase, describeWithPostgres, type TestDatabase } from "@/src/adapters/repository/postgres/test-database"
 import { SEEDED_APPLICATIONS } from "@/db/seed/data/applications"
+import { SEEDED_DOCUMENTS } from "@/db/seed/data/documents"
+import { setupServer } from "msw/node"
+import { STORAGE_TEST_BUCKET, STORAGE_TEST_KEY, STORAGE_TEST_URL, SupabaseStorageDouble } from "@/tests/msw/supabase-storage"
 import { runDatabaseCommand } from "./database"
 
 const UNREACHABLE = "postgres://nobody:nothing@127.0.0.1:1/none"
@@ -72,5 +75,37 @@ describeWithPostgres("runDatabaseCommand on a database", () => {
     expect(await run("down")).toBe(`Reverted ${newest}`)
     expect(await run("down", "all")).toBe(older.map((name) => `Reverted ${name}`).join("\n"))
     expect(await run("status")).toMatch(/^pending 0001_create_applications$/m)
+  })
+
+  describe("seeding the documents", () => {
+    const storage = new SupabaseStorageDouble()
+    const server = setupServer(...storage.handlers)
+    beforeAll(() => server.listen({ onUnhandledRequest: "error" }))
+    beforeEach(() => storage.objects.clear())
+    afterAll(() => server.close())
+
+    const runWithStorage = () =>
+      runDatabaseCommand(
+        ["seed"],
+        onPostgres({
+          DIRECT_DATABASE_URL: database.url,
+          STORAGE_DRIVER: "supabase",
+          SUPABASE_STORAGE_URL: STORAGE_TEST_URL,
+          SUPABASE_STORAGE_BUCKET: STORAGE_TEST_BUCKET,
+          SUPABASE_STORAGE_SERVICE_KEY: STORAGE_TEST_KEY,
+        }),
+      )
+
+    it("puts them in the bucket beside the applications, once, however often it runs", async () => {
+      await run("up")
+
+      const first = await runWithStorage()
+      const second = await runWithStorage()
+
+      expect(first).toContain(`Seeded ${SEEDED_APPLICATIONS.length} applications.`)
+      expect(first).toContain(`Seeded ${SEEDED_DOCUMENTS.length} documents.`)
+      expect(second).toBe("Seed already loaded.")
+      expect(storage.objects.size).toBe(SEEDED_DOCUMENTS.length)
+    })
   })
 })
