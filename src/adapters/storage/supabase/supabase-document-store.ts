@@ -33,6 +33,7 @@ export class SupabaseDocumentStore implements DocumentStore {
       upsert: true,
     })
     if (error) throw storageFailure("put", error)
+    await this.removeOtherKinds(reference, document)
   }
 
   async get(reference: ApplicationReference, documentId: string): Promise<StoredDocument | undefined> {
@@ -42,6 +43,15 @@ export class SupabaseDocumentStore implements DocumentStore {
     const { data, error } = await this.bucket.download(`${reference}/${objectName(document)}`)
     if (error) throw storageFailure("get", error)
     return { kind: document.kind, bytes: new Uint8Array(await data.arrayBuffer()) }
+  }
+
+  /** An id names one document, so a copy stored under another kind is the old version of it. */
+  private async removeOtherKinds(reference: ApplicationReference, kept: DocumentRef): Promise<void> {
+    const stale = (await this.list(reference)).filter(({ id, kind }) => id === kept.id && kind !== kept.kind)
+    if (stale.length === 0) return
+
+    const { error } = await this.bucket.remove(stale.map((document) => `${reference}/${objectName(document)}`))
+    if (error) throw storageFailure("put", error)
   }
 
   async list(reference: ApplicationReference): Promise<DocumentRef[]> {

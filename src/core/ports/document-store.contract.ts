@@ -43,6 +43,16 @@ export function documentStoreContract(name: string, makeSubject: () => DocumentS
       expect(new TextDecoder().decode((await store.get(reference, confirmation.id))?.bytes)).toBe("%PDF-replaced")
     })
 
+    it("lists a document once even when it is stored again under another kind", async () => {
+      const { reference } = anApplication()
+
+      await store.put(reference, { id: "42", kind: "unknown" }, pdf())
+      await store.put(reference, { id: "42", kind: "confirmation" }, pdf())
+
+      expect(await store.list(reference)).toEqual([{ id: "42", kind: "confirmation" }])
+      expect((await store.get(reference, "42"))?.kind).toBe("confirmation")
+    })
+
     it("keeps its own copy, so changing the bytes after storing them changes nothing", async () => {
       const { reference } = anApplication()
       const bytes = pdf()

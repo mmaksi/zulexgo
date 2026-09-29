@@ -4,7 +4,7 @@ export const STORAGE_TEST_URL = "https://storage-project.example.test"
 export const STORAGE_TEST_BUCKET = "documents"
 export const STORAGE_TEST_KEY = "sb_secret_fake_zulexgo"
 
-type Call = "list" | "upload" | "download"
+type Call = "list" | "upload" | "download" | "remove"
 
 interface StoredObject {
   bytes: Uint8Array
@@ -81,6 +81,16 @@ export class SupabaseStorageDouble {
         createdAt: earlier?.createdAt ?? ++this.clock,
       })
       return HttpResponse.json({ Id: `id-${this.clock}`, Key: `${params.bucket}/${path}` })
+    }),
+
+    http.delete(`${BASE}/object/:bucket`, async ({ request, params }) => {
+      const failure = this.hijacked("remove")
+      if (failure) return failure
+      if (!this.allowed(request, String(params.bucket))) return unauthorized()
+
+      const { prefixes } = (await request.json()) as { prefixes: string[] }
+      const removed = prefixes.filter((path) => this.objects.delete(path))
+      return HttpResponse.json(removed.map((name) => ({ name, bucket_id: STORAGE_TEST_BUCKET })))
     }),
 
     http.get(`${BASE}/object/:bucket/*`, ({ request, params }) => {
