@@ -10,6 +10,7 @@ import { ZulexRegistrationGateway } from "@/src/adapters/registration/zulex/zule
 import { InMemoryApplicationRepository } from "@/src/adapters/repository/fake/in-memory-application-repository"
 import { PostgresApplicationRepository } from "@/src/adapters/repository/postgres/postgres-application-repository"
 import { InMemoryDocumentStore } from "@/src/adapters/storage/fake/in-memory-document-store"
+import { SupabaseDocumentStore } from "@/src/adapters/storage/supabase/supabase-document-store"
 import { CryptoTokenGenerator } from "@/src/adapters/tokens/crypto/crypto-token-generator"
 import type { ApplicationRepository } from "@/src/core/ports/application-repository"
 import type { IdentityVerification } from "@/src/core/ports/identity-verification"
@@ -64,15 +65,17 @@ export function createContainer(source: EnvSource = process.env): Container {
             from: env.MAIL_FROM!,
             allowlist: env.APP_ENV === "staging" ? env.MAIL_ALLOWLIST : undefined,
           }),
-    documents: env.STORAGE_DRIVER === "fake" ? new InMemoryDocumentStore() : notBuiltYet("STORAGE_DRIVER=supabase", "M5"),
+    documents:
+      env.STORAGE_DRIVER === "fake"
+        ? new InMemoryDocumentStore()
+        : new SupabaseDocumentStore({
+            url: env.SUPABASE_STORAGE_URL!,
+            bucket: env.SUPABASE_STORAGE_BUCKET!,
+            serviceKey: env.SUPABASE_STORAGE_SERVICE_KEY!,
+          }),
     identity: new FakeIdentityVerification(),
     statusLink: (token) => new URL(`/status/${token}`, env.APP_BASE_URL).toString(),
   }
-}
-
-/** A real driver without its adapter must stop the boot, never fall back to a fake. */
-function notBuiltYet(driver: string, milestone: string): never {
-  throw new Error(`${driver} is configured, but its adapter arrives in ${milestone}.`)
 }
 
 /** On the in-memory repository every boot starts from the seed; a database is seeded by its deploy instead. */

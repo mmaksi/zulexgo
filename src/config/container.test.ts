@@ -1,6 +1,8 @@
 import { randomBytes } from "node:crypto"
 import { join } from "node:path"
+import { setupServer } from "msw/node"
 import { anApplication, FAKE_REQUEST } from "@/tests/fixtures/applications"
+import { STORAGE_TEST_BUCKET, STORAGE_TEST_KEY, STORAGE_TEST_URL, SupabaseStorageDouble } from "@/tests/msw/supabase-storage"
 import { Migrator, readMigrations } from "@/src/adapters/repository/postgres/migrator"
 import { createTestDatabase, describeWithPostgres, type TestDatabase } from "@/src/adapters/repository/postgres/test-database"
 import { clockContract } from "@/src/core/ports/clock.contract"
@@ -74,17 +76,27 @@ describe("container ports", () => {
     expect(log.mock.calls.flat().join("\n").includes("faketoken-container-log-test")).toBe(printed)
     log.mockRestore()
   })
+})
 
-  it("refuses a driver whose real adapter does not exist yet, instead of quietly running a fake", () => {
-    expect(() =>
-      createContainer({
-        ...staging,
-        STORAGE_DRIVER: "supabase",
-        SUPABASE_STORAGE_URL: "https://storage.example.test",
-        SUPABASE_STORAGE_BUCKET: "documents",
-        SUPABASE_STORAGE_SERVICE_KEY: "placeholder",
-      }),
-    ).toThrow(/STORAGE_DRIVER=supabase/)
+describe("container documents on Supabase Storage", () => {
+  const storage = new SupabaseStorageDouble()
+  const server = setupServer(...storage.handlers)
+  beforeAll(() => server.listen({ onUnhandledRequest: "error" }))
+  afterAll(() => server.close())
+
+  it("stores and lists documents in the configured bucket when STORAGE_DRIVER is supabase", async () => {
+    const { documents } = createContainer({
+      ...staging,
+      STORAGE_DRIVER: "supabase",
+      SUPABASE_STORAGE_URL: STORAGE_TEST_URL,
+      SUPABASE_STORAGE_BUCKET: STORAGE_TEST_BUCKET,
+      SUPABASE_STORAGE_SERVICE_KEY: STORAGE_TEST_KEY,
+    })
+    const { reference } = anApplication()
+
+    await documents.put(reference, { id: "7", kind: "confirmation" }, new Uint8Array([1, 2, 3]))
+
+    expect(await documents.list(reference)).toEqual([{ id: "7", kind: "confirmation" }])
   })
 })
 

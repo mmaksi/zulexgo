@@ -38,7 +38,8 @@ export function documentStoreContract(name: string, makeSubject: () => DocumentS
       await store.put(reference, confirmation, new TextEncoder().encode("%PDF-replaced"))
       await store.put(reference, rejection, pdf())
 
-      expect(await store.list(reference)).toEqual([confirmation, rejection])
+      expect(await store.list(reference)).toHaveLength(2)
+      expect(await store.list(reference)).toEqual(expect.arrayContaining([confirmation, rejection]))
       expect(new TextDecoder().decode((await store.get(reference, confirmation.id))?.bytes)).toBe("%PDF-replaced")
     })
 

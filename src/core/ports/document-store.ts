@@ -16,6 +16,7 @@ export interface StoredDocument {
  * - Bytes and kind round-trip unchanged, and storing the same document again
  *   replaces it rather than duplicating it.
  * - Stored and returned bytes are copies: mutating either side changes nothing.
+ * - `list` returns each stored document once, in no particular order.
  */
 export interface DocumentStore {
   put(reference: ApplicationReference, document: DocumentRef, bytes: Uint8Array): Promise<void>
