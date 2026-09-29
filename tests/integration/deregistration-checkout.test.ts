@@ -41,6 +41,34 @@ describe("de-registration checkout", () => {
     expect(await world.deps.repository.getStatusToken(reference)).toEqual(expect.any(String))
   })
 
+  it("tags the PaymentIntent with Zulex's application id once Zulex accepts the application", async () => {
+    const { reference, paymentId } = await checkout()
+    world.stripe.customerPays(paymentId, "card")
+
+    await handlePaymentNotification(world.deps, webhookRequest(world.stripe.event("payment_intent.amount_capturable_updated", paymentId)))
+
+    const { zulexApplicationId } = await stored(reference)
+    expect(world.stripe.intents.get(paymentId)?.metadata).toEqual({
+      order_id: reference,
+      service_type: "deregistration",
+      application_id: zulexApplicationId,
+    })
+  })
+
+  it("still files the application and tells the customer when Stripe refuses the tag, and says so in the log", async () => {
+    const warn = jest.spyOn(console, "warn").mockImplementation(() => {})
+    const { reference, paymentId } = await checkout()
+    world.stripe.customerPays(paymentId, "card")
+    world.stripe.refuseUpdates()
+
+    await handlePaymentNotification(world.deps, webhookRequest(world.stripe.event("payment_intent.amount_capturable_updated", paymentId)))
+
+    expect((await stored(reference)).status).toBe("submitted_to_kba")
+    expect(emails()).toEqual(["orderConfirmation", "submittedToKba"])
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining(reference))
+    warn.mockRestore()
+  })
+
   it("keeps the PaymentIntent id and nothing else of Stripe's in the application record", async () => {
     const { reference, clientSecret, paymentId } = await checkout()
     world.stripe.customerPays(paymentId, "card")

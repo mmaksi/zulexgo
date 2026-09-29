@@ -218,6 +218,25 @@ describe("de-registration flow on fakes", () => {
       expect(emails()).toEqual(["orderConfirmation", "submittedToKba", "correctionRequired"])
     })
 
+    it("flags for support, once, a KBA error code the catalogue does not know, naming the order and never a security code", async () => {
+      const warn = jest.spyOn(console, "warn").mockImplementation(() => {})
+      const { deps, zulexId, poll, checkoutAndPay } = setup()
+      const reference = await checkoutAndPay()
+      const id = await zulexId(reference)
+
+      deps.registration.setStatus(id, { state: "failed", error: { code: 999, details: [] }, documents: [] })
+      await poll(1)
+      deps.registration.setStatus(id, { state: "failed", error: { code: 999, details: [] }, documents: [] })
+      await poll(2)
+
+      expect(warn).toHaveBeenCalledTimes(1)
+      const [line] = warn.mock.calls[0]
+      expect(line).toEqual(expect.stringContaining("999"))
+      expect(line).toEqual(expect.stringContaining(reference))
+      for (const code of CODES) expect(line).not.toContain(String(code))
+      warn.mockRestore()
+    })
+
     it("backs off along the poll schedule while the KBA is still processing: 1, then 2, then 5 minutes", async () => {
       const { stored, poll, checkoutAndPay } = setup()
       const reference = await checkoutAndPay()
@@ -338,7 +357,8 @@ describe("de-registration flow on fakes", () => {
     const { deps, stored, zulexId, poll, checkoutAndPay } = setup()
     const broken = await checkoutAndPay()
     const healthy = await checkoutAndPay()
-    deps.registration.setStatus(await zulexId(broken), undefined as never)
+    const unreadable = { get state(): never { throw new Error("unexpected vendor payload") } } as never
+    deps.registration.setStatus(await zulexId(broken), unreadable)
     deps.registration.setStatus(await zulexId(healthy), { state: "finished", documents: [] })
 
     const result = await poll(1)

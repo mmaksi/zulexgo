@@ -18,6 +18,8 @@ export interface Payment {
   readonly refunded: Money
   /** Only while held: after this the provider releases the hold (7 days for an online card payment). */
   readonly holdExpiresAt?: Date
+  /** The registration service's id for the application, once recorded, so a payment can be reconciled with its fees. */
+  readonly registrationId?: string
 }
 
 /**
@@ -42,6 +44,8 @@ export type PaymentNotification =
  * - `release` is safe to call twice.
  * - `refund` needs captured money and never exceeds captured minus refunded.
  *   The same idempotency key refunds once, however often it is sent.
+ * - `recordRegistration` works in every payment state; recording the same id
+ *   again changes nothing.
  * - `readNotification` trusts only a payload signed by the provider; anything
  *   unsigned or altered throws `NotificationRejected`. The same notification
  *   may arrive twice, so acting on it must be safe to repeat.
@@ -56,5 +60,6 @@ export interface PaymentProvider {
   capture(paymentId: string, amount: Money): Promise<Payment>
   release(paymentId: string): Promise<Payment>
   refund(paymentId: string, amount: Money, idempotencyKey: string): Promise<Payment>
+  recordRegistration(paymentId: string, registrationId: string): Promise<void>
   readNotification(payload: string, signature: string | null): PaymentNotification
 }

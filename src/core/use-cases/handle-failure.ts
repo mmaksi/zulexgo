@@ -1,5 +1,5 @@
 import { applyEvent, type Application } from "@/src/core/domain/application"
-import { decideOnFailure, type Failure } from "@/src/core/domain/error-algorithm"
+import { decideOnFailure, isUnrecognised, type Failure } from "@/src/core/domain/error-algorithm"
 import type { Dependencies } from "./dependencies"
 import { mailCustomer } from "./mail-customer"
 import { settlePayment } from "./settle-payment"
@@ -25,6 +25,9 @@ export async function handleFailure(
   }
 
   if (decision.action === "failCorrectable") {
+    if (isUnrecognised(failure, deps.errorCatalogue)) {
+      console.warn(`[error-algorithm] ${application.reference}: unrecognised KBA error code ${failure.code}, treated as correctable; add it to the catalogue`)
+    }
     const failed = await deps.repository.update(applyEvent(stopped, "failedCorrectable", now))
     await mailCustomer(deps, failed, "correctionRequired")
     return

@@ -1,6 +1,7 @@
 import type { CustomerStep } from "@/src/core/domain/customer-steps"
 import type { StatusView as View } from "@/src/core/use-cases/get-status-by-token"
 import { cn } from "@/src/lib/utils"
+import { PlateFrame } from "@/src/ui/plate-frame"
 
 const SUPPORT_EMAIL = "kontakt@gm-gastro.com"
 
@@ -9,7 +10,11 @@ function describe(step: CustomerStep): { title: string; line?: string; text?: st
   if (step.id === "paid") {
     return step.state === "current"
       ? { title: "Antrag eingegangen", line: "Zahlung wird bestätigt" }
-      : { title: "Antrag eingegangen & bezahlt", line: "Zahlung erfasst", text: "Wir haben Ihren Antrag und Ihre Zahlung erhalten." }
+      : {
+          title: "Antrag eingegangen",
+          line: "Betrag reserviert",
+          text: "Wir haben Ihren Antrag erhalten und den Betrag auf Ihrer Karte reserviert. Abgebucht wird er erst mit dem Ergebnis.",
+        }
   }
   if (step.id === "kba") {
     return { title: "An das KBA übermittelt", line: step.state === "pending" ? undefined : "KBA bearbeitet", text: "Ihr Antrag liegt beim Kraftfahrt-Bundesamt." }
@@ -18,9 +23,9 @@ function describe(step: CustomerStep): { title: string; line?: string; text?: st
     case "completed":
       return { title: "Abmeldung abgeschlossen", line: "Vorgang abgeschlossen", text: "Ihr Fahrzeug ist abgemeldet. Kfz-Steuer und Versicherung enden automatisch." }
     case "failed_correctable":
-      return { title: "Korrektur erforderlich", line: "Korrektur erforderlich", text: "Einige Angaben müssen korrigiert werden. Wir haben Ihnen dazu eine E-Mail geschickt." }
+      return { title: "Korrektur erforderlich", line: "Korrektur erforderlich", text: "Die Zulassungsbehörde konnte den Antrag mit diesen Angaben nicht bearbeiten. Schreiben Sie uns, dann klären wir mit Ihnen die Korrektur oder die Stornierung." }
     case "failed_final":
-      return { title: "Antrag abgelehnt", line: "Teilerstattung", text: "Der Antrag konnte nicht abgeschlossen werden. Wir haben Ihnen dazu eine E-Mail geschickt." }
+      return { title: "Antrag abgelehnt", line: "Erstattung", text: "Der Antrag konnte nicht abgeschlossen werden. Wie viel Sie zurückerhalten, steht in unserer E-Mail dazu." }
     case "cancelled":
       return { title: "Antrag storniert", line: "Storniert", text: "Sie haben den Antrag storniert. Die Erstattung ist unterwegs." }
     default:
@@ -41,8 +46,12 @@ export function StatusView({ view }: { view: View }) {
         <h1 className="text-grau-dark">Ihre Abmeldung</h1>
         <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-body">
           <dt className="text-grau-bright">Kennzeichen</dt>
-          <dd className="plate-text text-grau-dark">
-            {licencePlate.prefix} {licencePlate.letters} {licencePlate.numbers}
+          <dd>
+            <PlateFrame className="inline-flex">
+              <span className="plate-text block px-3 py-1 text-grau-dark">
+                {licencePlate.prefix} {licencePlate.letters} {licencePlate.numbers}
+              </span>
+            </PlateFrame>
           </dd>
           <dt className="text-grau-bright">FIN</dt>
           <dd className="text-grau-dark">endet auf {view.vinEnding}</dd>

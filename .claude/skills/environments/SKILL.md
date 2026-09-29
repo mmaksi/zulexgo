@@ -11,7 +11,7 @@ Three stages, three purposes. Code is identical in all three; only configuration
 
 | Stage | Purpose | Data | Money |
 |---|---|---|---|
-| **dev** | Build and debug locally. Fast and disposable. | In-memory, seeded at boot, gone on restart | None — Stripe `dev` sandbox |
+| **dev** | Build and debug locally. Fast and disposable. | In-memory, seeded at boot, gone on restart | None — Stripe test mode |
 | **staging** | Rehearse production. Verify a release against real external systems before it ships. | Real-shaped, non-production; seeded with the same fake applications as dev | Stripe **test** mode only |
 | **production** | Serve real customers. | Real personal data — GDPR applies | Real charges |
 
@@ -36,7 +36,7 @@ Selected in the composition root (see `external-services`).
 | Port | dev | staging | production |
 |---|---|---|---|
 | `RegistrationGateway` (Zulex) | `https://integration-zulex.de/zulex-api/v1` (from M4) | `https://integration-zulex.de/zulex-api/v1` | `https://app.zulex.de/zulex-api/v1` |
-| `PaymentProvider` | Stripe sandbox `dev` (from M4) | Stripe sandbox `staging` | Stripe **live** account |
+| `PaymentProvider` | Stripe test mode of the `G&M Gastro Event GmbH` account (from M4) | Stripe sandbox `staging` | Stripe **live** account |
 | `Mailer` | Console or local mail catcher — never sends | Resend, recipients restricted to an allowlist | Resend |
 | `DocumentStore` | In-memory fake | Supabase Storage, staging project (from M5) | Supabase Storage, production project |
 | `IdentityVerification` | Fake | Fake; Verimi is added later (launch plan Q1–Q4) | Verimi |

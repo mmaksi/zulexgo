@@ -91,6 +91,15 @@ export function paymentProviderContract(name: string, makeSubject: () => Payment
       })
     })
 
+    it("records the registration service's id on a held payment, and recording it again is harmless", async () => {
+      const paymentId = await paid("card")
+
+      await provider.recordRegistration(paymentId, "registration-1")
+      await provider.recordRegistration(paymentId, "registration-1")
+
+      expect(await provider.getPayment(paymentId)).toMatchObject({ status: "held", registrationId: "registration-1" })
+    })
+
     it("releases a hold, and releasing again is harmless", async () => {
       const paymentId = await paid("card")
 

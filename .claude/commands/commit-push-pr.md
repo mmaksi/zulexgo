@@ -12,6 +12,7 @@ Commit the staged changes, push them to the current branch, and open a pull requ
 
 Run these steps in order:
 
+0. **Verification** — `CLAUDE.md` requires the `verify-app` loop green on the final code before every commit. If it has not run on what is staged, stop and say so; this command does not run it.
 1. **`git status`** — show what will be committed. If nothing is staged, stop and tell the user which files are unstaged or untracked so they can stage what they want. Do not `git add` anything yourself.
 2. **`git diff --staged`** — read the actual staged changes before writing anything. Base the message on what the change *does*, not on the file names.
 3. **Write a commit message in Conventional Commits format** based on what is staged: `type(scope): summary`, where `type` is one of `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, or `revert`. Subject line in imperative mood, no trailing period, ≤ 72 chars. Add a body only when the *why* isn't obvious from the subject.

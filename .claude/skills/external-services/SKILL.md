@@ -19,7 +19,7 @@ If swapping a vendor requires editing a file outside `src/adapters/` and one lin
 
 ## The four rules
 
-1. **A vendor SDK may be imported in exactly one folder.** `import Stripe from 'stripe'` is legal only inside `src/adapters/payment/stripe/`. Anywhere else it is a bug, enforced by lint (see below).
+1. **A vendor SDK may be imported in exactly one folder.** `import Stripe from 'stripe'` is legal only inside `src/adapters/payment/stripe/`. Anywhere else it is a bug, enforced by lint (see below). One exception: Stripe's browser SDK (`@stripe/*`) renders the Payment Element in `app/(funnel)/deregister/_components/stripe/`, the only folder lint allows it in.
 2. **Ports speak domain language, not vendor language.** `PaymentProvider.authorize()`, not `createPaymentIntent()`. `RegistrationGateway.submitDeregistration()`, not `postDeregistrationApplication()`. If a port method name would change when you swap vendors, rename it.
 3. **Vendor types never cross the boundary.** No `Stripe.PaymentIntent` in a function signature outside the adapter. The adapter maps vendor shapes to domain types at its edge and throws domain errors, not SDK errors.
 4. **Every port ships with at least two adapters:** the real one and an in-memory fake used by tests, and by dev where the `environments` skill wires it. A port with one implementation has not been proven swappable.
@@ -105,13 +105,13 @@ Use cases receive their ports as constructor arguments or function parameters. T
 | Port | Real adapter | Notes | Vendor source of truth |
 |---|---|---|---|
 | `PaymentProvider` | Stripe (manual capture for cards; SEPA Direct Debit captured at checkout) | Hold expiry is a documented port guarantee; partial refunds for the 19.99 € processing fee | Stripe MCP (docs search, API details, sandbox reads) |
-| `RegistrationGateway` | Zulex API | Also the KBA status source; see `docs/launch-plan.md` | `docs/api-1.yaml`; no MCP |
-| `Mailer` | Resend | The six status and refund emails (eight once Verimi is added), one-time link delivery | The `resend`, `react-email` and `email-best-practices` skills; no MCP connected |
+| `RegistrationGateway` | Zulex API | Also the KBA status source; see `docs/launch-plan.md` | `docs/api-1.yaml`, local only (confidential, gitignored); no MCP |
+| `Mailer` | Resend | The six status and refund emails (eight once Verimi is added), status link delivery | The `resend`, `react-email` and `email-best-practices` skills; no MCP connected |
 | `ApplicationRepository` | Postgres | Owns our status machine, not the vendor's | `supabase` and `supabase-postgres-best-practices` skills, Supabase MCP |
 | `DocumentStore` | Zulex `/documents/{id}` + Supabase Storage cache | Returns bytes + a domain document type | as above, per vendor |
 | `IdentityVerification` | Verimi — added later (launch plan Q1–Q4); port and fake exist | Status 2 → 3; a failed verification leads to 5c | none yet |
 | `Clock` | System clock | Injected so polling/expiry tests are deterministic | — |
-| `TokenGenerator` | Crypto RNG | Injected so one-time link tests are seeded | — |
+| `TokenGenerator` | Crypto RNG | Injected so status link tests are seeded | — |
 
 Vendor code is written against the source in the last column, never from memory. Where it names neither an MCP nor a skill, say so before writing the adapter.
 
@@ -125,7 +125,7 @@ The core never calls `new Date()` or `randomBytes()` itself. Three small classes
 |---|---|---|
 | `SystemClock` | `now()` returns `new Date()` | The one place in the app allowed to read the wall clock. |
 | `FakeClock` | Stands still until `advance(ms)` or `set(date)` moves it | Lets a test cross a deadline in a line instead of sleeping. |
-| `CryptoTokenGenerator` | 32 random bytes, base64url | The one place allowed to read the CSPRNG. One-time status links have no other protection. |
+| `CryptoTokenGenerator` | 32 random bytes, base64url | The one place allowed to read the CSPRNG. Status links have no other protection. |
 | `FakeTokenGenerator` | A seeded counter, prefixed `faketoken-` | Lets a test assert the exact link it expects, and makes a fake token unmistakable in output. |
 
 This is not ceremony. A Stripe pre-authorisation hold expires after roughly seven days and the status poller backs off over 1, 2, 5, 10, 30 minutes then hourly. Testing "the hold expired before capture" against the real clock means sleeping for a week or never testing it; against `FakeClock` it is `clock.advance(SEVEN_DAYS)`. The price is that use cases take the clock as an argument rather than calling `new Date()` — that is the whole trade, and it is why the lint rules treat a direct `new Date()` in `src/core/` as drift.

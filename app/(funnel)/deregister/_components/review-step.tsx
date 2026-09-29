@@ -10,6 +10,8 @@ import { euros } from "./money"
 import { SimulatedPaymentFields } from "./simulated-payment-fields"
 import { StripePaymentFields } from "./stripe/stripe-payment-fields"
 import type { PlateCount, VehicleData } from "./vehicle-data"
+import { Alert } from "@/src/ui/alert"
+import { PlateFrame } from "@/src/ui/plate-frame"
 
 const MASK = "•••"
 
@@ -91,13 +93,13 @@ export function ReviewStep({
           <dt className="font-normal text-grau-dark">Gesamt inkl. MwSt.</dt>
           <dd className="text-right text-h3 text-grau-dark">{euros(DEREGISTRATION_TOTAL)}</dd>
         </dl>
-        <p className="measure border-l-4 border-warning bg-warning-tint p-4 text-body text-grau-dark">
+        <Alert variant="warning" className="measure">
           Stornieren Sie nach einem korrigierbaren Fehler oder kann der Antrag nicht korrigiert werden, behalten wir{" "}
           {euros(PROCESSING_FEE)} Bearbeitungsgebühr ein und erstatten den Rest.{" "}
-          <Link href="/agb" className="underline underline-offset-4 hover:text-orange-dark">
+          <Link href="/agb" target="_blank" rel="noopener" className="underline underline-offset-4 hover:text-orange-dark">
             Mehr in den AGB
           </Link>
-        </p>
+        </Alert>
       </section>
 
       <section aria-labelledby="review-payment" className="flex flex-col gap-3">
@@ -114,7 +116,7 @@ export function ReviewStep({
       <div className="flex flex-col gap-4">
         <Consent checked={terms} onChange={setTerms}>
           Ich akzeptiere die{" "}
-          <Link href="/agb" className="underline underline-offset-4 hover:text-orange-dark">
+          <Link href="/agb" target="_blank" rel="noopener" className="underline underline-offset-4 hover:text-orange-dark">
             AGB
           </Link>{" "}
           und habe die Widerrufsbelehrung gelesen.
@@ -126,9 +128,9 @@ export function ReviewStep({
       </div>
 
       {error ? (
-        <p role="alert" className="measure border-l-4 border-error bg-error-tint p-4 text-body text-grau-dark">
+        <Alert role="alert" variant="error" className="measure">
           {error}
-        </p>
+        </Alert>
       ) : null}
 
       {/* site-contract §3: on phones the CTA docks at the bottom with the total. */}
@@ -153,7 +155,15 @@ function Row({ term, value, plate = false }: { term: string; value: string; plat
   return (
     <>
       <dt className="text-grau-bright">{term}</dt>
-      <dd className={plate ? "plate-text text-grau-dark" : "break-all text-grau-dark"}>{value}</dd>
+      {plate ? (
+        <dd>
+          <PlateFrame className="inline-flex">
+            <span className="plate-text block px-3 py-1 text-grau-dark">{value}</span>
+          </PlateFrame>
+        </dd>
+      ) : (
+        <dd className="break-all text-grau-dark">{value}</dd>
+      )}
     </>
   )
 }

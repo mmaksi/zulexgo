@@ -25,6 +25,7 @@ export function toPayment(intent: Stripe.PaymentIntent): Payment {
     captured: Money.ofCents(status === "captured" ? intent.amount_received : 0),
     refunded: Money.ofCents(charge?.amount_refunded ?? 0),
     holdExpiresAt: status === "held" && captureBefore ? new Date(captureBefore * 1000) : undefined,
+    registrationId: intent.metadata?.application_id,
   }
 }
 

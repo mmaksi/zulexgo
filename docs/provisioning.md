@@ -50,7 +50,7 @@ Do §3 first: step 5 needs the database values.
    CODES_ENCRYPTION_KEY=<openssl rand -base64 32>    # Sensitive
    ```
 
-   Payment, registration, mail and storage stay fake because those vendors come later: M4 flips payment, registration and mail, M5 storage. The app refuses to boot if a driver is flipped without its key.
+   These are the first deploy's values: payment, registration, mail and storage start fake because those vendors come later. §8 has since switched payment and mail to Stripe and Resend; registration switches once the Zulex API is back, storage in M5. The app refuses to boot if a driver is flipped without its key.
 
 6. **Deployments → Create Deployment** → branch `staging`. The marketing site must serve at `APP_BASE_URL`. Once M3 is merged, the build log also shows the migrations running.
 7. Region needs nothing: `vercel.json` pins Frankfurt (`fra1`).
@@ -120,7 +120,7 @@ Each blocks the milestone beside it; none blocks M1.
 
 | Item | Needed by | Note |
 |---|---|---|
-| Stripe keys | M4 | Two test environments: the test mode of account **`G&M Gastro Event GmbH`** (`acct_1UI72AFfyXGmFLpZ`) for dev (developers' `.env.local`) and the sandbox **`G&M Gastro Event GmbH Sandbox`** (`acct_1UI72PFkTWmWhWUM`) for staging (staging Vercel project); keys never cross between them. Dev receives webhooks via `stripe listen --forward-to localhost:3000/api/webhooks/stripe`, which prints its own signing secret. Production uses the live account, whose business verification (KYC) is still pending and must finish by M8. Enable card, SEPA Direct Debit, Apple Pay, Google Pay in all three; SEPA needs extra business verification in Stripe. Claude's Stripe MCP has both: §6. |
+| Stripe keys | M4 | Two test environments: the test mode of account **`G&M Gastro Event GmbH`** (`acct_1UI72AFfyXGmFLpZ`) for dev (developers' `.env.local`) and the sandbox **`G&M Gastro Event GmbH Sandbox`** (`acct_1UI72PFkTWmWhWUM`) for staging (staging Vercel project); keys never cross between them. Dev receives webhooks via `stripe listen --forward-to localhost:3000/api/webhooks/stripe`, which prints its own signing secret. Production uses the live account, whose business verification (KYC) is still pending and must finish by M8. Enable cards in all three; Apple Pay and Google Pay run as cards. SEPA Direct Debit stays off: the app does not offer it. Claude's Stripe MCP has both: §6. |
 | Verimi contract and credentials | M5 | Only if ZulexGO integrates Verimi itself — launch plan Q1–Q4. |
 | Zulex integration key + confirmed base URL | M4 | Used by dev and staging — Zulex has one integration and one production environment. Ask the Zulex API team whether they can issue a separate integration key per stage (otherwise dev and staging share one), and, separately, for a signed status-change webhook — see the poller decision in the launch plan. |
 | Zulex production key | M8 | |

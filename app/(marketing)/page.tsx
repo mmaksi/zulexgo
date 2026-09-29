@@ -17,8 +17,8 @@ export default function LandingPage() {
   return (
     <>
       <Hero />
-      <TrustStrip />
       <ServiceSelection />
+      <TrustStrip />
       {/* §5.1 at most one section wedge per viewport height */}
       <Wedge />
       <HowItWorks />
