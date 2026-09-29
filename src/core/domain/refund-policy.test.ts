@@ -1,6 +1,6 @@
 import { Money } from "./money"
 import { PROCESSING_FEE } from "./pricing"
-import { refundPolicy, settledDecision } from "./refund-policy"
+import { refundPolicy, retainedOf, settledDecision } from "./refund-policy"
 
 const euros = (amount: number) => Money.ofCents(Math.round(amount * 100))
 
@@ -121,5 +121,24 @@ describe("settledDecision: what a rerun finds already done", () => {
 
   it("leaves a completed order to the policy itself, which already skips a captured payment", () => {
     expect(settledDecision({ type: "completed" }, paid("captured", 6999))).toBeUndefined()
+  })
+})
+
+describe("retainedOf", () => {
+  const record = (captured: number, refunded: number) => ({ captured: Money.ofCents(captured), refunded: Money.ofCents(refunded) })
+
+  it("is what was taken and not given back", () => {
+    expect(retainedOf(record(6999, 5000)).cents).toBe(1999)
+  })
+
+  it("is nothing when a provider reports a reversal of money that was never taken, rather than failing", () => {
+    expect(retainedOf(record(0, 6999)).cents).toBe(0)
+  })
+
+  it("lets settledDecision see a released hold through such a report", () => {
+    const released = { status: "released", total: TOTAL, ...record(0, 6999) } as const
+
+    expect(settledDecision({ type: "ourTechnicalError" }, released)).toBeDefined()
+    expect(settledDecision({ type: "failedFinal" }, released)).toBeUndefined()
   })
 })

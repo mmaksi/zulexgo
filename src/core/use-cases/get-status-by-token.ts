@@ -3,6 +3,7 @@ import type { Application } from "@/src/core/domain/application"
 import { DOCUMENT_KINDS, type DocumentRef } from "@/src/core/domain/document"
 import type { LicencePlate } from "@/src/core/domain/licence-plate"
 import type { Money } from "@/src/core/domain/money"
+import { retainedOf } from "@/src/core/domain/refund-policy"
 import { TokenInvalid } from "@/src/core/errors/token-invalid"
 import type { ApplicationRepository } from "@/src/core/ports/application-repository"
 import type { DocumentStore } from "@/src/core/ports/document-store"
@@ -56,9 +57,9 @@ export async function getStatusByToken(
 async function refundOf(payments: Pick<PaymentProvider, "getPayment">, { status, payment }: Application): Promise<StatusView["refund"]> {
   if (status !== "failed_final" && status !== "cancelled") return undefined
   try {
-    const { amount, captured, refunded } = await payments.getPayment(payment.id)
-    const retained = captured.subtract(refunded)
-    return { returned: amount.subtract(retained), retained }
+    const paid = await payments.getPayment(payment.id)
+    const retained = retainedOf(paid)
+    return { returned: paid.amount.subtract(retained), retained }
   } catch {
     return undefined
   }

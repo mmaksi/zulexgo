@@ -1,4 +1,5 @@
 import type { ApplicationReference } from "@/src/core/domain/application-reference"
+import { retainedOf } from "@/src/core/domain/refund-policy"
 import type { Dependencies } from "./dependencies"
 import { mailRefund } from "./mail-customer"
 
@@ -15,7 +16,7 @@ export async function confirmRefund(deps: Dependencies, reference: ApplicationRe
   if (application?.status !== "failed_final" && application?.status !== "cancelled") return
 
   const payment = await deps.payments.getPayment(application.payment.id)
-  const returned = payment.amount.subtract(payment.captured.subtract(payment.refunded))
+  const returned = payment.amount.subtract(retainedOf(payment))
 
   await mailRefund(deps, application, returned)
 }
