@@ -1,6 +1,7 @@
 import { anApplication, FAKE_REQUEST } from "@/tests/fixtures/applications"
 import type { ApplicationReference } from "@/src/core/domain/application-reference"
 import type { DocumentRef } from "@/src/core/domain/document"
+import { Money } from "@/src/core/domain/money"
 import { TokenInvalid } from "@/src/core/errors/token-invalid"
 import { getStatusByToken } from "./get-status-by-token"
 
@@ -8,7 +9,16 @@ const TOKEN = "faketoken-status"
 const application = anApplication({ status: "submitted_to_kba" })
 const repository = { findByStatusToken: async (token: string) => (token === TOKEN ? application : undefined) }
 const storeOf = (stored: Map<ApplicationReference, DocumentRef[]> = new Map()) => ({ list: async (reference: ApplicationReference) => stored.get(reference) ?? [] })
-const deps = { repository, documents: storeOf() }
+const held = Money.ofCents(6999)
+const paymentOf = (captured: number, refunded = 0) => async () => ({
+  id: "fake-payment",
+  status: "captured" as const,
+  amount: held,
+  captured: Money.ofCents(captured),
+  refunded: Money.ofCents(refunded),
+})
+const payments = { getPayment: paymentOf(1999) }
+const deps = { repository, documents: storeOf(), payments }
 
 describe("getStatusByToken", () => {
   it("describes the application behind a status link", async () => {
@@ -41,7 +51,7 @@ describe("getStatusByToken", () => {
       [stranger.reference, [{ id: "6", kind: "confirmation" }]],
     ])
 
-    const view = await getStatusByToken({ repository, documents: storeOf(stored) }, TOKEN)
+    const view = await getStatusByToken({ repository, documents: storeOf(stored), payments }, TOKEN)
 
     expect(view.documents).toEqual([
       { id: "9", kind: "confirmation" },
@@ -52,5 +62,39 @@ describe("getStatusByToken", () => {
 
   it("lists no documents for an order that has none", async () => {
     expect((await getStatusByToken(deps, TOKEN)).documents).toEqual([])
+  })
+
+  describe("what comes back to the customer", () => {
+    const viewOf = (status: "failed_final" | "cancelled" | "completed", getPayment = payments.getPayment) => {
+      const ended = anApplication({ status })
+      return getStatusByToken(
+        { repository: { findByStatusToken: async () => ended }, documents: storeOf(), payments: { getPayment } },
+        TOKEN,
+      )
+    }
+
+    it.each(["failed_final", "cancelled"] as const)("states, for a %s order, what the provider returned and what it kept", async (status) => {
+      expect((await viewOf(status)).refund).toEqual({ returned: Money.ofCents(5000), retained: Money.ofCents(1999) })
+    })
+
+    it("counts a released hold as everything returned", async () => {
+      expect((await viewOf("failed_final", paymentOf(0))).refund).toEqual({ returned: held, retained: Money.ofCents(0) })
+    })
+
+    it("states nothing for an order that was not refunded, and asks the provider nothing", async () => {
+      const getPayment = jest.fn(payments.getPayment)
+
+      expect((await viewOf("completed", getPayment)).refund).toBeUndefined()
+      expect((await getStatusByToken(deps, TOKEN)).refund).toBeUndefined()
+      expect(getPayment).not.toHaveBeenCalled()
+    })
+
+    it("still shows the page when the provider cannot be asked", async () => {
+      const failing = async () => {
+        throw new Error("Stripe is down")
+      }
+
+      expect((await viewOf("failed_final", failing)).refund).toBeUndefined()
+    })
   })
 })
