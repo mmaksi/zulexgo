@@ -1,59 +1,12 @@
 import { FAKE_REQUEST } from "@/tests/fixtures/applications"
-import { FakeClock } from "@/src/adapters/clock/fake/fake-clock"
-import { FakeMailer } from "@/src/adapters/mail/fake/fake-mailer"
-import { FakePaymentProvider } from "@/src/adapters/payment/fake/fake-payment-provider"
-import { FakeRegistrationGateway } from "@/src/adapters/registration/fake/fake-registration-gateway"
-import { InMemoryApplicationRepository } from "@/src/adapters/repository/fake/in-memory-application-repository"
-import { InMemoryDocumentStore } from "@/src/adapters/storage/fake/in-memory-document-store"
-import { FakeTokenGenerator } from "@/src/adapters/tokens/fake/fake-token-generator"
-import type { ApplicationReference } from "@/src/core/domain/application-reference"
-import type { ErrorCatalogue } from "@/src/core/domain/error-algorithm"
 import { Money } from "@/src/core/domain/money"
 import { DEREGISTRATION_TOTAL, PROCESSING_FEE } from "@/src/core/domain/pricing"
 import { GatewayRejected } from "@/src/core/errors/gateway-rejected"
 import { GatewayUnavailable } from "@/src/core/errors/gateway-unavailable"
-import type { PaymentMethodKind } from "@/src/core/ports/payment-provider"
 import { confirmPayment } from "@/src/core/use-cases/confirm-payment"
 import { confirmRefund } from "@/src/core/use-cases/confirm-refund"
-import { pollDueApplications } from "@/src/core/use-cases/poll-due-applications"
 import { submitCheckout } from "@/src/core/use-cases/submit-checkout"
-
-const MINUTE = 60_000
-const CATALOGUE: ErrorCatalogue = { 101: "correctable", 202: "final" }
-const CODES = Object.values(FAKE_REQUEST.codes)
-
-function setup() {
-  const clock = new FakeClock(new Date("2026-03-01T09:00:00.000Z"))
-  const deps = {
-    repository: new InMemoryApplicationRepository(),
-    registration: new FakeRegistrationGateway(),
-    payments: new FakePaymentProvider(clock),
-    mailer: new FakeMailer(),
-    documents: new InMemoryDocumentStore(),
-    clock,
-    tokens: new FakeTokenGenerator(),
-    statusLink: (token: string) => `https://zulexgo.example.test/status/${token}`,
-    errorCatalogue: CATALOGUE,
-  }
-
-  const emails = () => deps.mailer.sent.map((message) => message.template.name)
-  const stored = async (reference: ApplicationReference) => (await deps.repository.get(reference))!
-  const zulexId = async (reference: ApplicationReference) => (await stored(reference)).zulexApplicationId!
-  const payment = async (reference: ApplicationReference) => deps.payments.getPayment((await stored(reference)).payment.id)
-  const poll = async (afterMinutes: number) => {
-    clock.advance(afterMinutes * MINUTE)
-    return pollDueApplications(deps, 50)
-  }
-
-  async function checkoutAndPay(method: PaymentMethodKind = "card") {
-    const { reference } = await submitCheckout(deps, { request: FAKE_REQUEST, email: "customer@example.test" })
-    await deps.payments.customerPays((await stored(reference)).payment.id, method)
-    await confirmPayment(deps, reference)
-    return reference
-  }
-
-  return { deps, clock, emails, stored, zulexId, payment, poll, checkoutAndPay }
-}
+import { CODES, MINUTE, setupFlow as setup } from "./flow-harness"
 
 describe("de-registration flow on fakes", () => {
   describe("J1, happy path", () => {
@@ -178,7 +131,7 @@ describe("de-registration flow on fakes", () => {
 
       expect((await stored(reference)).status).toBe("failed_final")
       expect(await payment(reference)).toMatchObject({ status: "released", captured: Money.ofCents(0) })
-      expect(emails()).toEqual(["orderConfirmation", "rejected"])
+      expect(emails()).toEqual(["orderConfirmation", "rejected", "refundIssued"])
 
       await confirmRefund(deps, reference)
 
@@ -312,7 +265,7 @@ describe("de-registration flow on fakes", () => {
 
       expect((await stored(reference)).status).toBe("failed_final")
       expect(await payment(reference)).toMatchObject({ status: "captured", captured: PROCESSING_FEE })
-      expect(emails()).toEqual(["orderConfirmation", "submittedToKba", "rejected"])
+      expect(emails()).toEqual(["orderConfirmation", "submittedToKba", "rejected", "refundIssued"])
     })
 
     it("completes a finished application that has a confirmation, even alongside a rejection document", async () => {

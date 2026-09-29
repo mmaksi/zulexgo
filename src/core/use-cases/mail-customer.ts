@@ -25,3 +25,9 @@ export async function mailCustomer(
   const idempotencyKey = `${application.reference}/${name}/${application.history.length}`
   await deps.mailer.send({ to: application.email, template, idempotencyKey })
 }
+
+/** Email 6. One per order however it is reached: the answer to a refund and the provider's confirmation of it share a key. */
+export async function mailRefund(deps: Pick<Dependencies, "mailer">, application: Application, amount: Money): Promise<void> {
+  const { reference, email } = application
+  await deps.mailer.send({ to: email, template: { name: "refundIssued", reference, amount }, idempotencyKey: `${reference}/refundIssued` })
+}

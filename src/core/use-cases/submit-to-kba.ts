@@ -15,27 +15,36 @@ import { mailCustomer } from "./mail-customer"
 export async function submitToKba(deps: Dependencies, application: Application): Promise<void> {
   if (application.status !== "submitted_and_paid") return
 
+  const resubmitLater = (error?: unknown) => async (retrying: Application) => ({
+    ...retrying,
+    polling: { ...retrying.polling, nextPollAt: resubmitAt(deps, retrying, error) },
+  })
+
+  // Money that already went back (our own failure whose email is still owed, or a hold that lapsed) is never filed for:
+  // the failure is finished instead, so a service that recovered in the meantime cannot undo the refund.
+  if ((await deps.payments.getPayment(application.payment.id)).status === "released") {
+    return handleFailure(deps, application, { kind: "unavailable" }, resubmitLater())
+  }
+
   let applicationId: string
   try {
     ;({ applicationId } = await deps.registration.submitDeregistration(application.request, application.idempotencyKey))
   } catch (error) {
-    const failure = toFailure(error)
-    await handleFailure(deps, application, failure, async (retrying) => ({
-      ...retrying,
-      polling: { ...retrying.polling, nextPollAt: resubmitAt(deps, retrying, error) },
-    }))
+    await handleFailure(deps, application, toFailure(error), resubmitLater(error))
     return
   }
 
   const now = deps.clock.now()
-  const submitted = await deps.repository.update({
+  const submitted: Application = {
     ...applyEvent(application, "submittedToKba", now),
     zulexApplicationId: applicationId,
     retryAttempts: 0,
     polling: { attempts: 0, nextPollAt: nextPollAt({ ikfzStatus: application.ikfzStatus, attempts: 0, now }) },
-  })
+  }
+  // Email before the status: an email that fails leaves the application at status 1, still due, so the next tick
+  // resubmits (same idempotency key) and tries again. The other order would lose the email for good.
   await mailCustomer(deps, submitted, "submittedToKba")
-  await recordRegistration(deps, submitted, applicationId)
+  await recordRegistration(deps, await deps.repository.update(submitted), applicationId)
 }
 
 /** For reconciling payments with registration fees only, so a provider failure is logged, never allowed to stop the application. */
