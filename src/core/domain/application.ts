@@ -26,6 +26,7 @@ export interface Application {
   /** One per checkout attempt, sent as `X-Idempotency-Key`, so a network retry never files twice. */
   readonly idempotencyKey: string
   readonly payment: { readonly id: string; readonly total: Money }
+  /** Available for applications at the KBA. */
   readonly zulexApplicationId?: string
   /** Silent retries of a technical error already used; business logic §2 allows one. */
   readonly retryAttempts: number

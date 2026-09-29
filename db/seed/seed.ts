@@ -6,7 +6,7 @@ import { SEEDED_APPLICATIONS, type SeededApplication } from "./data/applications
 /**
  * The same applications, one or more per status, for dev and staging: dev
  * loads them into the in-memory repository at every boot, staging into its
- * database on every deploy (`npm run db:seed`). Production is never seeded.
+ * database on every deploy (`npm run db:seed`).
  */
 export function seedFor(stage: Stage): readonly SeededApplication[] {
   if (stage === "production") throw new Error("The seed never loads in production.")

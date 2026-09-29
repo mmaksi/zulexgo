@@ -11,9 +11,7 @@ const USAGE = "Usage: db up | db down [count | all] | db status | db seed"
 
 /**
  * `npm run db:migrate`, `db:migrate:down`, `db:status` and `db:seed`. They use
- * the direct (session) connection, never the transaction pooler the app uses.
- * Reverting drops data, so it runs in dev only; staging and production move
- * forward with a new migration instead. Seeding refuses production.
+ * the direct session pooler connection, never the transaction pooler the app uses.
  */
 export async function runDatabaseCommand([command, count]: string[], source: EnvSource = process.env): Promise<string> {
   const env = parseEnv(source)
