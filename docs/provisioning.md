@@ -50,7 +50,7 @@ Do §3 first: step 5 needs the database values.
    CODES_ENCRYPTION_KEY=<openssl rand -base64 32>    # Sensitive
    ```
 
-   Payment, registration, mail and storage stay fake because those vendors come later: M4 flips payment, registration and mail, M5 storage. The app refuses to boot if a driver is flipped without its key.
+   These are the first deploy's values: payment, registration, mail and storage start fake because those vendors come later. §8 has since switched payment and mail to Stripe and Resend; registration switches once the Zulex API is back, storage in M5. The app refuses to boot if a driver is flipped without its key.
 
 6. **Deployments → Create Deployment** → branch `staging`. The marketing site must serve at `APP_BASE_URL`. Once M3 is merged, the build log also shows the migrations running.
 7. Region needs nothing: `vercel.json` pins Frankfurt (`fra1`).

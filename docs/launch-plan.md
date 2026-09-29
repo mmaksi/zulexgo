@@ -9,6 +9,7 @@ ZulexGO: B2C web app for online vehicle de-registration (Außerbetriebsetzung) o
 - **CI:** `.github/workflows/ci.yml` runs lint, typecheck, tests, build on every PR, plus the `main accepts staging only` check. ESLint boundary rule in place; a canary test proves the Zulex key never reaches the client bundle.
 - **Deployment:** GitHub remote with protected `staging` and `main`, baseline security headers in `next.config.ts`. Vercel project `zulexgo-staging` deploys `staging` (created 2026-09-27, later than M1 recorded); the production project `zulexgo` is created in M8.
 - **Walking skeleton (M4 code):** Zulex, Stripe and Resend adapters, each passing its port's contract; the Zulex adapter is written from `docs/api-1.yaml` and tested against an msw double of that spec, never yet against the live API. Signed Stripe webhook at `app/api/webhooks/stripe/`, poll route at `app/api/internal/poll/` behind `CRON_SECRET`, funnel at `/deregister`, status page at `/status/[token]`, and the M4 integration tests.
+- **Staging drivers today:** payment on the Stripe sandbox `G&M Gastro Event GmbH Sandbox`, mail on Resend within `MAIL_ALLOWLIST`, repository on the staging Supabase project (`docs/provisioning.md` §8). Registration stays fake until the Zulex API is back, and storage until M5; each Vercel instance keeps the fakes' state in its own memory (D11).
 
 Not built yet: the Supabase Storage and Verimi adapters (M5); the Zulex spike (no captured fixtures, and `docs/deregistration-user-journeys.md` has no findings from the live API); a schedule for the poll route (`docs/provisioning.md` §5); the staging run that closes M4.
 
@@ -337,7 +338,7 @@ Funnel UI (M4 Track B) starts once M2's fakes exist, parallel to M3.
 
 ## Known defects (docs vs code audit, 2026-09-29)
 
-Found on `main` @ `1ed5034`. Numbered D1–D10; none is fixed yet.
+Found on `main` @ `1ed5034`. Numbered D1–D11; none is fixed yet.
 
 | # | Defect | Status |
 |---|---|---|
@@ -351,6 +352,7 @@ Found on `main` @ `1ed5034`. Numbered D1–D10; none is fixed yet.
 | D8 | Legal pages are wrong or missing | Parked (M7) |
 | D9 | Consent (`agb_version`, `consent_at`) is never stored | Planned |
 | D10 | Checked radio contrast is 2.31:1 | Planned |
+| D11 | On staging, two Vercel instances can give two orders the same fake Zulex id | Planned; gone once staging runs on Zulex |
 
 **Planned fixes** (test-first, one PR each into `staging`):
 
@@ -361,6 +363,7 @@ Found on `main` @ `1ed5034`. Numbered D1–D10; none is fixed yet.
 - **D6.** A timeout, network error, 409, 429 or 5xx on create counts as "never reached Zulex" (`error-algorithm.ts`); after one retry it goes to 5c with a full release, though the create may have succeeded. Fix in `error-algorithm.ts` and `submit-to-kba.ts`, per Q23: e.g. keep resubmitting with the same idempotency key for up to 24 h before falling back to 5c.
 - **D9.** Write both columns at checkout (`app/(funnel)/deregister/actions.ts`, `submit-checkout.ts`, `Application`, `postgres-application-repository.ts`); test that they persist and that checkout is refused without them.
 - **D10.** `src/ui/radio-group.tsx` draws an orange dot and border on white; `docs/design-standard.md` requires an orange fill with a grau-dark mark. Presentation: checked in the browser, not tested.
+- **D11.** The fake registration gateway numbers its ids `fake-zulex-application-1`, `-2`, … per instance, and `applications.zulex_application_id` is `UNIQUE`, so the second order to draw a taken id fails to record it and stays at status 1. A status check on an instance that did not create the application also fails; this waits on D1, since nothing polls yet. Production is unaffected: it refuses every fake driver. Fix: random ids in `src/adapters/registration/fake/`.
 
 ## Open questions (business logic v1.0)
 
