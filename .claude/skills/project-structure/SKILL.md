@@ -59,7 +59,7 @@ Config files (`package.json`, `next.config.ts`, `tsconfig.json`, `.env.*`) stay 
 
 | Layer | May import | Must never import |
 |---|---|---|
-| `app/` | `src/core/**`, `src/ui/**`, `src/config/**`, `src/lib/**` | vendor SDKs, `src/adapters/**` directly |
+| `app/` | `src/core/**`, `src/ui/**`, `src/config/**`, `src/lib/**`; Stripe's browser SDK (`@stripe/*`) in `app/(funnel)/deregister/_components/stripe/` only | any other vendor SDK, `src/adapters/**` directly |
 | `src/core/` | `src/core/**` only | anything in `app/`, `adapters/`, `ui/`, `next/*`, `react`, any SDK |
 | `src/adapters/` | `src/core/ports/**`, `src/core/domain/**`, its own SDK, siblings via `./` | other adapters, `app/`, `src/ui/`, `src/config/` |
 | `src/config/` | everything (it is the composition root) | — |

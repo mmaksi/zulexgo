@@ -14,7 +14,7 @@ Business logic: [launch-plan.md](launch-plan.md) is source of truth; open points
 | Security code, registration certificate part 1 | 7 alphanumeric | Required (scratched field on Zulassungsbescheinigung Teil I) |
 | VIN | 1–17 chars `[A-Z0-9]` | Required. Loose API pattern; UI expects 17 chars for modern vehicles, allows shorter for old ones |
 | `reserveLicencePlate` | boolean | Out of scope — always omit/send `false` (founder decision) |
-| Email, payment | — | **Not part of the API.** Ours to collect for Stripe, status emails, one-time link |
+| Email, payment | — | **Not part of the API.** Ours to collect for Stripe, status emails, status link |
 
 Always send `X-Idempotency-Key` (one per checkout attempt): a network retry must never create two applications and two charges.
 
@@ -54,7 +54,7 @@ Double-click / refresh on "Pay & submit": idempotency key makes API call safe; S
 `GET /registration-authorities?licencePlatePrefix=…` before payment. `online` → normal expectations ("usually minutes to hours"). `unavailable`/`offline` → **manual processing**: tell customer before payment it may take days. Always use this endpoint in the eligibility step.
 
 ### J10 — Status tracking, lost link, unknown status
-One-time link → personal status dashboard (no account) with the customer statuses (seven once Verimi is added) and documents. Lost link → "Resend my link" by email + order ID (launch-plan assumption; send to stored address only — never reveal data on-page from an email guess). Unknown status tag from API (spec explicitly warns of new statuses) → render generic "In progress" step, don't break.
+Status link → personal status dashboard (no account) with the customer statuses (seven once Verimi is added) and documents. Lost link → "Resend my link" by email + order ID (launch-plan assumption; send to stored address only — never reveal data on-page from an email guess). Unknown status tag from API (spec explicitly warns of new statuses) → render generic "In progress" step, don't break.
 
 ### J11 — Special plates (edge case)
 Seasonal (Saisonkennzeichen), electric (E), historic (H) plates: deregistration request has **no `licencePlateAttributes`** (other flows do). If KBA needs E/H suffix, these vehicles may be rejected. Clarify with API provider; until then exclude them in eligibility check or expect J4/J5 outcomes.

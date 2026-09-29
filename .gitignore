@@ -25,3 +25,6 @@ tsconfig.tsbuildinfo
 # code needs from them is restated in docs/launch-plan.md.
 /docs/zulexgo-business-logic-en.pdf
 /docs/api-1.yaml
+
+# Working notes: audits and provisional answers, kept local.
+/notes/
