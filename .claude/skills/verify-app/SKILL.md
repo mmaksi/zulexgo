@@ -9,7 +9,7 @@ description: Use before claiming any change is done, before committing, and befo
 
 "Done" means the loop below ran green on the final state of the code, not an earlier one. Run it fast to slow; the first failure stops the loop. Fix it, rerun that step, then rerun the whole loop once before reporting, because a fix can break an earlier step.
 
-The loop mirrors CI (`.github/workflows/ci.yml`): if it passes here, the `lint, typecheck, test, build` check passes there. Whole loop takes under a minute.
+The loop mirrors CI (`.github/workflows/ci.yml`) with two gaps. CI also runs the Postgres suites and the migration rehearsal against a Postgres service container; locally those suites skip without `TEST_DATABASE_URL`. So for a change to a migration, the seed or the Postgres adapter, set `TEST_DATABASE_URL` to a scratch Postgres before step 4, or rely on CI. Otherwise, if the loop passes here, the `lint, typecheck, test, build` check passes there. Whole loop takes under a minute.
 
 ## The loop
 
@@ -72,9 +72,9 @@ If one is already running (`.next/dev/lock` holds its PID and URL), reuse it. Th
 - `preview_logs`: `✓ Ready`, and no error, warning, or stack trace. `instrumentation.ts` builds the container at boot, so a clean start proves the dev env parses.
 - Every route answers, and an unknown one 404s:
   ```bash
-  for p in / /agb /datenschutz /impressum /does-not-exist; do echo "$(curl -s -o /dev/null -w '%{http_code}' localhost:3000$p) $p"; done
+  for p in / /agb /datenschutz /impressum /deregister /status/seed-status-link-submitted-to-kba /does-not-exist; do echo "$(curl -s -o /dev/null -w '%{http_code}' localhost:3000$p) $p"; done
   ```
-  Add any route your change created.
+  The status link is one the dev seed opens. `/api/webhooks/stripe` and `/api/internal/poll` are exercised by the integration tests, not here. Add any route your change created.
 - `read_console_messages` with `onlyErrors: true`: empty. No hydration mismatch, no React key warning.
 - Logs show no security code or `X-Api-Key`, and no status token outside dev (CLAUDE.md Non-negotiables).
 

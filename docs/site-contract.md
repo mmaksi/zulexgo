@@ -57,7 +57,7 @@ Per field: label ≤40, helper ≤150, locator image (where to find it), error �
 - **Certificate part 1 security code** — exactly 7 alphanumeric; masked.
 - **Rear plate security code** — exactly 3 alphanumeric.
 - **Front plate security code** — exactly 3 alphanumeric; only if plate count = 2.
-- **Email** — RFC-valid; for status updates, one-time status link, and the Verimi link once Verimi is added. Consent microcopy ≤200 chars.
+- **Email** — RFC-valid; for status updates, the status link, and the Verimi link once Verimi is added. Consent microcopy ≤200 chars.
 
 ### 2.4 Review & Payment
 - **Order summary** — read-only echo of all fields (codes masked).
@@ -70,9 +70,9 @@ Per field: label ≤40, helper ≤150, locator image (where to find it), error �
 ### 2.5 Confirmation
 - **Success headline** ≤60 chars; **order ID** `ZG-XXXXXX`; **status link notice** "link sent to {email}" ≤150 chars; **next-steps text** — mentions the following identity-verification email once Verimi is added, ≤300 chars.
 
-### 2.6 Status Dashboard (one-time link)
+### 2.6 Status Dashboard (status link)
 - **Vehicle summary** — plate + masked VIN only; never security codes.
-- **Status stepper** — the customer statuses (five now, seven with Verimi); per step: title ≤50, status line ≤50, description ≤150 chars, timestamp (our backend), state (done/current/pending/failed). Titles/status lines = the statuses and internal labels in `launch-plan.md` § Context; status 1 wording depends on Q7.
+- **Status stepper** — the customer statuses as three rows now (1, 4 and the outcome 5a | 5b | 5c), five with Verimi; per step: title ≤50, status line ≤50, description ≤150 chars, timestamp (our backend), state (done/current/pending/failed). Titles/status lines = the statuses and internal labels in `launch-plan.md` § Context; status 1 wording depends on Q7.
 - **Outcome block** variants:
   - *5a* — success text ≤300 chars + documents list.
   - *5b* — reason (rewritten from `errorInfo`) ≤300; CTA "Correct data" ≤25; CTA "Cancel" ≤25 with adjacent fee notice ("19.99 € is retained, the rest is refunded") ≤150 chars.

@@ -10,7 +10,7 @@
 - **Plakette / Siegel (plate seal)** — Official sticker on each plate hiding a **3-character security code**; scratching invalidates the plate. Rear code always required, front code only for two-plate vehicles.
 - **Sicherheitscode (security code)** — The scratch-off codes above. Legal proof of possession authorizing online de-registration — treat as secrets.
 - **VIN / FIN (Fahrzeug-Identifizierungsnummer)** — Vehicle identification number, up to 17 characters, printed in Teil I.
-- **Antrag (application)** — One submission to the authority. Identified by our `applicationId` (UUID) and, once at KBA, a `kbaApplicationNumber`.
+- **Antrag (application)** — One submission to the authority. Identified by our order reference `ZG-XXXXXX` (`ApplicationReference`); the Zulex API gives it its own `applicationId`, stored as `zulexApplicationId`.
 - **Bescheid (notice)** — Formal decision document from the registration authority (confirmation or rejection).
 - **Abmeldebescheinigung (deregistration confirmation)** — Official PDF proving de-registration (`DEREGISTRATION_CONFIRMATION` document). Customer's end deliverable.
 - **Gebühr (fee)** — Statutory authority fee, returned as a `FEE` document; shown inside the customer's total price.
@@ -23,5 +23,5 @@
 - **Status 5a / 5b / 5c** — The three outcomes: completed; failed, correction possible (customer corrects or cancels); failed, correction not possible (new application, refund minus 19.99 €).
 - **Stornierung (cancellation)** — Customer's option at 5b to stop instead of correcting. 19.99 € retained, rest refunded; later resubmission is a new order at full price.
 - **SEPA-Lastschrift (SEPA Direct Debit)** — Bank-account payment in the Payment Element. Captured at checkout, settles over several business days; customer can dispute with their bank for up to 13 months.
-- **One-time status link** — Unguessable URL giving account-free access to the personal status dashboard; sole access credential, delivered by email.
+- **Status link** — Unguessable URL giving account-free access to the personal status dashboard; sole access credential, delivered by email. Reusable until a new token replaces it; it does not expire.
 - **Widerrufsrecht (right of withdrawal)** — 14-day consumer cancellation right; shown with T&Cs before payment. How it interacts with the 19.99 € processing fee, and whether an immediate-performance waiver is still needed: open (launch plan Q13).
