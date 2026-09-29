@@ -113,6 +113,7 @@ describe("status notifications: an email that could not be sent is not lost", ()
   it("email 4: the transition waits, the next tick sends it once, and only then is the KBA asked about", async () => {
     const flow = setupFlow()
     failMailerOnce(flow, "submittedToKba")
+    const submit = jest.spyOn(flow.deps.registration, "submitDeregistration")
     const reference = await flow.payForCheckout()
 
     await expect(flow.confirm(reference)).rejects.toThrow("Resend refused")
@@ -123,6 +124,8 @@ describe("status notifications: an email that could not be sent is not lost", ()
 
     expect((await flow.stored(reference)).status).toBe("submitted_to_kba")
     expect(flow.emails()).toEqual(["orderConfirmation", "submittedToKba"])
+    // Zulex's answer to a replayed submission is unspecified (Q23), so a failed email must never cause one.
+    expect(submit).toHaveBeenCalledTimes(1)
   })
 
   it("email 5a: the confirmation is still stored and the card still captured once, and the email goes out on the next tick", async () => {
@@ -193,12 +196,45 @@ describe("status notifications: an email that could not be sent is not lost", ()
   })
 })
 
+describe("status notifications: a step that keeps failing is not silent", () => {
+  it("names the order and the kind of error in the log, never the message, which may hold an address", async () => {
+    const error = jest.spyOn(console, "error").mockImplementation(() => {})
+    const flow = setupFlow()
+    const { reference, id } = await reachKba(flow)
+    jest.spyOn(flow.deps.mailer, "send").mockRejectedValue(new Error(`Resend refused ${"customer@example.test"}`))
+
+    flow.deps.registration.setStatus(id, FINISHED)
+    await flow.poll(1)
+
+    const logged = error.mock.calls.flat().join(" ")
+    expect(logged).toContain(reference)
+    expect(logged).toContain("Error")
+    expect(logged).not.toContain("customer@example.test")
+    error.mockRestore()
+  })
+})
+
 describe("status notifications: money that already went back", () => {
   it("never files an application whose payment was released, and tells the customer it is refunded", async () => {
     const flow = setupFlow()
     flow.deps.registration.failNext("submit", new GatewayUnavailable())
     const reference = await flow.checkoutAndPay()
     await flow.deps.payments.release((await flow.stored(reference)).payment.id)
+
+    await flow.poll(1)
+
+    expect(flow.deps.registration.submissions).toEqual([])
+    expect((await flow.stored(reference)).status).toBe("failed_final")
+    expect(flow.emails()).toEqual(["orderConfirmation", "rejected", "refundIssued"])
+  })
+})
+
+describe("status notifications: money that went back by refund", () => {
+  it("never files an application whose captured payment was refunded in full", async () => {
+    const flow = setupFlow()
+    flow.deps.registration.failNext("submit", new GatewayUnavailable())
+    const reference = await flow.checkoutAndPay("sepaDebit")
+    await flow.deps.payments.refund((await flow.stored(reference)).payment.id, DEREGISTRATION_TOTAL, "test-refund")
 
     await flow.poll(1)
 
