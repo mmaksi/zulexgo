@@ -87,6 +87,18 @@ export function copyFor(template: EmailTemplate): EmailCopy {
         ],
         action: { label: "Status ansehen", href: template.statusLink },
       }
+    case "statusLinkResent":
+      return {
+        subject: `Ihr neuer Statuslink zu ${reference}`,
+        preview: "Der bisherige Link ist nicht mehr gültig.",
+        heading: "Ihr neuer Statuslink",
+        paragraphs: [
+          `Sie haben einen neuen Link zu Ihrem Antrag ${reference} angefordert. Der bisherige Link funktioniert nicht mehr.`,
+          "Der neue Link ist nur für Sie bestimmt: Bitte geben Sie ihn nicht weiter.",
+          `Sie haben ihn nicht angefordert? Dann schreiben Sie uns an ${SUPPORT_EMAIL}.`,
+        ],
+        action: { label: "Status ansehen", href: template.statusLink },
+      }
     case "refundIssued":
       return {
         subject: `Ihre Erstattung zu ${reference} ist unterwegs`,

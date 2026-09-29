@@ -12,6 +12,7 @@ export const EVERY_TEMPLATE: EmailTemplate[] = [
   { name: "correctionRequired", reference, statusLink },
   { name: "rejected", reference, statusLink, refund: Money.ofCents(5000), retained: Money.ofCents(1999) },
   { name: "refundIssued", reference, amount: Money.ofCents(5000) },
+  { name: "statusLinkResent", reference, statusLink },
 ]
 
 /** Every Mailer adapter must pass this, including the fake. */

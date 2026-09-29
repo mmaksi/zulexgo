@@ -28,6 +28,8 @@ export type EmailTemplate =
       readonly retained: Money
     }
   | { readonly name: "refundIssued"; readonly reference: ApplicationReference; readonly amount: Money }
+  /** Not in the business logic document: the recovery for a lost link (launch plan M5). */
+  | { readonly name: "statusLinkResent"; readonly reference: ApplicationReference; readonly statusLink: string }
 
 export interface MailMessage {
   readonly to: Email
