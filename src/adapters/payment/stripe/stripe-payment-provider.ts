@@ -88,6 +88,15 @@ export class StripePaymentProvider implements PaymentProvider {
     return this.getPayment(paymentId)
   }
 
+  /** Business logic §4's `application_id`, added to the order metadata once the registration service accepts the application. */
+  async recordRegistration(paymentId: string, registrationId: string): Promise<void> {
+    await this.stripe.paymentIntents.update(
+      paymentId,
+      { metadata: { application_id: registrationId } },
+      { idempotencyKey: `registration/${paymentId}/${registrationId}` },
+    )
+  }
+
   readNotification(payload: string, signature: string | null): PaymentNotification {
     if (!signature) throw new NotificationRejected()
     let event: Stripe.Event
