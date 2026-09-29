@@ -4,7 +4,7 @@
 
 ## Project identity
 
-B2C web app for German vehicle registration services, built on the B2B Zulex API. MVP: one service, vehicle de-registration (Außerbetriebsetzung), from eligibility check through payment to the official KBA confirmation. No user accounts: order status is reached by a one-time link sent by email.
+B2C web app for German vehicle registration services, built on the B2B Zulex API. MVP: one service, vehicle de-registration (Außerbetriebsetzung), from eligibility check through payment to the official KBA confirmation. No user accounts: order status is reached by a personal status link sent by email.
 
 ## Stack
 
