@@ -5,7 +5,7 @@ import type { IkfzStatus } from "@/src/core/domain/registration-authority"
 import { Button } from "@/src/ui/button"
 import { RadioGroup, RadioGroupItem } from "@/src/ui/radio-group"
 import type { CheckoutActions } from "./checkout-actions"
-import { TextField } from "./text-field"
+import { TextField } from "@/app/_components/text-field"
 import type { PlateCount } from "./vehicle-data"
 import { Alert } from "@/src/ui/alert"
 
