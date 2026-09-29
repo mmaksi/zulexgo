@@ -58,4 +58,13 @@ describeWithPostgres("PostgresRateLimiter", () => {
 
     expect((await other.consume("same-key", limit)).allowed).toBe(true)
   })
+
+  it("forgets the counts of windows that ended long ago, so the table does not grow with every caller", async () => {
+    await database.query("INSERT INTO rate_limits (key_hash, window_started_at, attempts) VALUES ('stale', '2026-02-26T09:00:00Z', 4), ('fresh', '2026-03-01T08:50:00Z', 1)")
+    const { clock } = movableClock()
+
+    await limiter(clock).consume("anyone", { max: 3, windowMs: 60_000 })
+
+    expect((await database.query("SELECT key_hash FROM rate_limits WHERE key_hash IN ('stale', 'fresh')")).map((row) => row.key_hash)).toEqual(["fresh"])
+  })
 })

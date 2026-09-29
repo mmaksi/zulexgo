@@ -15,7 +15,15 @@ export default async function StatusPage({ params }: PageProps<"/status/[token]"
 
   // Every invalid link gets the same page: nothing says whether one ever existed.
   if (lookup.kind === "invalid") notFound()
-  if (lookup.kind === "limited") return <TooManyLookups retryAfterSeconds={lookup.retryAfterSeconds} />
+  if (lookup.kind === "limited") {
+    // Keep asking: the page appears by itself once the caller is under the limit again.
+    return (
+      <>
+        <TooManyLookups retryAfterSeconds={lookup.retryAfterSeconds} />
+        <StatusRefresh active />
+      </>
+    )
+  }
 
   const { view } = lookup
   const inProgress = view.steps.some((step) => step.id === "outcome" && step.state === "pending")

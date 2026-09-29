@@ -1,7 +1,7 @@
 import { createHmac } from "node:crypto"
 import { Pool } from "pg"
 import type { Clock } from "@/src/core/ports/clock"
-import type { RateLimit, RateLimitDecision, RateLimiter } from "@/src/core/ports/rate-limiter"
+import { MAX_WINDOW_MS, type RateLimit, type RateLimitDecision, type RateLimiter } from "@/src/core/ports/rate-limiter"
 
 /** One statement, so concurrent attempts queue on the row: each sees the count the last one left. */
 const COUNT_ATTEMPT = `
@@ -14,16 +14,21 @@ const COUNT_ATTEMPT = `
                     THEN 1 ELSE r.attempts + 1 END
   RETURNING window_started_at, attempts`
 
+const PURGE_EVERY_MS = 60 * 60_000
+
 /**
  * `RateLimiter` on the application database, so every Vercel instance counts
  * into the same rows. Keys carry addresses and emails, so only an HMAC of a
  * key is stored. Server-side only, through the transaction pooler: the query
- * is unnamed.
+ * is unnamed. Once an hour per instance it forgets the counts of windows that
+ * began more than a day ago, which no window can still cover, so the table
+ * holds only recent callers.
  */
 export class PostgresRateLimiter implements RateLimiter {
   private readonly pool: Pool
   private readonly secret: string
   private readonly clock: Clock
+  private lastPurgeAt = 0
 
   constructor(options: { connectionString: string; secret: string; clock: Clock }) {
     this.pool = new Pool({ connectionString: options.connectionString, allowExitOnIdle: true })
@@ -34,11 +39,19 @@ export class PostgresRateLimiter implements RateLimiter {
   }
 
   async consume(key: string, { max, windowMs }: RateLimit): Promise<RateLimitDecision> {
+    if (windowMs > MAX_WINDOW_MS) throw new RangeError(`A rate limit window is at most ${MAX_WINDOW_MS} ms`)
     const now = this.clock.now()
+    await this.purgeOldWindows(now)
     const keyHash = createHmac("sha256", this.secret).update(key).digest("base64url")
     const { rows } = await this.pool.query<{ window_started_at: Date; attempts: number }>(COUNT_ATTEMPT, [keyHash, now, windowMs])
     const { window_started_at: startedAt, attempts } = rows[0]
 
     return attempts <= max ? { allowed: true } : { allowed: false, retryAfterMs: startedAt.getTime() + windowMs - now.getTime() }
+  }
+
+  private async purgeOldWindows(now: Date): Promise<void> {
+    if (now.getTime() - this.lastPurgeAt < PURGE_EVERY_MS) return
+    this.lastPurgeAt = now.getTime()
+    await this.pool.query("DELETE FROM rate_limits WHERE window_started_at < $1", [new Date(now.getTime() - MAX_WINDOW_MS)])
   }
 }

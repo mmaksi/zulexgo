@@ -63,6 +63,10 @@ export function rateLimiterContract(name: string, makeSubject: () => RateLimiter
       expect((await limiter.consume(key, THREE_PER_MINUTE)).allowed).toBe(true)
     })
 
+    it("refuses a window longer than a day, which an adapter may already have purged", async () => {
+      await expect(limiter.consume(newKey(), { max: 1, windowMs: 25 * 60 * 60_000 })).rejects.toThrow(RangeError)
+    })
+
     it("counts each key on its own", async () => {
       const [first, second] = [newKey(), newKey()]
       await attempts(first, 3)
