@@ -47,6 +47,12 @@ export function decideOnFailure(
   }
 }
 
+/** A KBA error whose code the catalogue lacks: support reclassifies it (launch plan M6 fallback). */
+export const isUnrecognised = (
+  failure: Failure,
+  catalogue: ErrorCatalogue = ERROR_CATALOGUE,
+): failure is Extract<Failure, { kind: "kbaError" }> => failure.kind === "kbaError" && !(failure.code in catalogue)
+
 function decideOnKbaError(errorClass: ErrorClass, canRetry: boolean): FailureDecision {
   if (errorClass === "final") return { action: "failFinal", refund: "fee" }
   if (errorClass === "technical" && canRetry) return { action: "retrySilently" }

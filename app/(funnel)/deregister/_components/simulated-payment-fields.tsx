@@ -2,6 +2,7 @@
 
 import { useEffect, type RefObject } from "react"
 import type { CheckoutActions, PaymentDriver } from "./checkout-actions"
+import { Alert } from "@/src/ui/alert"
 
 /** Where no payment provider is configured (dev, a demo): no money moves, the server plays the customer paying. */
 export function SimulatedPaymentFields({
@@ -23,8 +24,6 @@ export function SimulatedPaymentFields({
   }, [driverRef, completeSimulatedPayment])
 
   return (
-    <p className="border-l-4 border-grau bg-info-tint p-4 text-body text-grau-dark">
-      Testmodus: Hier ist kein Zahlungsanbieter angebunden. Es wird kein Geld bewegt.
-    </p>
+    <Alert>Testmodus: Hier ist kein Zahlungsanbieter angebunden. Es wird kein Geld bewegt.</Alert>
   )
 }

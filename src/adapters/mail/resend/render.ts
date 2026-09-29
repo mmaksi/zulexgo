@@ -42,8 +42,20 @@ export function renderEmail(template: EmailTemplate): RenderedEmail {
         ...layout(
           "Vielen Dank, Ihr Antrag ist eingegangen",
           [
-            `Ihr Antrag auf Außerbetriebsetzung mit der Auftragsnummer ${template.reference} und Ihre Zahlung sind bei uns eingegangen.`,
+            `Ihr Antrag auf Außerbetriebsetzung mit der Auftragsnummer ${template.reference} ist bei uns eingegangen. Den Betrag haben wir auf Ihrer Karte reserviert; abgebucht wird er erst mit dem Ergebnis Ihres Antrags.`,
             "Über den Link sehen Sie jederzeit, wie weit Ihr Antrag ist. Er ist nur für Sie bestimmt: Bitte geben Sie ihn nicht weiter.",
+          ],
+          { label: "Status ansehen", href: template.statusLink },
+        ),
+      }
+    case "rejected":
+      return {
+        subject: `Ihr Antrag ${template.reference} wurde abgelehnt`,
+        ...layout(
+          "Ihr Antrag konnte nicht abgeschlossen werden",
+          [
+            `Die Abmeldung zu Auftrag ${template.reference} können wir nicht durchführen.`,
+            `Sie erhalten ${euros(template.refund)} zurück. Je nach Bank ist der Betrag in 3 bis 5 Werktagen auf Ihrem Konto.`,
           ],
           { label: "Status ansehen", href: template.statusLink },
         ),

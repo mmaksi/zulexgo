@@ -30,7 +30,7 @@ export function SiteHeader() {
               <li key={item.href}>
                 <Link
                   href={item.href}
-                  className="text-body text-grau underline-offset-4 transition-colors hover:text-orange-dark hover:underline"
+                  className="inline-flex min-h-11 items-center text-body text-grau underline-offset-4 transition-colors hover:text-orange-dark hover:underline"
                 >
                   {item.label}
                 </Link>

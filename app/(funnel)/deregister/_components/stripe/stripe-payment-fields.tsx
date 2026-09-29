@@ -14,6 +14,8 @@ const APPEARANCE: Appearance = {
     colorTextSecondary: "#58626D",
     colorDanger: "#A32A1E",
     colorBackground: "#FFFFFF",
+    // No web font is loaded into Stripe's iframe: fonts are self-hosted (design-standard §3.1), never fetched
+    // from Google, so the fields fall back to Helvetica Neue or Arial.
     fontFamily: "Kanit, 'Helvetica Neue', Arial, sans-serif",
     fontSizeBase: "16px",
     borderRadius: "2px",
@@ -48,7 +50,6 @@ export function StripePaymentFields({
         paymentMethodTypes: ["card"],
         locale: "de",
         appearance: APPEARANCE,
-        fonts: [{ cssSrc: "https://fonts.googleapis.com/css2?family=Kanit:wght@300;400&display=swap" }],
       }}
     >
       <Fields driverRef={driverRef} />

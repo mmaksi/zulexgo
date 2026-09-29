@@ -57,6 +57,14 @@ describe("ResendMailer", () => {
     expect(resend.delivered[0].text).toMatch(/50,00\s€/)
   })
 
+  it("states in the rejection email the amount that is returned", async () => {
+    const rejected = { name: "rejected", reference, statusLink: "https://zulexgo.example.test/status/t", refund: Money.ofCents(5001) } as const
+
+    await mailer().send({ to: email, template: rejected, idempotencyKey: "r" })
+
+    expect(resend.delivered[0].text).toMatch(/50,01\s€/)
+  })
+
   it("throws when Resend refuses the message, so the caller can retry", async () => {
     resend.failNext(HttpResponse.json({ statusCode: 403, name: "validation_error", message: "domain not verified" }, { status: 403 }))
 

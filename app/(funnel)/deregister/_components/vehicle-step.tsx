@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react"
 import { Button } from "@/src/ui/button"
+import { PlateFrame } from "@/src/ui/plate-frame"
 import { TextField } from "./text-field"
 import { fieldsFor, validateVehicle, type PlateCount, type VehicleData, type VehicleField } from "./vehicle-data"
 
@@ -56,11 +57,13 @@ export function VehicleStep({
     <form onSubmit={submit} noValidate className="flex flex-col gap-(--field-gap)">
       <fieldset className="flex flex-col gap-3">
         <legend className="mb-2 text-small font-normal text-grau-dark">Kennzeichen</legend>
-        <div className="grid grid-cols-[1fr_1fr_1.4fr] gap-3 sm:max-w-md">
-          <TextField {...bind("prefix")} label="Ortskürzel" maxLength={3} inputClassName="plate-text" />
-          <TextField {...bind("letters")} label="Buchstaben" maxLength={2} inputClassName="plate-text" />
-          <TextField {...bind("numbers")} label="Ziffern" maxLength={4} inputMode="numeric" inputClassName="plate-text" />
-        </div>
+        <PlateFrame className="sm:max-w-md">
+          <div className="grid grid-cols-[1fr_1fr_1.4fr] gap-2 p-2">
+            <TextField {...bind("prefix")} label="Ortskürzel" maxLength={3} inputClassName="plate-text" />
+            <TextField {...bind("letters")} label="Buchstaben" maxLength={2} inputClassName="plate-text" />
+            <TextField {...bind("numbers")} label="Ziffern" maxLength={4} inputMode="numeric" inputClassName="plate-text" />
+          </div>
+        </PlateFrame>
       </fieldset>
 
       <TextField
