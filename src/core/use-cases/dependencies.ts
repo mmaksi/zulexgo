@@ -4,6 +4,7 @@ import type { Clock } from "@/src/core/ports/clock"
 import type { DocumentStore } from "@/src/core/ports/document-store"
 import type { Mailer } from "@/src/core/ports/mailer"
 import type { PaymentProvider } from "@/src/core/ports/payment-provider"
+import type { RateLimiter } from "@/src/core/ports/rate-limiter"
 import type { RegistrationGateway } from "@/src/core/ports/registration-gateway"
 import type { TokenGenerator } from "@/src/core/ports/token-generator"
 
@@ -14,6 +15,7 @@ export interface Dependencies {
   readonly payments: PaymentProvider
   readonly mailer: Mailer
   readonly documents: DocumentStore
+  readonly rateLimiter: RateLimiter
   readonly clock: Clock
   readonly tokens: TokenGenerator
   /** Turns a status token into the absolute link the customer receives. */

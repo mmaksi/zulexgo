@@ -1,4 +1,6 @@
 import { randomBytes } from "node:crypto"
+import { join } from "node:path"
+import { readMigrations } from "@/src/adapters/repository/postgres/migrator"
 import { createTestDatabase, describeWithPostgres, type TestDatabase } from "@/src/adapters/repository/postgres/test-database"
 import { SEEDED_APPLICATIONS } from "@/db/seed/data/applications"
 import { runDatabaseCommand } from "./database"
@@ -44,12 +46,10 @@ describeWithPostgres("runDatabaseCommand on a database", () => {
 
   const run = (...args: string[]) => runDatabaseCommand(args, onPostgres({ DIRECT_DATABASE_URL: database.url }))
 
+  const migrationNames = async () => (await readMigrations(join(process.cwd(), "db", "migrations"))).map(({ name }) => name)
+
   it("migrates over the direct connection and reports what ran", async () => {
-    expect(await run("up")).toBe(
-      ["0001_create_applications", "0002_create_payments", "0003_create_status_history", "0004_create_status_tokens"]
-        .map((name) => `Applied ${name}`)
-        .join("\n"),
-    )
+    expect(await run("up")).toBe((await migrationNames()).map((name) => `Applied ${name}`).join("\n"))
     expect(await run("up")).toBe("Nothing to apply.")
     expect(await run("status")).toMatch(/^applied .* 0001_create_applications$/m)
   })
@@ -67,11 +67,10 @@ describeWithPostgres("runDatabaseCommand on a database", () => {
 
   it("reverts one migration by default, or all of them", async () => {
     await run("up")
+    const [newest, ...older] = (await migrationNames()).reverse()
 
-    expect(await run("down")).toBe("Reverted 0004_create_status_tokens")
-    expect(await run("down", "all")).toBe(
-      ["0003_create_status_history", "0002_create_payments", "0001_create_applications"].map((name) => `Reverted ${name}`).join("\n"),
-    )
+    expect(await run("down")).toBe(`Reverted ${newest}`)
+    expect(await run("down", "all")).toBe(older.map((name) => `Reverted ${name}`).join("\n"))
     expect(await run("status")).toMatch(/^pending 0001_create_applications$/m)
   })
 })

@@ -3,6 +3,7 @@ import { FakeClock } from "@/src/adapters/clock/fake/fake-clock"
 import { ConsoleMailer } from "@/src/adapters/mail/console/console-mailer"
 import { FakePaymentProvider } from "@/src/adapters/payment/fake/fake-payment-provider"
 import { FakeRegistrationGateway } from "@/src/adapters/registration/fake/fake-registration-gateway"
+import { InMemoryRateLimiter } from "@/src/adapters/rate-limit/fake/in-memory-rate-limiter"
 import { InMemoryApplicationRepository } from "@/src/adapters/repository/fake/in-memory-application-repository"
 import { InMemoryDocumentStore } from "@/src/adapters/storage/fake/in-memory-document-store"
 import { FakeTokenGenerator } from "@/src/adapters/tokens/fake/fake-token-generator"
@@ -40,6 +41,7 @@ async function runEveryPath(revealStatusLinks: boolean): Promise<string[]> {
     payments: new FakePaymentProvider(clock),
     mailer: new ConsoleMailer({ revealStatusLinks }),
     documents: new InMemoryDocumentStore(),
+    rateLimiter: new InMemoryRateLimiter(clock),
     clock,
     tokens: new FakeTokenGenerator(),
     statusLink: (token: string) => `https://zulexgo.example.test/status/${token}`,

@@ -135,6 +135,23 @@ describeWithPostgres("container repository on Postgres", () => {
 
     expect((await container().repository.get(created.reference))?.status).toBe(created.status)
   })
+
+  it("counts rate-limited attempts in that database too, so two instances share one count", async () => {
+    const encryptionKey = randomBytes(32).toString("base64")
+    const container = () =>
+      createContainer({
+        ...staging,
+        REPOSITORY_DRIVER: "postgres",
+        DATABASE_URL: database.url,
+        DIRECT_DATABASE_URL: database.url,
+        CODES_ENCRYPTION_KEY: encryptionKey,
+      })
+    const limit = { max: 1, windowMs: 60_000 }
+
+    await container().rateLimiter.consume("container-test", limit)
+
+    expect(await container().rateLimiter.consume("container-test", limit)).toMatchObject({ allowed: false })
+  })
 })
 
 clockContract("container clock", () => createContainer(dev).clock)
