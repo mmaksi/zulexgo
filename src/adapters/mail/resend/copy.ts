@@ -1,6 +1,6 @@
 import { PROCESSING_FEE } from "@/src/core/domain/pricing"
 import { SUPPORT_EMAIL } from "@/src/core/domain/contact"
-import type { Money } from "@/src/core/domain/money"
+import { formatEuros } from "@/src/core/domain/money"
 import type { EmailTemplate } from "@/src/core/ports/mailer"
 
 /**
@@ -18,9 +18,6 @@ export interface EmailCopy {
   readonly note?: string
   readonly action?: { readonly label: string; readonly href: string }
 }
-
-const euros = (money: Money) =>
-  new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format(money.cents / 100)
 
 const REFUND_TIMEFRAME = "Je nach Bank ist der Betrag in 3 bis 5 Werktagen auf Ihrem Konto."
 
@@ -74,7 +71,7 @@ export function copyFor(template: EmailTemplate): EmailCopy {
           "Die Zulassungsstelle konnte Ihren Antrag mit den angegebenen Daten nicht bearbeiten. Das lässt sich meist korrigieren.",
           `Schreiben Sie uns an ${SUPPORT_EMAIL} und nennen Sie Ihre Auftragsnummer ${reference}. Wir korrigieren den Antrag gemeinsam mit Ihnen. Sie zahlen nur die Differenz, falls Mehrkosten entstehen.`,
         ],
-        note: `Sie können den Antrag auch stornieren. Wir behalten dann die Bearbeitungsgebühr von ${euros(PROCESSING_FEE)} ein und erstatten den Rest.`,
+        note: `Sie können den Antrag auch stornieren. Wir behalten dann die Bearbeitungsgebühr von ${formatEuros(PROCESSING_FEE)} ein und erstatten den Rest.`,
         action: { label: "Status ansehen", href: template.statusLink },
       }
     case "rejected":
@@ -85,17 +82,17 @@ export function copyFor(template: EmailTemplate): EmailCopy {
         paragraphs: [
           `Der Antrag zu Auftrag ${reference} konnte nicht abgeschlossen werden. Eine Korrektur ist nicht möglich; für die Abmeldung wäre ein neuer Antrag nötig.`,
           template.retained.cents > 0
-            ? `Sie erhalten ${euros(template.refund)} zurück. Die Bearbeitungsgebühr von ${euros(template.retained)} behalten wir ein. Eine weitere E-Mail bestätigt die Erstattung.`
-            : `Sie erhalten ${euros(template.refund)} zurück. Eine weitere E-Mail bestätigt die Erstattung.`,
+            ? `Sie erhalten ${formatEuros(template.refund)} zurück. Die Bearbeitungsgebühr von ${formatEuros(template.retained)} behalten wir ein. Eine weitere E-Mail bestätigt die Erstattung.`
+            : `Sie erhalten ${formatEuros(template.refund)} zurück. Eine weitere E-Mail bestätigt die Erstattung.`,
         ],
         action: { label: "Status ansehen", href: template.statusLink },
       }
     case "refundIssued":
       return {
         subject: `Ihre Erstattung zu ${reference} ist unterwegs`,
-        preview: `Wir haben ${euros(template.amount)} erstattet.`,
+        preview: `Wir haben ${formatEuros(template.amount)} erstattet.`,
         heading: "Ihre Erstattung ist unterwegs",
-        paragraphs: [`Wir haben Ihnen ${euros(template.amount)} zu Auftrag ${reference} erstattet.`, REFUND_TIMEFRAME],
+        paragraphs: [`Wir haben Ihnen ${formatEuros(template.amount)} zu Auftrag ${reference} erstattet.`, REFUND_TIMEFRAME],
       }
   }
 }

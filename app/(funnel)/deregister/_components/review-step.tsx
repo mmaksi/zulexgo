@@ -2,11 +2,11 @@
 
 import Link from "next/link"
 import { useRef, useState, type FormEvent } from "react"
+import { formatEuros } from "@/src/core/domain/money"
 import { DEREGISTRATION_TOTAL, PROCESSING_FEE, SERVICE_PRICE } from "@/src/core/domain/pricing"
 import { Button } from "@/src/ui/button"
 import { Checkbox } from "@/src/ui/checkbox"
 import type { CheckoutActions, PaymentDriver, PaymentMode } from "./checkout-actions"
-import { euros } from "./money"
 import { SimulatedPaymentFields } from "./simulated-payment-fields"
 import { StripePaymentFields } from "./stripe/stripe-payment-fields"
 import type { PlateCount, VehicleData } from "./vehicle-data"
@@ -87,15 +87,15 @@ export function ReviewStep({
         </h2>
         <dl className="grid max-w-md grid-cols-[1fr_auto] gap-x-6 gap-y-2 text-body">
           <dt>Abmeldung inkl. behördlicher Gebühr</dt>
-          <dd className="text-right">{euros(SERVICE_PRICE)}</dd>
+          <dd className="text-right">{formatEuros(SERVICE_PRICE)}</dd>
           <dt>Bearbeitungsgebühr</dt>
-          <dd className="text-right">{euros(PROCESSING_FEE)}</dd>
+          <dd className="text-right">{formatEuros(PROCESSING_FEE)}</dd>
           <dt className="font-normal text-grau-dark">Gesamt inkl. MwSt.</dt>
-          <dd className="text-right text-h3 text-grau-dark">{euros(DEREGISTRATION_TOTAL)}</dd>
+          <dd className="text-right text-h3 text-grau-dark">{formatEuros(DEREGISTRATION_TOTAL)}</dd>
         </dl>
         <Alert variant="warning" className="measure">
           Stornieren Sie nach einem korrigierbaren Fehler oder kann der Antrag nicht korrigiert werden, behalten wir{" "}
-          {euros(PROCESSING_FEE)} Bearbeitungsgebühr ein und erstatten den Rest.{" "}
+          {formatEuros(PROCESSING_FEE)} Bearbeitungsgebühr ein und erstatten den Rest.{" "}
           <Link href="/agb" target="_blank" rel="noopener" className="underline underline-offset-4 hover:text-orange-dark">
             Mehr in den AGB
           </Link>
@@ -136,7 +136,7 @@ export function ReviewStep({
       {/* site-contract §3: on phones the CTA docks at the bottom with the total. */}
       <div className="flex flex-col gap-2 max-md:fixed max-md:inset-x-0 max-md:bottom-0 max-md:z-40 max-md:border-t max-md:border-border max-md:bg-white max-md:px-(--gutter) max-md:py-3 max-md:shadow-elev-2">
         <div className="flex items-center justify-between gap-4 md:justify-start">
-          <span className="text-body text-grau-dark md:hidden">{euros(DEREGISTRATION_TOTAL)}</span>
+          <span className="text-body text-grau-dark md:hidden">{formatEuros(DEREGISTRATION_TOTAL)}</span>
           <Button type="submit" disabled={!consented || paying} aria-describedby={consented ? undefined : "pay-hint"}>
             {paying ? "Zahlung läuft …" : "Jetzt bezahlen"}
           </Button>
