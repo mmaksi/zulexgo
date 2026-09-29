@@ -172,7 +172,7 @@ function Documents({ view, documentHref }: { view: View; documentHref: (document
         <ul className="flex flex-col items-start gap-3">
           {view.documents.map(({ id, kind }) => (
             <li key={id}>
-              <a href={documentHref(id)} className={buttonLink({ variant: "outline" })}>
+              <a href={documentHref(id)} className={buttonLink({ variant: "outline", className: "h-auto min-h-12 py-3 text-left whitespace-normal" })}>
                 <Download aria-hidden="true" />
                 {DOCUMENT_LABELS[kind]} herunterladen
               </a>
