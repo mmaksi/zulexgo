@@ -91,6 +91,10 @@ export class FakePaymentProvider implements PaymentProvider {
     return this.snapshot(payment)
   }
 
+  async recordRegistration(paymentId: string, registrationId: string): Promise<void> {
+    this.find(paymentId).registrationId = registrationId
+  }
+
   private store(reference: ApplicationReference, amount: Money): Stored {
     const id = `fake-payment-${this.payments.size + 1}`
     const payment: Stored = { id, reference, status: "awaitingCustomer", amount, captured: NOTHING, refunded: NOTHING }
@@ -111,7 +115,7 @@ export class FakePaymentProvider implements PaymentProvider {
     }
   }
 
-  private snapshot({ id, status, amount, captured, refunded, holdExpiresAt }: Stored): Payment {
-    return { id, status, amount, captured, refunded, holdExpiresAt }
+  private snapshot({ id, status, amount, captured, refunded, holdExpiresAt, registrationId }: Stored): Payment {
+    return { id, status, amount, captured, refunded, holdExpiresAt, registrationId }
   }
 }

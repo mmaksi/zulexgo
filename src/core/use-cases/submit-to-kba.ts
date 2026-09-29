@@ -35,6 +35,16 @@ export async function submitToKba(deps: Dependencies, application: Application):
     polling: { attempts: 0, nextPollAt: nextPollAt({ ikfzStatus: application.ikfzStatus, attempts: 0, now }) },
   })
   await mailCustomer(deps, submitted, "submittedToKba")
+  await recordRegistration(deps, submitted, applicationId)
+}
+
+/** For reconciling payments with registration fees only, so a provider failure is logged, never allowed to stop the application. */
+async function recordRegistration(deps: Dependencies, application: Application, registrationId: string) {
+  try {
+    await deps.payments.recordRegistration(application.payment.id, registrationId)
+  } catch (error) {
+    console.warn(`[payments] ${application.reference}: registration id not recorded on the payment: ${error instanceof Error ? error.name : "unknown error"}`)
+  }
 }
 
 function toFailure(error: unknown): Failure {

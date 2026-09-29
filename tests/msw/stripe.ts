@@ -68,6 +68,12 @@ export class StripeDouble {
   private readonly refunds: Refund[] = []
   private readonly idempotent = new Map<string, JsonBodyType>()
   private sequence = 0
+  private updatesRefused = false
+
+  /** Stripe answers every later PaymentIntent update with an error. */
+  refuseUpdates() {
+    this.updatesRefused = true
+  }
 
   /** card: authorised and held. sepaDebit: taken at once, as a method that cannot be held. */
   customerPays(intentId: string, method: "card" | "sepaDebit") {
@@ -130,6 +136,15 @@ export class StripeDouble {
       const expand = new URL(request.url).searchParams.getAll("expand[0]").concat(new URL(request.url).searchParams.getAll("expand[]"))
       return HttpResponse.json(this.intentJson(intent, expand.includes("latest_charge")))
     }),
+
+    http.post(`${API}/payment_intents/:id`, async ({ params, request }) =>
+      this.once(request, async (form) => {
+        if (this.updatesRefused) return stripeError("This PaymentIntent cannot be updated.", "payment_intent_unexpected_state")
+        const intent = this.find(String(params.id))
+        Object.assign(intent.metadata, form.metadata as Record<string, string>)
+        return this.intentJson(intent)
+      }),
+    ),
 
     http.post(`${API}/payment_intents/:id/capture`, async ({ params, request }) =>
       this.once(request, async (form) => {
