@@ -10,7 +10,7 @@ export const EVERY_TEMPLATE: EmailTemplate[] = [
   { name: "submittedToKba", reference, statusLink, manualProcessing: false },
   { name: "completed", reference, statusLink },
   { name: "correctionRequired", reference, statusLink },
-  { name: "rejected", reference, statusLink, refund: Money.ofCents(5000) },
+  { name: "rejected", reference, statusLink, refund: Money.ofCents(5000), retained: Money.ofCents(1999) },
   { name: "refundIssued", reference, amount: Money.ofCents(5000) },
 ]
 

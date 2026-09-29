@@ -36,5 +36,5 @@ export async function handleFailure(
   const outcome = decision.refund === "full" ? ({ type: "ourTechnicalError" } as const) : ({ type: "failedFinal" } as const)
   const settled = await settlePayment(deps, application, outcome)
   const failed = await deps.repository.update(applyEvent(stopped, "failedFinal", now))
-  await mailCustomer(deps, failed, "rejected", { refund: settled.returned })
+  await mailCustomer(deps, failed, "rejected", { refund: settled.returned, retained: settled.retained })
 }

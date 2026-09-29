@@ -22,7 +22,10 @@ export type EmailTemplate =
       readonly name: "rejected"
       readonly reference: ApplicationReference
       readonly statusLink: string
+      /** What goes back to the customer. */
       readonly refund: Money
+      /** What we keep of the payment: the processing fee, or nothing when the failure was ours. */
+      readonly retained: Money
     }
   | { readonly name: "refundIssued"; readonly reference: ApplicationReference; readonly amount: Money }
 

@@ -27,7 +27,7 @@ export class ResendMailer implements Mailer {
       return
     }
 
-    const { subject, html, text } = renderEmail(template)
+    const { subject, html, text } = await renderEmail(template)
     // The SDK returns errors instead of throwing them.
     const { error } = await this.resend.emails.send({ from: this.config.from, to: [to], subject, html, text }, { idempotencyKey })
     if (error) throw new Error(`Resend did not accept ${template.name}: ${error.name}`)

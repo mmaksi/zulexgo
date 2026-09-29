@@ -1,9 +1,8 @@
+import { SUPPORT_EMAIL } from "@/src/core/domain/contact"
 import type { CustomerStep } from "@/src/core/domain/customer-steps"
 import type { StatusView as View } from "@/src/core/use-cases/get-status-by-token"
 import { cn } from "@/src/lib/utils"
 import { PlateFrame } from "@/src/ui/plate-frame"
-
-const SUPPORT_EMAIL = "kontakt@gm-gastro.com"
 
 /** Titles are the customer statuses, status lines the internal labels (launch plan § Context). */
 function describe(step: CustomerStep): { title: string; line?: string; text?: string } {

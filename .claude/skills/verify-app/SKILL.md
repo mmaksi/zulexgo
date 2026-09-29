@@ -81,12 +81,12 @@ Runs `next typegen` first, so route types match the `app/` tree. Never silence a
 npm test -- --ci
 ```
 
-All suites pass in both projects (`jsdom` and `node`). While iterating, run one file: `npx jest path/to/file.test.ts`, but finish on the full suite.
+All suites pass in both projects (`jsdom` and `node`). While iterating, run one file: `npm test -- path/to/file.test.ts`, but finish on the full suite.
 
 - Read the summary, not the exit code. Without `TEST_DATABASE_URL` the Postgres suites report as **skipped** (`2 skipped` suites) and the run still exits 0. If the change touches persistence, that is a step 6 run, not a pass.
 - New logic or a fix has a test, and you watched it fail before the code made it pass (`test-driven-development`). A test you never saw fail proves nothing.
 - Every edge from step 2 that logic can answer has a test, the failure path included. Read your new tests as a reviewer would: they assert what the caller observes; fixtures pass the same zod schemas as production input; no real sleeps or wall clock; no real security code or token as a fixture value; no snapshot of a component tree (CLAUDE.md Testing).
-- Code with shared state, time or ordering: rerun its file a few times with `npx jest path/to/file.test.ts --randomize`. It shuffles the tests, so state leaking between them shows up.
+- Code with shared state, time or ordering: rerun its file a few times with `npm test -- path/to/file.test.ts --randomize`. It shuffles the tests, so state leaking between them shows up.
 - The suite count did not drop, and no test was skipped, deleted or loosened to go green. If a test was wrong, say so and why.
 
 ### 6. Database: only when persistence is touched
