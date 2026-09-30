@@ -11,4 +11,4 @@ ALTER TABLE applications
   DROP CONSTRAINT IF EXISTS applications_failure_code_only_for_kba_errors;
 ALTER TABLE applications
   ADD CONSTRAINT applications_failure_code_only_for_kba_errors
-    CHECK ((failure_kind = 'kbaError') = (failure_code IS NOT NULL));
+    CHECK ((failure_kind IS NOT DISTINCT FROM 'kbaError') = (failure_code IS NOT NULL));

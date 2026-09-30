@@ -25,6 +25,16 @@ describeWithPostgres("PostgresApplicationRepository", () => {
 
   applicationRepositoryContract("PostgresApplicationRepository", () => repository)
 
+  it.each([
+    ["a code on a row with no failure kind", "failure_kind = NULL, failure_code = 5"],
+    ["a code on a failure that has none", "failure_kind = 'rejected', failure_code = 5"],
+    ["a KBA error without its code", "failure_kind = 'kbaError', failure_code = NULL"],
+  ])("refuses %s, however the row is written", async (_, assignments) => {
+    const created = await repository.create(anApplication())
+
+    await expect(database.query(`UPDATE applications SET ${assignments} WHERE reference = '${created.reference}'`)).rejects.toThrow(/failure/)
+  })
+
   it("keeps security codes and status tokens out of every stored row", async () => {
     const created = await repository.create(anApplication())
     await repository.setStatusToken(created.reference, TOKEN)
