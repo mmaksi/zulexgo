@@ -16,7 +16,12 @@ export async function settlePayment(
   const { id, total } = application.payment
   const payment = await deps.payments.getPayment(id)
   const settled = settledDecision(outcome, { ...payment, total })
-  if (settled) return settled
+  if (settled) {
+    if (payment.status === "released" && outcome.type !== "ourTechnicalError") {
+      console.warn(`[payments] ${application.reference}: the hold lapsed before it was taken; the order ends as ${outcome.type} with nothing kept`)
+    }
+    return settled
+  }
   if (payment.status !== "held" && payment.status !== "captured") throw new HoldExpired(id)
 
   const decision = refundPolicy(outcome, { state: payment.status, total })

@@ -1,6 +1,7 @@
 import { applyEvent, type Application } from "@/src/core/domain/application"
 import { decideOnFailure, isUnrecognised } from "@/src/core/domain/error-algorithm"
 import type { Failure } from "@/src/core/domain/failure"
+import { HOLD_CHECK_INTERVAL_MS } from "@/src/core/domain/hold-policy"
 import type { Dependencies } from "./dependencies"
 import { mailCustomer, mailRefund } from "./mail-customer"
 import { settlePayment } from "./settle-payment"
@@ -34,7 +35,9 @@ export async function handleFailure(
     if (isUnrecognised(failure, deps.errorCatalogue)) {
       console.warn(`[error-algorithm] ${application.reference}: unrecognised KBA error code ${failure.code}, treated as correctable; add it to the catalogue`)
     }
-    const failed = applyEvent(stopped, "failedCorrectable", now)
+    // Waiting on the customer can outlast the card hold, so the money is looked at daily until it is safe (Q20).
+    const watched = { ...stopped, polling: { attempts: stopped.polling.attempts, nextPollAt: new Date(now.getTime() + HOLD_CHECK_INTERVAL_MS) } }
+    const failed = applyEvent(watched, "failedCorrectable", now)
     await mailCustomer(deps, failed, "correctionRequired")
     await deps.repository.update(failed)
     return

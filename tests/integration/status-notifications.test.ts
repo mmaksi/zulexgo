@@ -1,5 +1,6 @@
 import { renderEmail } from "@/src/adapters/mail/resend/render"
 import type { ApplicationReference } from "@/src/core/domain/application-reference"
+import { Money } from "@/src/core/domain/money"
 import { DEREGISTRATION_TOTAL, PROCESSING_FEE } from "@/src/core/domain/pricing"
 import { GatewayUnavailable } from "@/src/core/errors/gateway-unavailable"
 import type { EmailTemplate } from "@/src/core/ports/mailer"
@@ -58,7 +59,7 @@ describe("status notifications: one email per transition", () => {
     expect(flow.emails()).toEqual(["orderConfirmation", "submittedToKba"])
   })
 
-  it("5b: a correctable error sends email 5b and touches no money", async () => {
+  it("5b: a correctable error sends email 5b and neither takes nor returns money (an online authority's order was paid for at acceptance)", async () => {
     const flow = setupFlow()
     const { reference, id } = await reachKba(flow)
 
@@ -66,7 +67,7 @@ describe("status notifications: one email per transition", () => {
     await flow.poll(1)
 
     expect(flow.emails()).toEqual(["orderConfirmation", "submittedToKba", "correctionRequired"])
-    expect((await flow.payment(reference)).status).toBe("held")
+    expect(await flow.payment(reference)).toMatchObject({ status: "captured", captured: DEREGISTRATION_TOTAL, refunded: Money.ofCents(0) })
   })
 
   it("5c: a final error sends 5c, then email 6 with what comes back, and a later refund confirmation adds nothing", async () => {
@@ -176,7 +177,11 @@ describe("status notifications: an email that could not be sent is not lost", ()
 
       expect((await flow.stored(reference)).status).toBe("failed_final")
       expect(flow.emails()).toEqual(["orderConfirmation", "submittedToKba", "rejected", "refundIssued"])
-      expect(await flow.payment(reference)).toMatchObject({ status: "captured", captured: PROCESSING_FEE })
+      expect(await flow.payment(reference)).toMatchObject({
+        status: "captured",
+        captured: DEREGISTRATION_TOTAL,
+        refunded: DEREGISTRATION_TOTAL.subtract(PROCESSING_FEE),
+      })
     },
   )
 

@@ -51,6 +51,9 @@ export function settledDecision(outcome: PaymentOutcome, payment: PaymentRecord)
   const kept = retainedOf(payment)
   const none: PaymentAction = { kind: "none" }
 
+  // A hold that lapsed (Q20) has already gone back whole: there is nothing left to take or return, whatever the outcome.
+  if (payment.status === "released" && outcome.type !== "corrected") return decide(none, payment.total, NOTHING)
+
   switch (outcome.type) {
     case "cancelled":
     case "failedFinal":

@@ -1,19 +1,27 @@
 import { applyEvent, type Application } from "@/src/core/domain/application"
 import type { DocumentRef } from "@/src/core/domain/document"
 import type { Failure } from "@/src/core/domain/failure"
+import { HOLD_CHECK_INTERVAL_MS, HOLD_RETRY_MS } from "@/src/core/domain/hold-policy"
 import { nextPollAt } from "@/src/core/domain/poll-schedule"
 import { GatewayUnavailable } from "@/src/core/errors/gateway-unavailable"
 import type { GatewayStatus } from "@/src/core/ports/registration-gateway"
 import type { Dependencies } from "./dependencies"
 import { handleFailure } from "./handle-failure"
 import { mailCustomer } from "./mail-customer"
+import { guardHold } from "./secure-hold"
 import { settlePayment } from "./settle-payment"
 import { submitToKba } from "./submit-to-kba"
 
-/** One poller step for one due application: resubmit it, or ask the service how it is doing. */
+/** One poller step for one due application: resubmit it, watch its money, or ask the service how it is doing. */
 export async function advanceStatus(deps: Dependencies, application: Application): Promise<void> {
   if (application.status === "submitted_and_paid") return submitToKba(deps, application)
+  if (application.status === "failed_correctable") return watchHold(deps, application)
   if (application.status !== "submitted_to_kba") return
+
+  // A hand-processed order's card is held for days; the status check must not wait on the provider, so a failed look is only logged.
+  if (application.ikfzStatus !== "online") {
+    await guardHold(deps, application).catch((error) => logHoldCheckFailed(application, error))
+  }
 
   let status: GatewayStatus
   try {
@@ -41,6 +49,27 @@ export async function advanceStatus(deps: Dependencies, application: Application
   }
 
   await complete(deps, application, status.documents)
+}
+
+/** A 5b waits for the customer, who may take longer than the hold lasts: take the money in time, then stop looking. */
+async function watchHold(deps: Dependencies, application: Application): Promise<void> {
+  const reschedule = (afterMs?: number) => ({
+    ...application,
+    polling: { attempts: application.polling.attempts, nextPollAt: afterMs === undefined ? undefined : new Date(deps.clock.now().getTime() + afterMs) },
+  })
+
+  let held: boolean
+  try {
+    held = (await guardHold(deps, application)).status === "held"
+  } catch (error) {
+    await deps.repository.update(reschedule(HOLD_RETRY_MS))
+    throw error
+  }
+  await deps.repository.update(reschedule(held ? HOLD_CHECK_INTERVAL_MS : undefined))
+}
+
+function logHoldCheckFailed({ reference }: Application, error: unknown) {
+  console.error(`[payments] ${reference}: hold not checked: ${error instanceof Error ? error.name : "unknown error"}`)
 }
 
 function failureOf(status: Exclude<GatewayStatus, { state: "inProgress" }>): Failure | undefined {

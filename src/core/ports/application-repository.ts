@@ -17,8 +17,8 @@ import type { ApplicationReference } from "@/src/core/domain/application-referen
  *   same link; adapters that persist it keep it encrypted and look it up by
  *   hash. Setting a new one revokes the old one.
  * - `findDueForPolling` returns applications whose next check is due, soonest
- *   first: a status check at the KBA, or a silent resubmission after a
- *   technical failure.
+ *   first: a status check at the KBA, a silent resubmission after a technical
+ *   failure, or a look at the money of a 5b that waits for the customer.
  */
 export interface ApplicationRepository {
   create(application: Application): Promise<Application>

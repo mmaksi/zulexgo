@@ -69,7 +69,10 @@ export function advance(status: ApplicationStatus, event: ApplicationEvent): App
   return next
 }
 
-/** Checked on a schedule: at the KBA, or waiting for a silent resubmission after a technical error. */
-export const POLLED_STATUSES: readonly ApplicationStatus[] = ["submitted_and_paid", "submitted_to_kba"]
+/**
+ * Looked at on a schedule: at the KBA, waiting for a silent resubmission after a
+ * technical error, or (5b) waiting for the customer while the money is watched.
+ */
+export const POLLED_STATUSES: readonly ApplicationStatus[] = ["submitted_and_paid", "submitted_to_kba", "failed_correctable"]
 
 export const isTerminal =(status: ApplicationStatus): boolean => Object.keys(TRANSITIONS[status]).length === 0

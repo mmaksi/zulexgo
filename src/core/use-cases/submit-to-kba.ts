@@ -7,6 +7,7 @@ import { GatewayUnavailable } from "@/src/core/errors/gateway-unavailable"
 import type { Dependencies } from "./dependencies"
 import { handleFailure } from "./handle-failure"
 import { mailCustomer } from "./mail-customer"
+import { captureHold } from "./secure-hold"
 
 /**
  * Files a paid application with the registration service, right after payment
@@ -41,6 +42,9 @@ export async function submitToKba(deps: Dependencies, application: Application):
     // how Zulex answers a replayed submission is unspecified (launch plan Q23).
     filed = await deps.repository.update({ ...application, zulexApplicationId: applicationId })
   }
+
+  // Launch plan Q7: an online authority answers within hours, so its order is paid for once Zulex has it; a hand-processed one stays held.
+  if (application.ikfzStatus === "online") await captureHold(deps, filed)
 
   const now = deps.clock.now()
   const submitted: Application = {

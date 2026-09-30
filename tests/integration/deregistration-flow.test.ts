@@ -264,7 +264,11 @@ describe("de-registration flow on fakes", () => {
       await poll(1)
 
       expect((await stored(reference)).status).toBe("failed_final")
-      expect(await payment(reference)).toMatchObject({ status: "captured", captured: PROCESSING_FEE })
+      expect(await payment(reference)).toMatchObject({
+        status: "captured",
+        captured: DEREGISTRATION_TOTAL,
+        refunded: DEREGISTRATION_TOTAL.subtract(PROCESSING_FEE),
+      })
       expect(emails()).toEqual(["orderConfirmation", "submittedToKba", "rejected", "refundIssued"])
     })
 
@@ -335,7 +339,6 @@ describe("de-registration flow on fakes", () => {
 
   it.each([
     ["completed", { state: "finished", documents: [] }],
-    ["failed_correctable", { state: "failed", error: { code: 101, details: [] }, documents: [] }],
     ["failed_final", { state: "failed", error: { code: 202, details: [] }, documents: [] }],
   ] as const)("stops scheduling checks once an application is %s, so nothing looks overdue", async (status, gatewayStatus) => {
     const { deps, stored, zulexId, poll, checkoutAndPay } = setup()
