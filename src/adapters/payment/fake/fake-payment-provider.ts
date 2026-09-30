@@ -15,12 +15,23 @@ const sign = (payload: string) => createHmac("sha256", SIGNING_SECRET).update(pa
 
 type Stored = { -readonly [Key in keyof Payment]: Payment[Key] } & { reference: ApplicationReference }
 
+/** A payment that already exists when the provider starts, as dev's seeded orders have. */
+export type ExistingPayment = Pick<Payment, "id" | "status" | "amount" | "captured" | "refunded"> & { reference: ApplicationReference }
+
 /** In-memory payments; `customerPays` stands in for the customer confirming in the browser. */
 export class FakePaymentProvider implements PaymentProvider {
   private readonly payments = new Map<string, Stored>()
   private readonly refundKeys = new Set<string>()
 
-  constructor(private readonly clock: Clock) {}
+  constructor(
+    private readonly clock: Clock,
+    existing: readonly ExistingPayment[] = [],
+  ) {
+    for (const payment of existing) {
+      const holdExpiresAt = payment.status === "held" ? new Date(clock.now().getTime() + HOLD_VALIDITY_MS) : undefined
+      this.payments.set(payment.id, { ...payment, holdExpiresAt })
+    }
+  }
 
   async createPayment({ reference, amount }: Parameters<PaymentProvider["createPayment"]>[0]) {
     const existing = [...this.payments.values()].find((payment) => payment.reference === reference)

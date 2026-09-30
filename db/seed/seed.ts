@@ -4,6 +4,7 @@ import type { ApplicationRepository } from "@/src/core/ports/application-reposit
 import type { DocumentStore } from "@/src/core/ports/document-store"
 import { SEEDED_APPLICATIONS, type SeededApplication } from "./data/applications"
 import { SEEDED_DOCUMENTS, type SeededDocument } from "./data/documents"
+import { SEEDED_PAYMENTS, type SeededPayment } from "./data/payments"
 
 /**
  * The same applications, one or more per status, for dev and staging: dev
@@ -18,6 +19,11 @@ export function seedFor(stage: Stage): readonly SeededApplication[] {
 export function seedDocumentsFor(stage: Stage): readonly SeededDocument[] {
   if (stage === "production") throw new Error("The seed never loads in production.")
   return SEEDED_DOCUMENTS
+}
+
+export function seedPaymentsFor(stage: Stage): readonly SeededPayment[] {
+  if (stage === "production") throw new Error("The seed never loads in production.")
+  return SEEDED_PAYMENTS
 }
 
 /** Stores each seeded document the store does not have yet and returns how many it added. */

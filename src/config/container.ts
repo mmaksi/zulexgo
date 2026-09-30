@@ -19,7 +19,7 @@ import type { Clock } from "@/src/core/ports/clock"
 import type { IdentityVerification } from "@/src/core/ports/identity-verification"
 import type { RateLimiter } from "@/src/core/ports/rate-limiter"
 import type { Dependencies } from "@/src/core/use-cases/dependencies"
-import { seedDocumentsFor, seedFor } from "@/db/seed/seed"
+import { seedDocumentsFor, seedFor, seedPaymentsFor } from "@/db/seed/seed"
 import { parseEnv, type Env, type EnvSource } from "./env"
 
 /**
@@ -47,7 +47,7 @@ export interface Container extends Dependencies {
 export function createContainer(source: EnvSource = process.env): Container {
   const env = parseEnv(source)
   const clock = new SystemClock()
-  const fakePayments = env.PAYMENT_DRIVER === "fake" ? new FakePaymentProvider(clock) : undefined
+  const fakePayments = env.PAYMENT_DRIVER === "fake" ? new FakePaymentProvider(clock, seedPaymentsFor(env.APP_ENV)) : undefined
   return {
     env,
     clock,

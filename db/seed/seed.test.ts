@@ -3,7 +3,10 @@ import { InMemoryApplicationRepository } from "@/src/adapters/repository/fake/in
 import { InMemoryDocumentStore } from "@/src/adapters/storage/fake/in-memory-document-store"
 import { anApplication } from "@/tests/fixtures/applications"
 import { JOURNEYS, seededApplications } from "./data/applications"
-import { loadDocuments, loadSeed, seedDocumentsFor, seedFor } from "./seed"
+import { FakePaymentProvider } from "@/src/adapters/payment/fake/fake-payment-provider"
+import { retainedOf } from "@/src/core/domain/refund-policy"
+import { PROCESSING_FEE } from "@/src/core/domain/pricing"
+import { loadDocuments, loadSeed, seedDocumentsFor, seedFor, seedPaymentsFor } from "./seed"
 
 describe("seedFor", () => {
   it("refuses to load in production", () => {
@@ -43,6 +46,34 @@ describe("seedFor", () => {
     expect(await repository.findDueForPolling(new Date("2100-01-01"), 100)).toHaveLength(
       seed.filter(({ application }) => application.polling.nextPollAt).length,
     )
+  })
+})
+
+describe("seedPaymentsFor", () => {
+  const provider = () => new FakePaymentProvider({ now: () => new Date("2026-01-05T09:00:00.000Z") }, seedPaymentsFor("dev"))
+
+  it("refuses to load in production", () => {
+    expect(() => seedPaymentsFor("production")).toThrow(/production/)
+  })
+
+  it("gives every seeded application the payment its own record names, so the fake provider can answer for it", async () => {
+    for (const { application } of seedFor("dev")) {
+      expect((await provider().getPayment(application.payment.id)).amount).toEqual(application.payment.total)
+    }
+  })
+
+  it.each(["failed_final", "cancelled"] as const)("shows %s as the fee kept and the rest returned, as the status page and email 6 read it", async (status) => {
+    const { application } = seedFor("dev").find(({ application }) => application.status === status)!
+
+    expect(retainedOf(await provider().getPayment(application.payment.id))).toEqual(PROCESSING_FEE)
+  })
+
+  it("shows an order still at the KBA, or waiting for a correction, as a held card, so cancelling it in dev works", async () => {
+    for (const status of ["submitted_to_kba", "failed_correctable"] as const) {
+      const { application } = seedFor("dev").find(({ application }) => application.status === status)!
+
+      expect((await provider().getPayment(application.payment.id)).status).toBe("held")
+    }
   })
 })
 
