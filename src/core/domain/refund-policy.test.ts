@@ -108,9 +108,19 @@ describe("settledDecision: what a rerun finds already done", () => {
   it.each([
     ["a payment still held", paid("held", 0)],
     ["a payment captured in full", paid("captured", 6999)],
-    ["a released hold, which is not the fee kept", paid("released", 0)],
   ])("finds nothing done yet on %s when the fee should be kept", (_, payment) => {
     expect(settledDecision({ type: "failedFinal" }, payment)).toBeUndefined()
+  })
+
+  describe("a hold that lapsed before the outcome (Q20: the customer keeps everything, the fee is lost)", () => {
+    it.each([{ type: "completed" }, { type: "cancelled" }, { type: "failedFinal" }, { type: "ourTechnicalError" }] as const)(
+      "finds %o settled with nothing retained, since the money already went back",
+      (outcome) => {
+        expect(summary(settledDecision(outcome, paid("released", 0))!)).toEqual({
+          action: "none", amount: undefined, retained: 0, returned: 6999,
+        })
+      },
+    )
   })
 
   it("finds nothing done on a hold or a payment that still holds money when it should all go back", () => {
@@ -139,6 +149,6 @@ describe("retainedOf", () => {
     const released = { status: "released", total: TOTAL, ...record(0, 6999) } as const
 
     expect(settledDecision({ type: "ourTechnicalError" }, released)).toBeDefined()
-    expect(settledDecision({ type: "failedFinal" }, released)).toBeUndefined()
+    expect(settledDecision({ type: "failedFinal" }, released)?.retained.cents).toBe(0)
   })
 })

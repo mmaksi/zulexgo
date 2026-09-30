@@ -9,7 +9,7 @@ import { Checkbox } from "@/src/ui/checkbox"
 import type { CheckoutActions, PaymentDriver, PaymentMode } from "./checkout-actions"
 import { SimulatedPaymentFields } from "./simulated-payment-fields"
 import { StripePaymentFields } from "./stripe/stripe-payment-fields"
-import type { PlateCount, VehicleData } from "./vehicle-data"
+import type { PlateCount, VehicleData } from "@/app/_components/vehicle-data"
 import { Alert } from "@/src/ui/alert"
 import { PlateFrame } from "@/src/ui/plate-frame"
 
@@ -33,9 +33,11 @@ export function ReviewStep({
   const order = useRef<{ reference: string; clientSecret: string } | null>(null)
   const [terms, setTerms] = useState(false)
   const [earlyStart, setEarlyStart] = useState(false)
+  const [duplicate, setDuplicate] = useState(false)
+  const [wantsAnother, setWantsAnother] = useState(false)
   const [paying, setPaying] = useState(false)
   const [error, setError] = useState<string>()
-  const consented = terms && earlyStart
+  const consented = terms && earlyStart && (!duplicate || wantsAnother)
 
   async function pay(event: FormEvent) {
     event.preventDefault()
@@ -53,8 +55,17 @@ export function ReviewStep({
 
     // A declined card is retried on the same order, never a second one.
     if (!order.current) {
-      const started = await actions.startCheckout({ plateCount, vehicle, consents: { terms, earlyStart } })
+      const started = await actions.startCheckout({
+        plateCount,
+        vehicle,
+        consents: { terms, earlyStart },
+        ...(wantsAnother ? { acknowledgedDuplicate: true } : {}),
+      })
       if (!started.ok) {
+        if (started.reason === "duplicate") {
+          setDuplicate(true)
+          return undefined
+        }
         return started.reason === "invalid"
           ? "Einige Angaben sind nicht gültig. Bitte gehen Sie einen Schritt zurück und prüfen Sie sie."
           : "Das hat gerade nicht geklappt. Bitte versuchen Sie es in ein paar Minuten noch einmal."
@@ -127,6 +138,18 @@ export function ReviewStep({
         </Consent>
       </div>
 
+      {duplicate ? (
+        <div className="flex flex-col gap-4">
+          <Alert role="alert" variant="warning" className="measure">
+            Für dieses Fahrzeug läuft bereits ein Antrag bei uns. Ein zweiter Antrag für dasselbe Fahrzeug wird vom KBA voraussichtlich
+            abgelehnt.
+          </Alert>
+          <Consent checked={wantsAnother} onChange={setWantsAnother}>
+            Ich möchte trotzdem einen weiteren Antrag stellen.
+          </Consent>
+        </div>
+      ) : null}
+
       {error ? (
         <Alert role="alert" variant="error" className="measure">
           {error}
@@ -143,7 +166,7 @@ export function ReviewStep({
         </div>
         {consented ? null : (
           <p id="pay-hint" className="text-small text-grau-bright">
-            Bitte bestätigen Sie zuerst die beiden Punkte oben.
+            {duplicate ? "Bitte bestätigen Sie zuerst die Punkte oben." : "Bitte bestätigen Sie zuerst die beiden Punkte oben."}
           </p>
         )}
       </div>

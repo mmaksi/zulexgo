@@ -75,10 +75,10 @@ Per field: label ≤40, helper ≤150, locator image (where to find it), error �
 - **Status stepper** — the customer statuses as three rows now (1, 4 and the outcome 5a | 5b | 5c), five with Verimi; per step: title ≤50, status line ≤50, description ≤150 chars, timestamp (our backend), state (done/current/pending/failed). Titles/status lines = the statuses and internal labels in `launch-plan.md` § Context; status 1 wording depends on Q7.
 - **Outcome block** variants:
   - *5a* — success text ≤300 chars + documents list.
-  - *5b* — reason (rewritten from `errorInfo`) ≤300; CTA "Correct data" ≤25; CTA "Cancel" ≤25 with adjacent fee notice ("19.99 € is retained, the rest is refunded") ≤150 chars.
+  - *5b* — reason (our wording from the rejection catalogue, never `errorInfo`'s) ≤300; the correction form and the CTA "Antrag stornieren" ≤25 with the adjacent fee notice ("19.99 € is retained, the rest is refunded") ≤150 chars; cancelling asks for confirmation in a dialog that repeats the amounts.
   - *5c* — reason ≤300; refund info (amount minus 19.99 €) ≤200; CTA "Start a new application" ≤30 chars.
   - *Cancelled* — refund info (amount minus 19.99 €) ≤200; CTA "Start a new application" ≤30 chars.
-- **Correction form** — fields/constraints as §2.3, prefilled except codes; `PATCH` on submit; charges price difference only if one arises (Q11).
+- **Correction form** — the VIN and the security codes (the front code only for two plates), with the constraints and wording of §2.3; it starts empty, so no stored value is put back on the page, and a field left blank stays as it was; the plate is not correctable (Q26); "Erneut einreichen" sends a `PATCH` of the changed fields, or files the order afresh when Zulex holds nothing to patch (Q37). A correction costs nothing extra (Q11).
 - **Documents list** — per document: type label (enum map: confirmation, fee, rejection, unknown→"Document") ≤40 chars, download button.
 - **Help block** — support email + "resend link" entry (needs email + order ID), ≤150 chars.
 

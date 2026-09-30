@@ -25,6 +25,11 @@ export type ApplicationStatus = (typeof APPLICATION_STATUSES)[number]
 /**
  * What happened, already classified. The one silent retry of a technical error
  * is not an event: the customer sees nothing until the error algorithm decides.
+ *
+ * A correction reaches the KBA again by one of two ways: `correctionResubmitted`
+ * patches an application the service already holds (back to status 4);
+ * `correctionRefiled` files an application the service refused outright, and
+ * so never held, like a new submission (back to status 1).
  */
 export const APPLICATION_EVENTS = [
   "paymentConfirmed",
@@ -34,6 +39,7 @@ export const APPLICATION_EVENTS = [
   "failedCorrectable",
   "failedFinal",
   "correctionResubmitted",
+  "correctionRefiled",
   "cancelledByCustomer",
 ] as const
 
@@ -56,6 +62,7 @@ const TRANSITIONS: Record<ApplicationStatus, Partial<Record<ApplicationEvent, Ap
   },
   failed_correctable: {
     correctionResubmitted: "submitted_to_kba",
+    correctionRefiled: "submitted_and_paid",
     cancelledByCustomer: "cancelled",
   },
   completed: {},
@@ -69,7 +76,13 @@ export function advance(status: ApplicationStatus, event: ApplicationEvent): App
   return next
 }
 
-/** Checked on a schedule: at the KBA, or waiting for a silent resubmission after a technical error. */
-export const POLLED_STATUSES: readonly ApplicationStatus[] = ["submitted_and_paid", "submitted_to_kba"]
+/** Paid and not finished: the orders a second order for the same vehicle would collide with (J8). */
+export const OPEN_STATUSES: readonly ApplicationStatus[] = ["submitted_and_paid", "submitted_to_kba", "failed_correctable"]
+
+/**
+ * Looked at on a schedule: at the KBA, waiting for a silent resubmission after a
+ * technical error, or (5b) waiting for the customer while the money is watched.
+ */
+export const POLLED_STATUSES: readonly ApplicationStatus[] = ["submitted_and_paid", "submitted_to_kba", "failed_correctable"]
 
 export const isTerminal =(status: ApplicationStatus): boolean => Object.keys(TRANSITIONS[status]).length === 0

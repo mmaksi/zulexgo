@@ -12,7 +12,7 @@ const STEPS = [
   },
   {
     title: "Sicher bezahlen",
-    text: "Gesamtpreis inklusive Behördengebühr. Abgebucht wird erst mit dem Ergebnis.",
+    text: "Gesamtpreis inklusive Behördengebühr. Scheitert der Antrag, erstatten wir den Betrag, unter Umständen abzüglich 19,99 €.",
   },
   {
     title: "Bestätigung erhalten",

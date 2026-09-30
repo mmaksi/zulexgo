@@ -56,6 +56,7 @@ describe("renderEmail", () => {
       name: "rejected",
       reference,
       statusLink,
+      reason: "Das Fahrzeug ist bereits abgemeldet.",
       refund: Money.ofCents(6999 - retained),
       retained: Money.ofCents(retained),
     })
@@ -75,8 +76,18 @@ describe("renderEmail", () => {
     })
   })
 
+  it.each(["correctionRequired", "rejected"] as const)("says in the %s email why the application failed", async (name) => {
+    const reason = "Die Fahrzeug-Identifizierungsnummer stimmt nicht."
+    const template: EmailTemplate =
+      name === "rejected"
+        ? { name, reference, statusLink, reason, refund: Money.ofCents(5000), retained: Money.ofCents(1999) }
+        : { name, reference, statusLink, reason }
+
+    expect((await renderEmail(template)).text).toContain(reason)
+  })
+
   it("names the processing fee in the correction email, next to the cancel option", async () => {
-    const { text } = await renderEmail({ name: "correctionRequired", reference, statusLink })
+    const { text } = await renderEmail({ name: "correctionRequired", reference, statusLink, reason: "Grund." })
 
     expect(text).toMatch(/stornieren/i)
     expect(text).toMatch(/19,99\s€/)

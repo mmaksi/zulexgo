@@ -1,4 +1,4 @@
-import type { ErrorCatalogue } from "@/src/core/domain/error-algorithm"
+import type { RejectionCatalogue } from "@/src/core/domain/rejection-catalogue"
 import type { ApplicationRepository } from "@/src/core/ports/application-repository"
 import type { Clock } from "@/src/core/ports/clock"
 import type { DocumentStore } from "@/src/core/ports/document-store"
@@ -20,5 +20,5 @@ export interface Dependencies {
   readonly tokens: TokenGenerator
   /** Turns a status token into the absolute link the customer receives. */
   readonly statusLink: (token: string) => string
-  readonly errorCatalogue?: ErrorCatalogue
+  readonly errorCatalogue?: RejectionCatalogue
 }

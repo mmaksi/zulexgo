@@ -62,6 +62,7 @@ describe("ResendMailer", () => {
       name: "rejected",
       reference,
       statusLink: "https://zulexgo.example.test/status/t",
+      reason: "Das Fahrzeug ist bereits abgemeldet.",
       refund: Money.ofCents(5001),
       retained: Money.ofCents(1998),
     } as const

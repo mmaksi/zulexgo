@@ -1,12 +1,13 @@
 import type { Application } from "@/src/core/domain/application"
 import type { Money } from "@/src/core/domain/money"
+import { reasonFor } from "@/src/core/domain/rejection-catalogue"
 import type { Dependencies } from "./dependencies"
 
 type LinkedEmail = "orderConfirmation" | "submittedToKba" | "completed" | "correctionRequired" | "rejected"
 
 /** Sends one of the emails that carry the status link, built from the application's current token. */
 export async function mailCustomer(
-  deps: Pick<Dependencies, "repository" | "mailer" | "statusLink">,
+  deps: Pick<Dependencies, "repository" | "mailer" | "statusLink" | "errorCatalogue">,
   application: Application,
   name: LinkedEmail,
   extra: { refund?: Money; retained?: Money } = {},
@@ -14,13 +15,16 @@ export async function mailCustomer(
   const token = await deps.repository.getStatusToken(application.reference)
   if (!token) throw new Error(`Application ${application.reference} has no status token`)
   const common = { reference: application.reference, statusLink: deps.statusLink(token) }
+  const reason = () => reasonFor(application.failure ?? { kind: "rejected" }, deps.errorCatalogue)
 
   const template =
     name === "submittedToKba"
       ? { name, ...common, manualProcessing: application.ikfzStatus !== "online" }
       : name === "rejected"
-        ? { name, ...common, refund: extra.refund!, retained: extra.retained! }
-        : { name, ...common }
+        ? { name, ...common, reason: reason(), refund: extra.refund!, retained: extra.retained! }
+        : name === "correctionRequired"
+          ? { name, ...common, reason: reason() }
+          : { name, ...common }
   // The history length names the transition, so an email repeated by a later transition (a correction back at the KBA) is still sent.
   const idempotencyKey = `${application.reference}/${name}/${application.history.length}`
   await deps.mailer.send({ to: application.email, template, idempotencyKey })

@@ -168,6 +168,8 @@ MAIL_ALLOWLIST=<the inboxes staging may mail, comma-separated>
 
 `RESEND_API_KEY` is already set (§7). Redeploy `staging`; the app refuses to boot if one of these is missing. Mail only goes out once Resend shows `mail.gm-gastro.com` as **Verified**.
 
+**Checked 2026-09-30 (names only, through the Vercel connector):** `zulexgo-staging` holds `APP_ENV`, `APP_BASE_URL`, `CRON_SECRET`, the five driver variables, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, `RESEND_API_KEY`, `MAIL_FROM`, `MAIL_ALLOWLIST`, `DATABASE_URL`, `DIRECT_DATABASE_URL`, `CODES_ENCRYPTION_KEY` and the three `SUPABASE_STORAGE_*`; no `ZULEX_*`, which `REGISTRATION_DRIVER=fake` does not need. That is everything `src/config/env.ts` requires for these drivers, and M6 added no variable. Migrations `0006` and `0007` run by themselves on the next deploy of `staging` (`scripts/vercel-build`).
+
 **Dev** (`.env.local`), for a real Stripe checkout on a laptop: `PAYMENT_DRIVER=stripe` with the keys of the test mode of `G&M Gastro Event GmbH`, and the secret `stripe listen --forward-to localhost:3000/api/webhooks/stripe` prints as `STRIPE_WEBHOOK_SECRET`. Without them dev runs a simulated payment. Mail stays on the console.
 
 ## 9. Document storage  *(M5)*

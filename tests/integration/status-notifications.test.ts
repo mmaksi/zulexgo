@@ -1,10 +1,11 @@
 import { renderEmail } from "@/src/adapters/mail/resend/render"
 import type { ApplicationReference } from "@/src/core/domain/application-reference"
+import { Money } from "@/src/core/domain/money"
 import { DEREGISTRATION_TOTAL, PROCESSING_FEE } from "@/src/core/domain/pricing"
 import { GatewayUnavailable } from "@/src/core/errors/gateway-unavailable"
 import type { EmailTemplate } from "@/src/core/ports/mailer"
 import { confirmRefund } from "@/src/core/use-cases/confirm-refund"
-import { CODES, setupFlow } from "./flow-harness"
+import { CODES, keepServiceDown, setupFlow } from "./flow-harness"
 
 const FINISHED = { state: "finished", documents: [] } as const
 const CORRECTABLE = { state: "failed", error: { code: 101, details: [] }, documents: [] } as const
@@ -58,7 +59,7 @@ describe("status notifications: one email per transition", () => {
     expect(flow.emails()).toEqual(["orderConfirmation", "submittedToKba"])
   })
 
-  it("5b: a correctable error sends email 5b and touches no money", async () => {
+  it("5b: a correctable error sends email 5b and neither takes nor returns money (an online authority's order was paid for at acceptance)", async () => {
     const flow = setupFlow()
     const { reference, id } = await reachKba(flow)
 
@@ -66,7 +67,7 @@ describe("status notifications: one email per transition", () => {
     await flow.poll(1)
 
     expect(flow.emails()).toEqual(["orderConfirmation", "submittedToKba", "correctionRequired"])
-    expect((await flow.payment(reference)).status).toBe("held")
+    expect(await flow.payment(reference)).toMatchObject({ status: "captured", captured: DEREGISTRATION_TOTAL, refunded: Money.ofCents(0) })
   })
 
   it("5c: a final error sends 5c, then email 6 with what comes back, and a later refund confirmation adds nothing", async () => {
@@ -88,8 +89,7 @@ describe("status notifications: one email per transition", () => {
     const flow = setupFlow()
     flow.deps.registration.failNext("submit", new GatewayUnavailable())
     await flow.checkoutAndPay()
-    flow.deps.registration.failNext("submit", new GatewayUnavailable())
-    await flow.poll(1)
+    await keepServiceDown(flow, 24)
 
     expect(flow.emails()).toEqual(["orderConfirmation", "rejected", "refundIssued"])
     const [, rejected, refund] = flow.deps.mailer.sent.map(({ template }) => template)
@@ -110,7 +110,7 @@ describe("status notifications: one email per transition", () => {
 })
 
 describe("status notifications: an email that could not be sent is not lost", () => {
-  it("email 4: the transition waits, the next tick sends it once, and only then is the KBA asked about", async () => {
+  it("email 4: the transition waits, the next tick after the backoff sends it once, and only then is the KBA asked about", async () => {
     const flow = setupFlow()
     failMailerOnce(flow, "submittedToKba")
     const submit = jest.spyOn(flow.deps.registration, "submitDeregistration")
@@ -119,8 +119,9 @@ describe("status notifications: an email that could not be sent is not lost", ()
     await expect(flow.confirm(reference)).rejects.toThrow("Resend refused")
     expect((await flow.stored(reference)).status).toBe("submitted_and_paid")
     expect(flow.emails()).toEqual(["orderConfirmation"])
+    expect(await flow.poll(0)).toEqual({ checked: 0, failed: 0 })
 
-    await flow.poll(0)
+    await flow.poll(1)
 
     expect((await flow.stored(reference)).status).toBe("submitted_to_kba")
     expect(flow.emails()).toEqual(["orderConfirmation", "submittedToKba"])
@@ -176,7 +177,11 @@ describe("status notifications: an email that could not be sent is not lost", ()
 
       expect((await flow.stored(reference)).status).toBe("failed_final")
       expect(flow.emails()).toEqual(["orderConfirmation", "submittedToKba", "rejected", "refundIssued"])
-      expect(await flow.payment(reference)).toMatchObject({ status: "captured", captured: PROCESSING_FEE })
+      expect(await flow.payment(reference)).toMatchObject({
+        status: "captured",
+        captured: DEREGISTRATION_TOTAL,
+        refunded: DEREGISTRATION_TOTAL.subtract(PROCESSING_FEE),
+      })
     },
   )
 
@@ -184,10 +189,11 @@ describe("status notifications: an email that could not be sent is not lost", ()
     const flow = setupFlow()
     flow.deps.registration.failNext("submit", new GatewayUnavailable())
     const reference = await flow.checkoutAndPay()
+    await keepServiceDown(flow, 23)
     failMailerOnce(flow, "refundIssued")
 
     flow.deps.registration.failNext("submit", new GatewayUnavailable())
-    expect(await flow.poll(1)).toMatchObject({ failed: 1 })
+    expect(await flow.poll(60)).toMatchObject({ failed: 1 })
     await flow.poll(0)
 
     expect((await flow.stored(reference)).status).toBe("failed_final")

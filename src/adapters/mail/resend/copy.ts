@@ -6,8 +6,8 @@ import type { EmailTemplate } from "@/src/core/ports/mailer"
 /**
  * The German wording of business logic §5, one statement and one button per
  * email. Kept apart from the markup so it can be read and reviewed alone.
- * The reason in the correction email stays general until the founder's error
- * catalogue exists (launch plan Q10); vendor text never reaches a customer.
+ * The reason in the correction and rejection emails is ours, from the
+ * rejection catalogue (launch plan Q10); vendor text never reaches a customer.
  */
 export interface EmailCopy {
   readonly subject: string
@@ -32,7 +32,7 @@ export function copyFor(template: EmailTemplate): EmailCopy {
         heading: "Ihr Antrag ist eingegangen",
         paragraphs: [
           `Vielen Dank für Ihren Antrag auf Außerbetriebsetzung. Ihre Auftragsnummer lautet ${reference}.`,
-          "Den Betrag haben wir auf Ihrer Karte reserviert. Abgebucht wird er erst mit dem Ergebnis Ihres Antrags.",
+          "Ihre Zahlung ist eingegangen. Ihre Karte wird belastet, sobald Ihr Antrag eingereicht ist, spätestens kurz vor Ablauf der Kartenreservierung. Scheitert er, erstatten wir den Betrag, gegebenenfalls abzüglich der Bearbeitungsgebühr.",
           "Über Ihren persönlichen Link sehen Sie jederzeit, wie weit Ihr Antrag ist. Der Link ist nur für Sie bestimmt: Bitte geben Sie ihn nicht weiter.",
         ],
         action: { label: "Status ansehen", href: template.statusLink },
@@ -68,11 +68,11 @@ export function copyFor(template: EmailTemplate): EmailCopy {
         preview: "Die Zulassungsstelle konnte den Antrag so nicht bearbeiten.",
         heading: "Ihr Antrag braucht eine Korrektur",
         paragraphs: [
-          "Die Zulassungsstelle konnte Ihren Antrag mit den angegebenen Daten nicht bearbeiten. Das lässt sich meist korrigieren.",
-          `Schreiben Sie uns an ${SUPPORT_EMAIL} und nennen Sie Ihre Auftragsnummer ${reference}. Wir korrigieren den Antrag gemeinsam mit Ihnen. Sie zahlen nur die Differenz, falls Mehrkosten entstehen.`,
+          `${template.reason} Das lässt sich meist korrigieren.`,
+          "Auf Ihrer Statusseite korrigieren Sie die Angaben und reichen den Antrag erneut ein. Das kostet nichts extra.",
         ],
-        note: `Sie können den Antrag auch stornieren. Wir behalten dann die Bearbeitungsgebühr von ${formatEuros(PROCESSING_FEE)} ein und erstatten den Rest.`,
-        action: { label: "Status ansehen", href: template.statusLink },
+        note: `Sie können den Antrag dort auch stornieren. Wir behalten dann die Bearbeitungsgebühr von ${formatEuros(PROCESSING_FEE)} ein und erstatten den Rest.`,
+        action: { label: "Antrag korrigieren", href: template.statusLink },
       }
     case "rejected":
       return {
@@ -80,7 +80,7 @@ export function copyFor(template: EmailTemplate): EmailCopy {
         preview: "Wir erstatten Ihnen den Betrag.",
         heading: "Ihr Antrag wurde abgelehnt",
         paragraphs: [
-          `Der Antrag zu Auftrag ${reference} konnte nicht abgeschlossen werden. Eine Korrektur ist nicht möglich; für die Abmeldung wäre ein neuer Antrag nötig.`,
+          `${template.reason} Der Antrag zu Auftrag ${reference} konnte nicht abgeschlossen werden. Eine Korrektur ist nicht möglich; für die Abmeldung wäre ein neuer Antrag nötig.`,
           template.retained.cents > 0
             ? `Sie erhalten ${formatEuros(template.refund)} zurück. Die Bearbeitungsgebühr von ${formatEuros(template.retained)} behalten wir ein. Eine weitere E-Mail bestätigt die Erstattung.`
             : `Sie erhalten ${formatEuros(template.refund)} zurück. Eine weitere E-Mail bestätigt die Erstattung.`,

@@ -8,7 +8,8 @@ import { InMemoryApplicationRepository } from "@/src/adapters/repository/fake/in
 import { InMemoryDocumentStore } from "@/src/adapters/storage/fake/in-memory-document-store"
 import { FakeTokenGenerator } from "@/src/adapters/tokens/fake/fake-token-generator"
 import type { ApplicationReference } from "@/src/core/domain/application-reference"
-import type { ErrorCatalogue } from "@/src/core/domain/error-algorithm"
+import { GatewayUnavailable } from "@/src/core/errors/gateway-unavailable"
+import type { RejectionCatalogue } from "@/src/core/domain/rejection-catalogue"
 import type { PaymentMethodKind } from "@/src/core/ports/payment-provider"
 import { confirmPayment } from "@/src/core/use-cases/confirm-payment"
 import { pollDueApplications } from "@/src/core/use-cases/poll-due-applications"
@@ -16,8 +17,21 @@ import { submitCheckout } from "@/src/core/use-cases/submit-checkout"
 
 /** Every fake wired as the container wires them, for tests that drive the whole flow. */
 export const MINUTE = 60_000
-export const CATALOGUE: ErrorCatalogue = { 101: "correctable", 202: "final" }
+export const CATALOGUE: RejectionCatalogue = {
+  101: { class: "correctable", reason: "Die FIN wurde nicht akzeptiert." },
+  202: { class: "final", reason: "Das Fahrzeug ist bereits abgemeldet." },
+}
 export const CODES = Object.values(FAKE_REQUEST.codes)
+
+export const HOUR = 60 * MINUTE
+
+/** The service cannot be reached for this many hourly checks: every attempt to file a waiting application fails. */
+export async function keepServiceDown(flow: Pick<ReturnType<typeof setupFlow>, "deps" | "poll">, hours: number) {
+  for (let hour = 0; hour < hours; hour++) {
+    flow.deps.registration.failNext("submit", new GatewayUnavailable())
+    await flow.poll(60)
+  }
+}
 
 export function setupFlow() {
   const clock = new FakeClock(new Date("2026-03-01T09:00:00.000Z"))
@@ -45,7 +59,8 @@ export function setupFlow() {
 
   /** Checks out and pays, but leaves the payment notification unhandled. */
   async function payForCheckout(method: PaymentMethodKind = "card") {
-    const { reference } = await submitCheckout(deps, { request: FAKE_REQUEST, email: "customer@example.test" })
+    // Tests that run several orders at once put them all on one fake vehicle, so each customer here has confirmed the duplicate warning.
+    const { reference } = await submitCheckout(deps, { request: FAKE_REQUEST, email: "customer@example.test", acknowledgedDuplicate: true })
     await deps.payments.customerPays((await stored(reference)).payment.id, method)
     return reference
   }

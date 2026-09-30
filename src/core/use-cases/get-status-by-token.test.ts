@@ -1,8 +1,10 @@
 import { anApplication, FAKE_REQUEST } from "@/tests/fixtures/applications"
+import type { Application } from "@/src/core/domain/application"
 import type { ApplicationReference } from "@/src/core/domain/application-reference"
 import type { DocumentRef } from "@/src/core/domain/document"
 import { Money } from "@/src/core/domain/money"
 import { TokenInvalid } from "@/src/core/errors/token-invalid"
+import type { PaymentProvider } from "@/src/core/ports/payment-provider"
 import { getStatusByToken } from "./get-status-by-token"
 
 const TOKEN = "faketoken-status"
@@ -31,6 +33,10 @@ describe("getStatusByToken", () => {
       vinEnding: "0001",
     })
     expect(view.steps.map((step) => step.id)).toEqual(["paid", "kba", "outcome"])
+  })
+
+  it("says how many plates the vehicle has, so a correction asks for the right codes", async () => {
+    expect((await getStatusByToken(deps, TOKEN)).plateCount).toBe(2)
   })
 
   it("carries no security code and no full VIN, so the page cannot render one", async () => {
@@ -86,6 +92,81 @@ describe("getStatusByToken", () => {
       expect(view.documents).toEqual([])
       expect(error.mock.calls.flat().join(" ")).toContain("[status]")
       error.mockRestore()
+    })
+  })
+
+  describe("what cancelling a 5b would do", () => {
+    const viewOf = (status: Application["status"]) => {
+      const order = anApplication({ status })
+      return getStatusByToken({ repository: { findByStatusToken: async () => order }, documents: storeOf(), payments }, TOKEN)
+    }
+
+    it("states what the order would get back and what the fee keeps, before the customer decides", async () => {
+      expect((await viewOf("failed_correctable")).cancellation).toEqual({ returned: Money.ofCents(5000), retained: Money.ofCents(1999) })
+    })
+
+    it.each(["submitted_to_kba", "completed", "failed_final", "cancelled"] as const)("states nothing for an order that is %s", async (status) => {
+      expect((await viewOf(status)).cancellation).toBeUndefined()
+    })
+  })
+
+  describe("whether a 5b can still be corrected", () => {
+    const orderAt5b = anApplication({ status: "failed_correctable" })
+    const viewWith = (getPayment: PaymentProvider["getPayment"]) =>
+      getStatusByToken({ repository: { findByStatusToken: async () => orderAt5b }, documents: storeOf(), payments: { getPayment } }, TOKEN)
+    const held = async () => ({ id: "p", status: "held" as const, amount: Money.ofCents(6999), captured: Money.ofCents(0), refunded: Money.ofCents(0) })
+
+    it("can while its money is whole, held or taken in full", async () => {
+      expect((await viewWith(held)).correctable).toBe(true)
+      expect((await viewWith(paymentOf(6999))).correctable).toBe(true)
+    })
+
+    it("cannot once part of its money has gone back: only the cancel is left to finish", async () => {
+      expect((await viewWith(paymentOf(6999, 5000))).correctable).toBe(false)
+      expect((await viewWith(paymentOf(1999))).correctable).toBe(false)
+    })
+
+    it("offers it when the provider cannot be asked, since correcting checks again", async () => {
+      expect((await viewWith(async () => Promise.reject(new Error("Stripe is down")))).correctable).toBe(true)
+    })
+
+    it.each(["submitted_to_kba", "completed", "failed_final", "cancelled"] as const)("says nothing for an order that is %s", async (status) => {
+      const order = anApplication({ status })
+      const view = await getStatusByToken({ repository: { findByStatusToken: async () => order }, documents: storeOf(), payments }, TOKEN)
+
+      expect(view.correctable).toBeUndefined()
+    })
+  })
+
+  describe("why an order failed", () => {
+    const CATALOGUE = { 101: { class: "correctable" as const, reason: "Die FIN wurde nicht akzeptiert." } }
+    const viewOf = (overrides: Parameters<typeof anApplication>[0]) => {
+      const failed = anApplication(overrides)
+      return getStatusByToken(
+        { repository: { findByStatusToken: async () => failed }, documents: storeOf(), payments, errorCatalogue: CATALOGUE },
+        TOKEN,
+      )
+    }
+
+    it("gives the catalogue's wording for the KBA's code", async () => {
+      const view = await viewOf({ status: "failed_correctable", failure: { kind: "kbaError", code: 101 } })
+
+      expect(view.failureReason).toBe("Die FIN wurde nicht akzeptiert.")
+    })
+
+    it("gives a general wording for a code the catalogue lacks, and never the code", async () => {
+      const view = await viewOf({ status: "failed_correctable", failure: { kind: "kbaError", code: 987 } })
+
+      expect(view.failureReason).toBeTruthy()
+      expect(view.failureReason).not.toContain("987")
+    })
+
+    it("still gives a wording for a failure stored before failures were kept", async () => {
+      expect((await viewOf({ status: "failed_final" })).failureReason).toBeTruthy()
+    })
+
+    it.each(["submitted_to_kba", "completed", "cancelled"] as const)("gives none for an order that is %s", async (status) => {
+      expect((await viewOf({ status, failure: { kind: "kbaError", code: 101 } })).failureReason).toBeUndefined()
     })
   })
 
