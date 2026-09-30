@@ -69,6 +69,34 @@ describe("de-registration funnel", () => {
       expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Können Sie online abmelden?")
     })
 
+    describe("J11, a special plate", () => {
+      const special = () => screen.getByRole("checkbox", { name: /E-, H- oder Saisonkennzeichen/ })
+
+      it("says the application may be rejected once the customer names such a plate, and says nothing before", async () => {
+        const { user } = setup()
+        expect(screen.queryByText(/abgelehnt werden/)).not.toBeInTheDocument()
+
+        await user.click(special())
+
+        expect(screen.getByRole("status")).toHaveTextContent(/abgelehnt werden/)
+        await user.click(special())
+        expect(screen.queryByText(/abgelehnt werden/)).not.toBeInTheDocument()
+      })
+
+      it("does not stop the customer: it is a warning, not a gate", async () => {
+        const { user, actions } = setup()
+        await user.click(screen.getByRole("radio", { name: /^Zwei Kennzeichen/ }))
+        await user.click(screen.getByRole("radio", { name: "Ja, beides liegt mir vor" }))
+        await user.type(screen.getByLabelText("Ortskürzel Ihres Kennzeichens"), "AAA")
+        await user.click(special())
+
+        await user.click(screen.getByRole("button", { name: "Weiter" }))
+
+        expect(actions.checkEligibility).toHaveBeenCalledWith("AAA")
+        expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Ihr Fahrzeug")
+      })
+    })
+
     it("warns before any data entry when the authority processes by hand", async () => {
       const { user } = setup({
         checkEligibility: jest.fn(async (prefix: string) => ({ ok: true as const, prefix, ikfzStatus: "offline" as const })),
