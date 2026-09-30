@@ -123,6 +123,18 @@ describe("correctOrder", () => {
     expect((await stored(reference)).status).toBe("failed_correctable")
   })
 
+  it("says it is not possible, changing nothing, once the order's money has already gone back", async () => {
+    const { deps, stored, reference, token } = await correctableAtTheKba()
+    jest.spyOn(deps.mailer, "send").mockRejectedValueOnce(new Error("Resend is down"))
+    expect(await cancelOrder(deps, headers, token)).toEqual({ status: "failed" })
+    const correct = jest.spyOn(deps.registration, "correct")
+
+    expect(await correctOrder(deps, headers, token, fix)).toEqual({ status: "notPossible" })
+
+    expect(correct).not.toHaveBeenCalled()
+    expect((await stored(reference)).status).toBe("failed_correctable")
+  })
+
   it("answers alike for a link that opens nothing and for an order that cannot be corrected", async () => {
     const flow = setupFlow()
     const reference = await flow.checkoutAndPay("card")

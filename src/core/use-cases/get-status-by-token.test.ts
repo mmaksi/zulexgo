@@ -4,6 +4,7 @@ import type { ApplicationReference } from "@/src/core/domain/application-referen
 import type { DocumentRef } from "@/src/core/domain/document"
 import { Money } from "@/src/core/domain/money"
 import { TokenInvalid } from "@/src/core/errors/token-invalid"
+import type { PaymentProvider } from "@/src/core/ports/payment-provider"
 import { getStatusByToken } from "./get-status-by-token"
 
 const TOKEN = "faketoken-status"
@@ -106,6 +107,34 @@ describe("getStatusByToken", () => {
 
     it.each(["submitted_to_kba", "completed", "failed_final", "cancelled"] as const)("states nothing for an order that is %s", async (status) => {
       expect((await viewOf(status)).cancellation).toBeUndefined()
+    })
+  })
+
+  describe("whether a 5b can still be corrected", () => {
+    const orderAt5b = anApplication({ status: "failed_correctable" })
+    const viewWith = (getPayment: PaymentProvider["getPayment"]) =>
+      getStatusByToken({ repository: { findByStatusToken: async () => orderAt5b }, documents: storeOf(), payments: { getPayment } }, TOKEN)
+    const held = async () => ({ id: "p", status: "held" as const, amount: Money.ofCents(6999), captured: Money.ofCents(0), refunded: Money.ofCents(0) })
+
+    it("can while its money is whole, held or taken in full", async () => {
+      expect((await viewWith(held)).correctable).toBe(true)
+      expect((await viewWith(paymentOf(6999))).correctable).toBe(true)
+    })
+
+    it("cannot once part of its money has gone back: only the cancel is left to finish", async () => {
+      expect((await viewWith(paymentOf(6999, 5000))).correctable).toBe(false)
+      expect((await viewWith(paymentOf(1999))).correctable).toBe(false)
+    })
+
+    it("offers it when the provider cannot be asked, since correcting checks again", async () => {
+      expect((await viewWith(async () => Promise.reject(new Error("Stripe is down")))).correctable).toBe(true)
+    })
+
+    it.each(["submitted_to_kba", "completed", "failed_final", "cancelled"] as const)("says nothing for an order that is %s", async (status) => {
+      const order = anApplication({ status })
+      const view = await getStatusByToken({ repository: { findByStatusToken: async () => order }, documents: storeOf(), payments }, TOKEN)
+
+      expect(view.correctable).toBeUndefined()
     })
   })
 

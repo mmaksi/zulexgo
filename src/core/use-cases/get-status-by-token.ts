@@ -5,7 +5,7 @@ import type { LicencePlate } from "@/src/core/domain/licence-plate"
 import type { Money } from "@/src/core/domain/money"
 import { PROCESSING_FEE } from "@/src/core/domain/pricing"
 import { reasonFor, type RejectionCatalogue } from "@/src/core/domain/rejection-catalogue"
-import { retainedOf } from "@/src/core/domain/refund-policy"
+import { isWhole, retainedOf } from "@/src/core/domain/refund-policy"
 import { TokenInvalid } from "@/src/core/errors/token-invalid"
 import type { ApplicationRepository } from "@/src/core/ports/application-repository"
 import type { DocumentStore } from "@/src/core/ports/document-store"
@@ -29,6 +29,8 @@ export interface StatusView {
   readonly documents: readonly DocumentRef[]
   /** For an order at 5b or 5c: what went wrong, in our words. */
   readonly failureReason?: string
+  /** For an order at 5b: whether it can still be corrected. Not once part of its money has gone back (a cancel begun and not finished). */
+  readonly correctable?: boolean
   /** For an order at 5b: what cancelling would return and what the fee would keep, shown beside the cancel button. */
   readonly cancellation?: { readonly returned: Money; readonly retained: Money }
   /** For an order that ended without a result: what went back and what we kept. Absent when the provider cannot say. */
@@ -56,6 +58,7 @@ export async function getStatusByToken(
     vinEnding: request.vin.slice(-VIN_VISIBLE),
     steps: customerSteps(application),
     failureReason: failureReasonOf(application, deps.errorCatalogue),
+    correctable: status === "failed_correctable" ? await correctableOf(deps.payments, application) : undefined,
     cancellation: status === "failed_correctable" ? { returned: application.payment.total.subtract(PROCESSING_FEE), retained: PROCESSING_FEE } : undefined,
     documents: await documentsOf(deps.documents, application),
     refund: await refundOf(deps.payments, application),
@@ -82,6 +85,16 @@ async function documentsOf(store: Pick<DocumentStore, "list">, { reference, stat
   } catch (error) {
     console.error(`[status] ${reference}: documents not listed: ${error instanceof Error ? error.name : "unknown error"}`)
     return []
+  }
+}
+
+/** An order whose provider cannot be asked is offered the form: correcting asks again before it sends anything. */
+async function correctableOf(payments: Pick<PaymentProvider, "getPayment">, { payment }: Application): Promise<boolean> {
+  try {
+    const paid = await payments.getPayment(payment.id)
+    return isWhole({ ...paid, total: paid.amount })
+  } catch {
+    return true
   }
 }
 

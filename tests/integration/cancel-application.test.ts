@@ -108,14 +108,18 @@ describe("cancelApplication", () => {
     expect(flow.emails().filter((name) => name === "refundIssued")).toHaveLength(1)
   })
 
-  it("loses to a poller tick that changed the order first, rather than overwriting it, and completes when asked again", async () => {
+  it("loses to a change made since it read the order, before any money moves, and completes when asked again", async () => {
     const flow = await correctableBeforeCapture()
     const token = await tokenOf(flow)
     const stale = (await flow.deps.repository.findByStatusToken(token))!
     await flow.deps.repository.update(stale)
     jest.spyOn(flow.deps.repository, "findByStatusToken").mockResolvedValueOnce(stale)
 
+    const before = await flow.payment(flow.reference)
+
     await expect(cancelApplication(flow.deps, token)).rejects.toBeInstanceOf(StaleApplication)
+    expect(await flow.payment(flow.reference)).toEqual(before)
+    expect(flow.emails()).not.toContain("refundIssued")
 
     await cancelApplication(flow.deps, token)
     expect((await flow.stored(flow.reference)).status).toBe("cancelled")

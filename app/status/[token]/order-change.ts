@@ -3,6 +3,7 @@ import type { CorrectionInput } from "@/src/core/domain/correction"
 import { RATE_LIMITS } from "@/src/core/domain/rate-limits"
 import { GatewayUnavailable } from "@/src/core/errors/gateway-unavailable"
 import { InvalidTransition } from "@/src/core/errors/invalid-transition"
+import { PaymentNoLongerWhole } from "@/src/core/errors/payment-no-longer-whole"
 import { TokenInvalid } from "@/src/core/errors/token-invalid"
 import { ValidationError } from "@/src/core/errors/validation-error"
 import { cancelApplication } from "@/src/core/use-cases/cancel-application"
@@ -65,7 +66,7 @@ export async function correctOrder(deps: Dependencies, headers: Headers, token: 
   try {
     return (await correctApplication(deps, token, input)) === "resubmitted" ? { status: "done" } : { status: "refused" }
   } catch (error) {
-    if (error instanceof TokenInvalid || error instanceof InvalidTransition) return { status: "notPossible" }
+    if (error instanceof TokenInvalid || error instanceof InvalidTransition || error instanceof PaymentNoLongerWhole) return { status: "notPossible" }
     if (error instanceof ValidationError) return invalid(error, input)
     if (error instanceof GatewayUnavailable) return { status: "unavailable" }
     // By name only: the message may hold an address or a code.

@@ -4,6 +4,9 @@ import { GatewayUnavailable } from "@/src/core/errors/gateway-unavailable"
 import { InvalidTransition } from "@/src/core/errors/invalid-transition"
 import { TokenInvalid } from "@/src/core/errors/token-invalid"
 import { ValidationError } from "@/src/core/errors/validation-error"
+import { PaymentNoLongerWhole } from "@/src/core/errors/payment-no-longer-whole"
+import { StaleApplication } from "@/src/core/errors/stale-application"
+import { cancelApplication } from "@/src/core/use-cases/cancel-application"
 import { correctApplication } from "@/src/core/use-cases/correct-application"
 import { CODES, setupFlow } from "./flow-harness"
 
@@ -90,7 +93,7 @@ describe("correctApplication, an order the service holds", () => {
 
     expect(await correctApplication(flow.deps, flow.token, newVin)).toBe("refused")
 
-    expect(await flow.stored(flow.reference)).toEqual(before)
+    expect(await flow.stored(flow.reference)).toEqual({ ...before, version: expect.any(Number) })
     expect(flow.emails()).toEqual(emailsBefore)
   })
 
@@ -100,7 +103,7 @@ describe("correctApplication, an order the service holds", () => {
     const before = await flow.stored(flow.reference)
 
     await expect(correctApplication(flow.deps, flow.token, newVin)).rejects.toBeInstanceOf(GatewayUnavailable)
-    expect(await flow.stored(flow.reference)).toEqual(before)
+    expect(await flow.stored(flow.reference)).toEqual({ ...before, version: expect.any(Number) })
 
     expect(await correctApplication(flow.deps, flow.token, newVin)).toBe("resubmitted")
   })
@@ -163,6 +166,72 @@ describe("correctApplication, an order the service holds", () => {
     for (const code of [...CODES, newVin.certificate]) expect(everything).not.toContain(code)
     warn.mockRestore()
     error.mockRestore()
+  })
+})
+
+describe("correctApplication, against a cancel that got part of the way", () => {
+  /** A cancel that moved the money and then failed on the refund email: the order is still at 5b, its money already gone back. */
+  async function halfCancelled(flow: Awaited<ReturnType<typeof refusedByKba>>) {
+    jest.spyOn(flow.deps.mailer, "send").mockRejectedValueOnce(new Error("Resend is down"))
+    await expect(cancelApplication(flow.deps, flow.token)).rejects.toThrow("Resend is down")
+    expect((await flow.stored(flow.reference)).status).toBe("failed_correctable")
+  }
+
+  it.each([
+    ["a card that was taken and refunded down to the fee", refusedByKba],
+    ["a card held and captured down to the fee", refusedAtSubmission],
+  ])("refuses to put an order back at the KBA once its money has gone back: %s", async (_, reach) => {
+    const flow = await reach()
+    await halfCancelled(flow as Awaited<ReturnType<typeof refusedByKba>>)
+    const emailsBefore = flow.emails()
+
+    await expect(correctApplication(flow.deps, flow.token, newVin)).rejects.toBeInstanceOf(PaymentNoLongerWhole)
+
+    expect(flow.deps.registration.corrections).toEqual([])
+    expect(flow.deps.registration.submissions.length).toBe(reach === refusedAtSubmission ? 0 : 1)
+    expect(flow.emails()).toEqual(emailsBefore)
+    expect((await flow.stored(flow.reference)).status).toBe("failed_correctable")
+  })
+
+  it("leaves the customer able to finish the cancel, which then completes as if nothing had failed", async () => {
+    const flow = await refusedByKba()
+    await halfCancelled(flow)
+
+    await cancelApplication(flow.deps, flow.token)
+
+    expect((await flow.stored(flow.reference)).status).toBe("cancelled")
+    expect(flow.emails().filter((name) => name === "refundIssued")).toHaveLength(1)
+  })
+
+  it("still corrects an order whose money is untouched, whatever its state", async () => {
+    const flow = await refusedAtSubmission()
+    expect((await flow.payment(flow.reference)).status).toBe("held")
+
+    expect(await correctApplication(flow.deps, flow.token, newVin)).toBe("resubmitted")
+  })
+
+  it("refuses an order whose hold lapsed, since resubmitting it would file an order nobody paid for", async () => {
+    const warn = jest.spyOn(console, "warn").mockImplementation(() => {})
+    const flow = await refusedAtSubmission()
+    flow.clock.advance(8 * 24 * 60 * 60 * 1000)
+
+    await expect(correctApplication(flow.deps, flow.token, newVin)).rejects.toBeInstanceOf(PaymentNoLongerWhole)
+    warn.mockRestore()
+  })
+})
+
+describe("correctApplication, against another change made at the same time", () => {
+  it("sends nothing to the service when the order changed since it was read, and lets the customer ask again", async () => {
+    const flow = await refusedByKba()
+    const stale = (await flow.deps.repository.findByStatusToken(flow.token))!
+    await flow.deps.repository.update(stale)
+    jest.spyOn(flow.deps.repository, "findByStatusToken").mockResolvedValueOnce(stale)
+
+    await expect(correctApplication(flow.deps, flow.token, newVin)).rejects.toBeInstanceOf(StaleApplication)
+
+    expect(flow.deps.registration.corrections).toEqual([])
+    expect(await correctApplication(flow.deps, flow.token, newVin)).toBe("resubmitted")
+    expect(flow.deps.registration.corrections).toHaveLength(1)
   })
 })
 

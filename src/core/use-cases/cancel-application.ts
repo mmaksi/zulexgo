@@ -9,18 +9,22 @@ import { settlePayment } from "./settle-payment"
  * email 6 says how much. Only an order waiting for a correction can be
  * cancelled; asking again for one already cancelled does nothing.
  *
- * Money moves first, then the email, then the status, so a failure anywhere
- * leaves the order at 5b for the customer to ask again: settlement recognises
- * what it already did, and email 6 is keyed by the order, so nothing is done
- * or sent twice.
+ * The order is claimed first, by a version-checked write, so a change made
+ * since it was read (a correction in another tab, a poll tick) fails the
+ * cancel before any money moves. Then money moves, then the email, then the
+ * status, so a failure anywhere leaves the order at 5b for the customer to ask
+ * again: settlement recognises what it already did, and email 6 is keyed by the
+ * order, so nothing is done or sent twice. A correction refuses an order whose
+ * money is no longer whole, so a cancel left half done can only be finished.
  */
 export async function cancelApplication(deps: Dependencies, token: string): Promise<void> {
   const application = token ? await deps.repository.findByStatusToken(token) : undefined
   if (!application) throw new TokenInvalid()
   if (application.status === "cancelled") return
 
-  const cancelled = { ...applyEvent(application, "cancelledByCustomer", deps.clock.now()), polling: { attempts: application.polling.attempts } }
-  const settled = await settlePayment(deps, application, { type: "cancelled" })
+  const claimed = await deps.repository.update(application)
+  const cancelled = { ...applyEvent(claimed, "cancelledByCustomer", deps.clock.now()), polling: { attempts: claimed.polling.attempts } }
+  const settled = await settlePayment(deps, claimed, { type: "cancelled" })
   if (settled.returned.cents > 0) await mailRefund(deps, cancelled, settled.returned)
   await deps.repository.update(cancelled)
 }

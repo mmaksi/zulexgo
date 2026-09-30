@@ -151,11 +151,18 @@ function OutcomeBlock({
           <h2 id="status-options" className="text-h4 text-grau-dark">
             Wie möchten Sie fortfahren?
           </h2>
-          <div className="flex flex-col gap-4">
-            <h3 className="text-subtitle text-grau-dark">Angaben korrigieren</h3>
-            <p className="text-body text-grau">Korrigieren Sie Ihre Angaben und reichen Sie den Antrag erneut ein. Das kostet nichts extra.</p>
-            <CorrectOrder action={correctAction} plateCount={view.plateCount} />
-          </div>
+          {view.correctable === false ? (
+            <Alert role="status" variant="warning">
+              Ihre Stornierung wurde begonnen, aber noch nicht abgeschlossen. Ein Teil Ihres Geldes ist schon unterwegs, deshalb lässt sich
+              der Antrag nicht mehr korrigieren. Bitte schließen Sie die Stornierung ab.
+            </Alert>
+          ) : (
+            <div className="flex flex-col gap-4">
+              <h3 className="text-subtitle text-grau-dark">Angaben korrigieren</h3>
+              <p className="text-body text-grau">Korrigieren Sie Ihre Angaben und reichen Sie den Antrag erneut ein. Das kostet nichts extra.</p>
+              <CorrectOrder action={correctAction} plateCount={view.plateCount} />
+            </div>
+          )}
           {view.cancellation ? (
             <div className="flex flex-col gap-4">
               <h3 className="text-subtitle text-grau-dark">Oder stornieren</h3>

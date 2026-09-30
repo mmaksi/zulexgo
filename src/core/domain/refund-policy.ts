@@ -41,6 +41,10 @@ export interface PaymentRecord {
 export const retainedOf = ({ captured, refunded }: Pick<PaymentRecord, "captured" | "refunded">): Money =>
   refunded.isGreaterThan(captured) ? NOTHING : captured.subtract(refunded)
 
+/** Nothing of the payment has gone back yet: still held, or captured in full and not refunded. */
+export const isWhole = (payment: PaymentRecord): boolean =>
+  payment.status === "held" || (payment.status === "captured" && retainedOf(payment).equals(payment.total))
+
 /**
  * The decision an earlier run of the same outcome already carried out, read
  * off the payment, so that a rerun (the email after it failed and the whole
