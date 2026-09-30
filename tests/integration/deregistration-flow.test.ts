@@ -183,6 +183,58 @@ describe("de-registration flow on fakes", () => {
       expect(new Set(submit.mock.calls.map(([, key]) => key)).size).toBe(1)
     })
 
+    it.each([
+      ["taking the money", (flow: ReturnType<typeof setup>) => jest.spyOn(flow.deps.payments, "capture").mockRejectedValueOnce(new Error("Stripe is down"))],
+      ["sending email 4", (flow: ReturnType<typeof setup>) => jest.spyOn(flow.deps.mailer, "send").mockImplementation(async ({ template }) => {
+        if (template.name === "submittedToKba") throw new Error("Resend is down")
+      })],
+    ])("backs off when %s fails after the application was filed, instead of retrying it every tick (D4's twin)", async (_, breakIt) => {
+      const error = jest.spyOn(console, "error").mockImplementation(() => {})
+      const flow = setup()
+      const reference = await flow.payForCheckout("card")
+      const broken = breakIt(flow)
+
+      await expect(flow.confirm(reference)).rejects.toThrow()
+
+      expect(await flow.poll(0)).toEqual({ checked: 0, failed: 0 })
+      expect((await flow.stored(reference)).status).toBe("submitted_and_paid")
+      broken.mockRestore()
+
+      await flow.poll(1)
+
+      expect((await flow.stored(reference)).status).toBe("submitted_to_kba")
+      expect(flow.deps.registration.submissions).toHaveLength(1)
+      error.mockRestore()
+    })
+
+    it("does not take a 400 on a retry as proof that nothing was filed: the first attempt may have been accepted, so it never becomes a correction that files a second application", async () => {
+      const warn = jest.spyOn(console, "warn").mockImplementation(() => {})
+      const flow = setup()
+      flow.deps.registration.failNext("submit", new GatewayUnavailable())
+      const reference = await flow.checkoutAndPay("card")
+
+      flow.deps.registration.failNext("submit", new GatewayRejected())
+      await flow.poll(2)
+
+      expect((await flow.stored(reference)).status).toBe("submitted_and_paid")
+      expect(flow.emails()).toEqual(["orderConfirmation"])
+      expect((await flow.stored(reference)).failure).toBeUndefined()
+
+      await keepServiceDown(flow, 24)
+      expect((await flow.stored(reference)).status).toBe("failed_final")
+      expect(warn.mock.calls.flat().join(" ")).toContain(reference)
+      warn.mockRestore()
+    })
+
+    it("still sends data refused at the first attempt straight to a correction", async () => {
+      const flow = setup()
+      flow.deps.registration.failNext("submit", new GatewayRejected())
+
+      const reference = await flow.checkoutAndPay("card")
+
+      expect((await flow.stored(reference)).status).toBe("failed_correctable")
+    })
+
     it("then files the application when the service comes back, however late within the day", async () => {
       const flow = setup()
       flow.deps.registration.failNext("submit", new GatewayUnavailable())

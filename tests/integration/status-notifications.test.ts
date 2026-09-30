@@ -110,7 +110,7 @@ describe("status notifications: one email per transition", () => {
 })
 
 describe("status notifications: an email that could not be sent is not lost", () => {
-  it("email 4: the transition waits, the next tick sends it once, and only then is the KBA asked about", async () => {
+  it("email 4: the transition waits, the next tick after the backoff sends it once, and only then is the KBA asked about", async () => {
     const flow = setupFlow()
     failMailerOnce(flow, "submittedToKba")
     const submit = jest.spyOn(flow.deps.registration, "submitDeregistration")
@@ -119,8 +119,9 @@ describe("status notifications: an email that could not be sent is not lost", ()
     await expect(flow.confirm(reference)).rejects.toThrow("Resend refused")
     expect((await flow.stored(reference)).status).toBe("submitted_and_paid")
     expect(flow.emails()).toEqual(["orderConfirmation"])
+    expect(await flow.poll(0)).toEqual({ checked: 0, failed: 0 })
 
-    await flow.poll(0)
+    await flow.poll(1)
 
     expect((await flow.stored(reference)).status).toBe("submitted_to_kba")
     expect(flow.emails()).toEqual(["orderConfirmation", "submittedToKba"])

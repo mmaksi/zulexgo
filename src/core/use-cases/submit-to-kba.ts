@@ -35,7 +35,7 @@ export async function submitToKba(deps: Dependencies, application: Application):
     try {
       ;({ applicationId } = await deps.registration.submitDeregistration(application.request, application.idempotencyKey))
     } catch (error) {
-      await handleFailure(deps, application, toFailure(error), resubmitLater(error))
+      await handleFailure(deps, application, toFailure(error, application), resubmitLater(error))
       // A refusal or an outage is expected; anything else (a wrong API key, an answer we cannot read) is rescheduled like them but left loud.
       if (error instanceof GatewayUnavailable || error instanceof GatewayRejected) return
       throw error
@@ -45,20 +45,38 @@ export async function submitToKba(deps: Dependencies, application: Application):
     filed = await deps.repository.update({ ...application, zulexApplicationId: applicationId })
   }
 
+  // Whatever fails from here, the application is already filed: back off before the next tick instead of retrying every minute
+  // (an outage of the provider or the mailer would otherwise keep every such order first in the queue), and let the error show.
+  await completeFiling(deps, filed).catch(async (error) => {
+    await deps.repository.update(afterFailure(deps, filed)).catch(() => undefined)
+    throw error
+  })
+}
+
+async function completeFiling(deps: Dependencies, filed: Application): Promise<void> {
   // Launch plan Q7: an online authority answers within hours, so its order is paid for once Zulex has it; a hand-processed one stays held.
-  if (application.ikfzStatus === "online") await captureHold(deps, filed)
+  if (filed.ikfzStatus === "online") await captureHold(deps, filed)
 
   const now = deps.clock.now()
   const submitted: Application = {
     ...applyEvent(filed, "submittedToKba", now),
     retryAttempts: 0,
-    polling: { attempts: 0, nextPollAt: nextPollAt({ ikfzStatus: application.ikfzStatus, attempts: 0, now }) },
+    polling: { attempts: 0, nextPollAt: nextPollAt({ ikfzStatus: filed.ikfzStatus, attempts: 0, now }) },
   }
   // Email before the status: an email that fails leaves the application at status 1, still due and already filed,
   // so the next tick only sends it again. The other order would lose the email for good.
   await mailCustomer(deps, submitted, "submittedToKba")
   await recordRegistration(deps, await deps.repository.update(submitted), filed.zulexApplicationId!)
 }
+
+/** `polling.attempts` counts failed tries at these steps, so it indexes the delay: a minute at first, then the online poll table. */
+const afterFailure = (deps: Dependencies, filed: Application): Application => ({
+  ...filed,
+  polling: {
+    attempts: filed.polling.attempts + 1,
+    nextPollAt: nextPollAt({ ikfzStatus: "online", attempts: filed.polling.attempts, now: deps.clock.now() }),
+  },
+})
 
 /** For reconciling payments with registration fees only, so a provider failure is logged, never allowed to stop the application. */
 async function recordRegistration(deps: Dependencies, application: Application, registrationId: string) {
@@ -69,9 +87,14 @@ async function recordRegistration(deps: Dependencies, application: Application, 
   }
 }
 
-/** Only a refusal is known not to have filed anything: whatever else went wrong, the service may hold the application. */
-function toFailure(error: unknown): Failure {
-  return error instanceof GatewayRejected ? { kind: "rejected" } : { kind: "unavailable" }
+/**
+ * Only a refusal on the first attempt is known not to have filed anything.
+ * Whatever else went wrong, the service may hold the application, and so may
+ * it after a retry: a 400 answering a replay says nothing about the attempt
+ * before it (launch plan Q23), so it is treated as one more unconfirmed try.
+ */
+function toFailure(error: unknown, { retryAttempts }: Application): Failure {
+  return error instanceof GatewayRejected && retryAttempts === 0 ? { kind: "rejected" } : { kind: "unavailable" }
 }
 
 /** `retryAttempts` counts resubmissions, so it indexes the delay before the next: a minute at first, then the online poll table. */
