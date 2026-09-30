@@ -8,6 +8,8 @@ import { InMemoryApplicationRepository } from "@/src/adapters/repository/fake/in
 import { InMemoryDocumentStore } from "@/src/adapters/storage/fake/in-memory-document-store"
 import { getStatusByToken } from "@/src/core/use-cases/get-status-by-token"
 
+jest.mock("next/navigation", () => ({ useRouter: () => ({ refresh: jest.fn() }) }))
+
 /**
  * CLAUDE.md non-negotiable: security codes and status tokens never appear in
  * a rendered status page. Checked for an application in every status, as the
@@ -17,13 +19,14 @@ const seeded = seedFor("dev")
 const repository = new InMemoryApplicationRepository(seeded)
 const documents = new InMemoryDocumentStore(seedDocumentsFor("dev"))
 const payments = new FakePaymentProvider(new FakeClock())
+const cancelAction = async () => ({ status: "done" as const })
 
 describe("the rendered status page", () => {
   it.each(seeded.map(({ application, statusToken }) => [application.status, application, statusToken] as const))(
     "shows no security code, token or full VIN at %s",
     async (_, application, token) => {
       const view = await getStatusByToken({ repository, documents, payments }, token)
-      const html = renderToStaticMarkup(createElement(StatusView, { view, documentHref: (id: string) => `/status/${token}/documents/${id}` }))
+      const html = renderToStaticMarkup(createElement(StatusView, { view, documentHref: (id: string) => `/status/${token}/documents/${id}`, cancelAction }))
       const { codes, vin } = application.request
 
       expect(html).toContain(application.reference)
@@ -39,7 +42,7 @@ describe("the rendered status page", () => {
   it("offers the seeded confirmation for download on the completed order, and no download anywhere else", async () => {
     for (const { application, statusToken } of seeded) {
       const view = await getStatusByToken({ repository, documents, payments }, statusToken)
-      const html = renderToStaticMarkup(createElement(StatusView, { view, documentHref: (id: string) => `/status/${statusToken}/documents/${id}` }))
+      const html = renderToStaticMarkup(createElement(StatusView, { view, documentHref: (id: string) => `/status/${statusToken}/documents/${id}`, cancelAction }))
 
       expect(html.includes("/documents/")).toBe(application.status === "completed")
     }

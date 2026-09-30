@@ -4,12 +4,12 @@ import { SUPPORT_EMAIL } from "@/src/core/domain/contact"
 import type { CustomerStep } from "@/src/core/domain/customer-steps"
 import type { DocumentKind } from "@/src/core/domain/document"
 import { formatEuros } from "@/src/core/domain/money"
-import { PROCESSING_FEE } from "@/src/core/domain/pricing"
 import type { StatusView as View } from "@/src/core/use-cases/get-status-by-token"
 import { cn } from "@/src/lib/utils"
 import { Alert } from "@/src/ui/alert"
 import { buttonLink } from "@/src/ui/button"
 import { PlateFrame } from "@/src/ui/plate-frame"
+import { CancelOrder, type CancelOrderAction } from "./cancel-order"
 
 /** Titles are the customer statuses, status lines the internal labels (launch plan § Context). */
 function describe(step: CustomerStep, failureReason?: string): { title: string; line?: string; text?: string } {
@@ -52,9 +52,18 @@ const when = (date: Date) =>
 /**
  * site-contract §2.6: plate and the end of the VIN, never a security code; a
  * vertical stepper at every size. `documentHref` builds a download link, the
- * one place a page repeats its own token.
+ * one place a page repeats its own token; `cancelAction` is the server action
+ * bound to it.
  */
-export function StatusView({ view, documentHref }: { view: View; documentHref: (documentId: string) => string }) {
+export function StatusView({
+  view,
+  documentHref,
+  cancelAction,
+}: {
+  view: View
+  documentHref: (documentId: string) => string
+  cancelAction: CancelOrderAction
+}) {
   const { licencePlate } = view
   return (
     <div className="flex flex-col gap-(--heading-space-above)">
@@ -86,7 +95,7 @@ export function StatusView({ view, documentHref }: { view: View; documentHref: (
         </ol>
       </section>
 
-      <OutcomeBlock view={view} documentHref={documentHref} />
+      <OutcomeBlock view={view} documentHref={documentHref} cancelAction={cancelAction} />
 
       <section aria-labelledby="status-help" className="measure flex flex-col gap-2">
         <h2 id="status-help" className="text-h4 text-grau-dark">
@@ -115,8 +124,16 @@ function MailLink() {
   )
 }
 
-/** site-contract §2.6: what to do next, by outcome. Correcting and cancelling arrive with M6, so for now they go through support. */
-function OutcomeBlock({ view, documentHref }: { view: View; documentHref: (documentId: string) => string }) {
+/** site-contract §2.6: what to do next, by outcome. */
+function OutcomeBlock({
+  view,
+  documentHref,
+  cancelAction,
+}: {
+  view: View
+  documentHref: (documentId: string) => string
+  cancelAction: CancelOrderAction
+}) {
   const outcome = view.steps.find((step) => step.id === "outcome")?.outcome
   if (!outcome) return null
 
@@ -125,16 +142,18 @@ function OutcomeBlock({ view, documentHref }: { view: View; documentHref: (docum
       return <Documents view={view} documentHref={documentHref} />
     case "failed_correctable":
       return (
-        <Alert variant="warning" className="measure flex flex-col gap-2">
-          <p>
+        <section aria-labelledby="status-options" className="measure flex flex-col gap-6">
+          <h2 id="status-options" className="text-h4 text-grau-dark">
+            Wie möchten Sie fortfahren?
+          </h2>
+          <Alert variant="warning">
             Schreiben Sie uns an <MailLink /> und nennen Sie Ihre Auftragsnummer {view.reference}. Wir korrigieren den Antrag gemeinsam
             mit Ihnen. Sie zahlen nur die Differenz, falls Mehrkosten entstehen.
-          </p>
-          <p>
-            Sie können den Antrag auch stornieren. Wir behalten dann die Bearbeitungsgebühr von {formatEuros(PROCESSING_FEE)} ein und
-            erstatten den Rest.
-          </p>
-        </Alert>
+          </Alert>
+          {view.cancellation ? (
+            <CancelOrder action={cancelAction} returned={formatEuros(view.cancellation.returned)} retained={formatEuros(view.cancellation.retained)} />
+          ) : null}
+        </section>
       )
     case "failed_final":
     case "cancelled":

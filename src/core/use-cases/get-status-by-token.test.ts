@@ -1,4 +1,5 @@
 import { anApplication, FAKE_REQUEST } from "@/tests/fixtures/applications"
+import type { Application } from "@/src/core/domain/application"
 import type { ApplicationReference } from "@/src/core/domain/application-reference"
 import type { DocumentRef } from "@/src/core/domain/document"
 import { Money } from "@/src/core/domain/money"
@@ -86,6 +87,21 @@ describe("getStatusByToken", () => {
       expect(view.documents).toEqual([])
       expect(error.mock.calls.flat().join(" ")).toContain("[status]")
       error.mockRestore()
+    })
+  })
+
+  describe("what cancelling a 5b would do", () => {
+    const viewOf = (status: Application["status"]) => {
+      const order = anApplication({ status })
+      return getStatusByToken({ repository: { findByStatusToken: async () => order }, documents: storeOf(), payments }, TOKEN)
+    }
+
+    it("states what the order would get back and what the fee keeps, before the customer decides", async () => {
+      expect((await viewOf("failed_correctable")).cancellation).toEqual({ returned: Money.ofCents(5000), retained: Money.ofCents(1999) })
+    })
+
+    it.each(["submitted_to_kba", "completed", "failed_final", "cancelled"] as const)("states nothing for an order that is %s", async (status) => {
+      expect((await viewOf(status)).cancellation).toBeUndefined()
     })
   })
 

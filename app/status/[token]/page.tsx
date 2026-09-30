@@ -4,6 +4,7 @@ import { notFound } from "next/navigation"
 import { StatusRefresh } from "@/app/status/[token]/_components/status-refresh"
 import { StatusView } from "@/app/status/[token]/_components/status-view"
 import { TooManyLookups } from "@/app/status/[token]/_components/too-many-lookups"
+import { cancelOrderAction } from "@/app/status/[token]/actions"
 import { lookupStatus } from "@/app/status/[token]/lookup"
 import { getContainer } from "@/src/config/container"
 
@@ -29,7 +30,11 @@ export default async function StatusPage({ params }: PageProps<"/status/[token]"
   const inProgress = view.steps.some((step) => step.id === "outcome" && step.state === "pending")
   return (
     <>
-      <StatusView view={view} documentHref={(documentId) => `/status/${encodeURIComponent(token)}/documents/${documentId}`} />
+      <StatusView
+        view={view}
+        documentHref={(documentId) => `/status/${encodeURIComponent(token)}/documents/${documentId}`}
+        cancelAction={cancelOrderAction.bind(null, token)}
+      />
       <StatusRefresh active={inProgress} />
     </>
   )

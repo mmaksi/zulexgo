@@ -3,6 +3,7 @@ import type { Application } from "@/src/core/domain/application"
 import { DOCUMENT_KINDS, type DocumentRef } from "@/src/core/domain/document"
 import type { LicencePlate } from "@/src/core/domain/licence-plate"
 import type { Money } from "@/src/core/domain/money"
+import { PROCESSING_FEE } from "@/src/core/domain/pricing"
 import { reasonFor, type RejectionCatalogue } from "@/src/core/domain/rejection-catalogue"
 import { retainedOf } from "@/src/core/domain/refund-policy"
 import { TokenInvalid } from "@/src/core/errors/token-invalid"
@@ -26,6 +27,8 @@ export interface StatusView {
   readonly documents: readonly DocumentRef[]
   /** For an order at 5b or 5c: what went wrong, in our words. */
   readonly failureReason?: string
+  /** For an order at 5b: what cancelling would return and what the fee would keep, shown beside the cancel button. */
+  readonly cancellation?: { readonly returned: Money; readonly retained: Money }
   /** For an order that ended without a result: what went back and what we kept. Absent when the provider cannot say. */
   readonly refund?: { readonly returned: Money; readonly retained: Money }
 }
@@ -50,6 +53,7 @@ export async function getStatusByToken(
     vinEnding: request.vin.slice(-VIN_VISIBLE),
     steps: customerSteps(application),
     failureReason: failureReasonOf(application, deps.errorCatalogue),
+    cancellation: status === "failed_correctable" ? { returned: application.payment.total.subtract(PROCESSING_FEE), retained: PROCESSING_FEE } : undefined,
     documents: await documentsOf(deps.documents, application),
     refund: await refundOf(deps.payments, application),
   }
