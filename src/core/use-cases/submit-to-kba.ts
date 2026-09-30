@@ -1,5 +1,5 @@
 import { applyEvent, type Application } from "@/src/core/domain/application"
-import type { Failure } from "@/src/core/domain/error-algorithm"
+import type { Failure } from "@/src/core/domain/failure"
 import { nextPollAt } from "@/src/core/domain/poll-schedule"
 import { settledDecision } from "@/src/core/domain/refund-policy"
 import { GatewayRejected } from "@/src/core/errors/gateway-rejected"

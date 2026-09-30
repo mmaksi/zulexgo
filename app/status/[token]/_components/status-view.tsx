@@ -12,7 +12,7 @@ import { buttonLink } from "@/src/ui/button"
 import { PlateFrame } from "@/src/ui/plate-frame"
 
 /** Titles are the customer statuses, status lines the internal labels (launch plan § Context). */
-function describe(step: CustomerStep): { title: string; line?: string; text?: string } {
+function describe(step: CustomerStep, failureReason?: string): { title: string; line?: string; text?: string } {
   if (step.id === "paid") {
     return step.state === "current"
       ? { title: "Antrag eingegangen", line: "Zahlung wird bestätigt" }
@@ -29,9 +29,9 @@ function describe(step: CustomerStep): { title: string; line?: string; text?: st
     case "completed":
       return { title: "Abmeldung abgeschlossen", line: "Vorgang abgeschlossen", text: "Ihr Fahrzeug ist abgemeldet. Kfz-Steuer und Versicherung enden automatisch." }
     case "failed_correctable":
-      return { title: "Korrektur erforderlich", line: "Korrektur erforderlich", text: "Die Zulassungsstelle konnte den Antrag mit diesen Angaben nicht bearbeiten." }
+      return { title: "Korrektur erforderlich", line: "Korrektur erforderlich", text: failureReason }
     case "failed_final":
-      return { title: "Antrag abgelehnt", line: "Erstattung", text: "Der Antrag konnte nicht abgeschlossen werden. Eine Korrektur ist nicht möglich." }
+      return { title: "Antrag abgelehnt", line: "Erstattung", text: `${failureReason ?? ""} Eine Korrektur ist nicht möglich.`.trim() }
     case "cancelled":
       return { title: "Antrag storniert", line: "Storniert", text: "Sie haben den Antrag storniert." }
     default:
@@ -81,7 +81,7 @@ export function StatusView({ view, documentHref }: { view: View; documentHref: (
         </h2>
         <ol className="flex max-w-xl flex-col">
           {view.steps.map((step) => (
-            <Step key={step.id} step={step} />
+            <Step key={step.id} step={step} failureReason={view.failureReason} />
           ))}
         </ol>
       </section>
@@ -209,8 +209,8 @@ const STATE_LABELS: Record<CustomerStep["state"], string> = {
   failed: "nicht erfolgreich",
 }
 
-function Step({ step }: { step: CustomerStep }) {
-  const { title, line, text } = describe(step)
+function Step({ step, failureReason }: { step: CustomerStep; failureReason?: string }) {
+  const { title, line, text } = describe(step, failureReason)
   return (
     <li aria-current={step.state === "current" ? "step" : undefined} className={cn("flex gap-4 rounded-md p-4", ROWS[step.state])}>
       <span aria-hidden="true" className={cn("mt-1 size-3 shrink-0 rounded-full", MARKS[step.state])} />

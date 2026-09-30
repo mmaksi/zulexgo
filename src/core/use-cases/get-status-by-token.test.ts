@@ -89,6 +89,38 @@ describe("getStatusByToken", () => {
     })
   })
 
+  describe("why an order failed", () => {
+    const CATALOGUE = { 101: { class: "correctable" as const, reason: "Die FIN wurde nicht akzeptiert." } }
+    const viewOf = (overrides: Parameters<typeof anApplication>[0]) => {
+      const failed = anApplication(overrides)
+      return getStatusByToken(
+        { repository: { findByStatusToken: async () => failed }, documents: storeOf(), payments, errorCatalogue: CATALOGUE },
+        TOKEN,
+      )
+    }
+
+    it("gives the catalogue's wording for the KBA's code", async () => {
+      const view = await viewOf({ status: "failed_correctable", failure: { kind: "kbaError", code: 101 } })
+
+      expect(view.failureReason).toBe("Die FIN wurde nicht akzeptiert.")
+    })
+
+    it("gives a general wording for a code the catalogue lacks, and never the code", async () => {
+      const view = await viewOf({ status: "failed_correctable", failure: { kind: "kbaError", code: 987 } })
+
+      expect(view.failureReason).toBeTruthy()
+      expect(view.failureReason).not.toContain("987")
+    })
+
+    it("still gives a wording for a failure stored before failures were kept", async () => {
+      expect((await viewOf({ status: "failed_final" })).failureReason).toBeTruthy()
+    })
+
+    it.each(["submitted_to_kba", "completed", "cancelled"] as const)("gives none for an order that is %s", async (status) => {
+      expect((await viewOf({ status, failure: { kind: "kbaError", code: 101 } })).failureReason).toBeUndefined()
+    })
+  })
+
   describe("what comes back to the customer", () => {
     const viewOf = (status: "failed_final" | "cancelled" | "completed", getPayment = payments.getPayment) => {
       const ended = anApplication({ status })

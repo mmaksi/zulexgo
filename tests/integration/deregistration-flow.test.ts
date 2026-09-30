@@ -291,6 +291,48 @@ describe("de-registration flow on fakes", () => {
     })
   })
 
+  describe("what the application remembers of a failure, for the page and the email", () => {
+    it("keeps the KBA's code of a correctable and of a non-correctable error", async () => {
+      const { deps, stored, zulexId, poll, checkoutAndPay } = setup()
+      const correctable = await checkoutAndPay()
+      const final = await checkoutAndPay()
+      deps.registration.setStatus(await zulexId(correctable), { state: "failed", error: { code: 101, details: [] }, documents: [] })
+      deps.registration.setStatus(await zulexId(final), { state: "failed", error: { code: 202, details: [] }, documents: [] })
+
+      await poll(1)
+
+      expect((await stored(correctable)).failure).toEqual({ kind: "kbaError", code: 101 })
+      expect((await stored(final)).failure).toEqual({ kind: "kbaError", code: 202 })
+    })
+
+    it("puts the catalogue's reason in the correction email and in the rejection email", async () => {
+      const { deps, zulexId, poll, checkoutAndPay } = setup()
+      const correctable = await checkoutAndPay()
+      const final = await checkoutAndPay()
+      deps.registration.setStatus(await zulexId(correctable), { state: "failed", error: { code: 101, details: [] }, documents: [] })
+      deps.registration.setStatus(await zulexId(final), { state: "failed", error: { code: 202, details: [] }, documents: [] })
+
+      await poll(1)
+
+      const sent = (name: string) => deps.mailer.sent.map(({ template }) => template).find((template) => template.name === name)
+      expect(sent("correctionRequired")).toMatchObject({ reason: "Die FIN wurde nicht akzeptiert." })
+      expect(sent("rejected")).toMatchObject({ reason: "Das Fahrzeug ist bereits abgemeldet." })
+    })
+
+    it("keeps that data was refused at submission, and that a rejection document came back", async () => {
+      const { deps, stored, zulexId, poll, checkoutAndPay } = setup()
+      deps.registration.failNext("submit", new GatewayRejected())
+      const refused = await checkoutAndPay()
+      const documented = await checkoutAndPay()
+      deps.registration.setStatus(await zulexId(documented), { state: "finished", documents: [{ id: "8", kind: "rejection" }] })
+
+      await poll(1)
+
+      expect((await stored(refused)).failure).toEqual({ kind: "rejected" })
+      expect((await stored(documented)).failure).toEqual({ kind: "rejectionDocument" })
+    })
+  })
+
   it.each([
     ["completed", { state: "finished", documents: [] }],
     ["failed_correctable", { state: "failed", error: { code: 101, details: [] }, documents: [] }],

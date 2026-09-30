@@ -2,6 +2,7 @@ import { advance, type ApplicationEvent, type ApplicationStatus } from "./applic
 import type { ApplicationReference } from "./application-reference"
 import type { DeregistrationRequest } from "./deregistration-request"
 import type { Email } from "./email"
+import type { Failure } from "./failure"
 import type { Money } from "./money"
 import type { IkfzStatus } from "./registration-authority"
 
@@ -30,6 +31,8 @@ export interface Application {
   readonly zulexApplicationId?: string
   /** Silent retries of a technical error already used; business logic §2 allows one. */
   readonly retryAttempts: number
+  /** Why the application is at 5b or 5c, so the page and the email can say so. Cleared when a correction resubmits it. */
+  readonly failure?: Failure
   readonly polling: { readonly nextPollAt?: Date; readonly attempts: number }
 }
 

@@ -1,5 +1,6 @@
 import { applyEvent, type Application } from "@/src/core/domain/application"
-import { decideOnFailure, isUnrecognised, type Failure } from "@/src/core/domain/error-algorithm"
+import { decideOnFailure, isUnrecognised } from "@/src/core/domain/error-algorithm"
+import type { Failure } from "@/src/core/domain/failure"
 import type { Dependencies } from "./dependencies"
 import { mailCustomer, mailRefund } from "./mail-customer"
 import { settlePayment } from "./settle-payment"
@@ -22,7 +23,7 @@ export async function handleFailure(
 ): Promise<void> {
   const decision = decideOnFailure(failure, application.retryAttempts, deps.errorCatalogue)
   const now = deps.clock.now()
-  const stopped = { ...application, polling: { attempts: application.polling.attempts } }
+  const stopped = { ...application, failure, polling: { attempts: application.polling.attempts } }
 
   if (decision.action === "retrySilently") {
     await deps.repository.update(await retry({ ...application, retryAttempts: application.retryAttempts + 1 }))

@@ -17,11 +17,19 @@ export type EmailTemplate =
       readonly manualProcessing: boolean
     }
   | { readonly name: "completed"; readonly reference: ApplicationReference; readonly statusLink: string }
-  | { readonly name: "correctionRequired"; readonly reference: ApplicationReference; readonly statusLink: string }
+  | {
+      readonly name: "correctionRequired"
+      readonly reference: ApplicationReference
+      readonly statusLink: string
+      /** What went wrong, in our words (the rejection catalogue), never the vendor's. */
+      readonly reason: string
+    }
   | {
       readonly name: "rejected"
       readonly reference: ApplicationReference
       readonly statusLink: string
+      /** What went wrong, in our words (the rejection catalogue), never the vendor's. */
+      readonly reason: string
       /** What goes back to the customer. */
       readonly refund: Money
       /** What we keep of the payment: the processing fee, or nothing when the failure was ours. */

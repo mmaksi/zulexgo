@@ -6,8 +6,8 @@ import type { EmailTemplate } from "@/src/core/ports/mailer"
 /**
  * The German wording of business logic §5, one statement and one button per
  * email. Kept apart from the markup so it can be read and reviewed alone.
- * The reason in the correction email stays general until the founder's error
- * catalogue exists (launch plan Q10); vendor text never reaches a customer.
+ * The reason in the correction and rejection emails is ours, from the
+ * rejection catalogue (launch plan Q10); vendor text never reaches a customer.
  */
 export interface EmailCopy {
   readonly subject: string
@@ -68,7 +68,7 @@ export function copyFor(template: EmailTemplate): EmailCopy {
         preview: "Die Zulassungsstelle konnte den Antrag so nicht bearbeiten.",
         heading: "Ihr Antrag braucht eine Korrektur",
         paragraphs: [
-          "Die Zulassungsstelle konnte Ihren Antrag mit den angegebenen Daten nicht bearbeiten. Das lässt sich meist korrigieren.",
+          `${template.reason} Das lässt sich meist korrigieren.`,
           `Schreiben Sie uns an ${SUPPORT_EMAIL} und nennen Sie Ihre Auftragsnummer ${reference}. Wir korrigieren den Antrag gemeinsam mit Ihnen. Sie zahlen nur die Differenz, falls Mehrkosten entstehen.`,
         ],
         note: `Sie können den Antrag auch stornieren. Wir behalten dann die Bearbeitungsgebühr von ${formatEuros(PROCESSING_FEE)} ein und erstatten den Rest.`,
@@ -80,7 +80,7 @@ export function copyFor(template: EmailTemplate): EmailCopy {
         preview: "Wir erstatten Ihnen den Betrag.",
         heading: "Ihr Antrag wurde abgelehnt",
         paragraphs: [
-          `Der Antrag zu Auftrag ${reference} konnte nicht abgeschlossen werden. Eine Korrektur ist nicht möglich; für die Abmeldung wäre ein neuer Antrag nötig.`,
+          `${template.reason} Der Antrag zu Auftrag ${reference} konnte nicht abgeschlossen werden. Eine Korrektur ist nicht möglich; für die Abmeldung wäre ein neuer Antrag nötig.`,
           template.retained.cents > 0
             ? `Sie erhalten ${formatEuros(template.refund)} zurück. Die Bearbeitungsgebühr von ${formatEuros(template.retained)} behalten wir ein. Eine weitere E-Mail bestätigt die Erstattung.`
             : `Sie erhalten ${formatEuros(template.refund)} zurück. Eine weitere E-Mail bestätigt die Erstattung.`,

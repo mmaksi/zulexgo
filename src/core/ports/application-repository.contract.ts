@@ -1,12 +1,19 @@
 import { anApplication, FAKE_REQUEST } from "@/tests/fixtures/applications"
 import { applyEvent } from "@/src/core/domain/application"
 import { APPLICATION_STATUSES } from "@/src/core/domain/application-status"
+import type { Failure } from "@/src/core/domain/failure"
 import { parseDeregistrationRequest } from "@/src/core/domain/deregistration-request"
 import { DuplicateApplication } from "@/src/core/errors/duplicate-application"
 import { StaleApplication } from "@/src/core/errors/stale-application"
 import type { ApplicationRepository } from "./application-repository"
 
 const NOW = new Date("2026-03-01T09:00:00.000Z")
+const FAILURES: Failure[] = [
+  { kind: "unavailable" },
+  { kind: "rejected" },
+  { kind: "rejectionDocument" },
+  { kind: "kbaError", code: 101 },
+]
 const minutes = (count: number) => new Date(NOW.getTime() + count * 60_000)
 
 /** Every ApplicationRepository adapter must pass this, including the fake. */
@@ -125,6 +132,23 @@ export function applicationRepositoryContract(name: string, makeSubject: () => A
         await repository.update({ ...created, request: corrected })
 
         expect((await repository.get(created.reference))?.request.codes.certificate.reveal()).toBe("AAAAAA9")
+      })
+
+      it.each(FAILURES)("stores why an application failed: %j", async (failure) => {
+        const created = await repository.create(anApplication())
+
+        await repository.update({ ...created, status: "failed_correctable", failure })
+
+        expect((await repository.get(created.reference))?.failure).toEqual(failure)
+      })
+
+      it("forgets the failure once an update clears it, as a correction does", async () => {
+        const created = await repository.create(anApplication())
+        const failed = await repository.update({ ...created, failure: { kind: "kbaError", code: 101 } })
+
+        await repository.update({ ...failed, failure: undefined })
+
+        expect((await repository.get(created.reference))?.failure).toBeUndefined()
       })
 
       it("rejects a stale version and keeps what is stored, so two writers cannot both win", async () => {

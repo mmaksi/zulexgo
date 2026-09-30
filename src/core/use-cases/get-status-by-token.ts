@@ -3,6 +3,7 @@ import type { Application } from "@/src/core/domain/application"
 import { DOCUMENT_KINDS, type DocumentRef } from "@/src/core/domain/document"
 import type { LicencePlate } from "@/src/core/domain/licence-plate"
 import type { Money } from "@/src/core/domain/money"
+import { reasonFor, type RejectionCatalogue } from "@/src/core/domain/rejection-catalogue"
 import { retainedOf } from "@/src/core/domain/refund-policy"
 import { TokenInvalid } from "@/src/core/errors/token-invalid"
 import type { ApplicationRepository } from "@/src/core/ports/application-repository"
@@ -23,6 +24,8 @@ export interface StatusView {
   readonly steps: CustomerStep[]
   /** What the customer may download: the ids to ask the download route for, confirmation first. */
   readonly documents: readonly DocumentRef[]
+  /** For an order at 5b or 5c: what went wrong, in our words. */
+  readonly failureReason?: string
   /** For an order that ended without a result: what went back and what we kept. Absent when the provider cannot say. */
   readonly refund?: { readonly returned: Money; readonly retained: Money }
 }
@@ -32,6 +35,7 @@ export async function getStatusByToken(
     repository: Pick<ApplicationRepository, "findByStatusToken">
     documents: Pick<DocumentStore, "list">
     payments: Pick<PaymentProvider, "getPayment">
+    errorCatalogue?: RejectionCatalogue
   },
   token: string,
 ): Promise<StatusView> {
@@ -45,9 +49,16 @@ export async function getStatusByToken(
     licencePlate: request.licencePlate,
     vinEnding: request.vin.slice(-VIN_VISIBLE),
     steps: customerSteps(application),
+    failureReason: failureReasonOf(application, deps.errorCatalogue),
     documents: await documentsOf(deps.documents, application),
     refund: await refundOf(deps.payments, application),
   }
+}
+
+/** An order stored before failures were kept has none, and reads as the general wording. */
+function failureReasonOf({ status, failure }: Application, catalogue?: RejectionCatalogue): string | undefined {
+  if (status !== "failed_correctable" && status !== "failed_final") return undefined
+  return reasonFor(failure ?? { kind: "rejected" }, catalogue)
 }
 
 /**

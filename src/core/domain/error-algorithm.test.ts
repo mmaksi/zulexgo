@@ -1,6 +1,11 @@
-import { decideOnFailure, type ErrorCatalogue } from "./error-algorithm"
+import { decideOnFailure } from "./error-algorithm"
+import type { RejectionCatalogue } from "./rejection-catalogue"
 
-const CATALOGUE: ErrorCatalogue = { 500: "technical", 101: "correctable", 202: "final" }
+const CATALOGUE: RejectionCatalogue = {
+  500: { class: "technical", reason: "Ein technischer Fehler." },
+  101: { class: "correctable", reason: "Korrigierbar." },
+  202: { class: "final", reason: "Endgültig." },
+}
 const kbaError = (code: number) => ({ kind: "kbaError", code }) as const
 
 describe("decideOnFailure (business logic §2, one silent retry)", () => {

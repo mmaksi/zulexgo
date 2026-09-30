@@ -1,6 +1,6 @@
 import { applyEvent, type Application } from "@/src/core/domain/application"
 import type { DocumentRef } from "@/src/core/domain/document"
-import type { Failure } from "@/src/core/domain/error-algorithm"
+import type { Failure } from "@/src/core/domain/failure"
 import { nextPollAt } from "@/src/core/domain/poll-schedule"
 import { GatewayUnavailable } from "@/src/core/errors/gateway-unavailable"
 import type { GatewayStatus } from "@/src/core/ports/registration-gateway"

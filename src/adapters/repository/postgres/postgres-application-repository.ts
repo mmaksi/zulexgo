@@ -4,6 +4,7 @@ import { parseApplicationReference, type ApplicationReference } from "@/src/core
 import { POLLED_STATUSES, type ApplicationStatus } from "@/src/core/domain/application-status"
 import { parseDeregistrationRequest } from "@/src/core/domain/deregistration-request"
 import { emailSchema } from "@/src/core/domain/email"
+import type { Failure } from "@/src/core/domain/failure"
 import { Money } from "@/src/core/domain/money"
 import type { IkfzStatus } from "@/src/core/domain/registration-authority"
 import { DuplicateApplication } from "@/src/core/errors/duplicate-application"
@@ -26,6 +27,8 @@ interface ApplicationRow {
   idempotency_key: string
   zulex_application_id: string | null
   retry_attempts: number
+  failure_kind: Failure["kind"] | null
+  failure_code: number | null
   next_poll_at: Date | null
   poll_attempts: number
   stripe_payment_intent_id: string
@@ -157,6 +160,8 @@ export class PostgresApplicationRepository implements ApplicationRepository {
       authority_ikfz_status: application.ikfzStatus,
       zulex_application_id: application.zulexApplicationId ?? null,
       retry_attempts: application.retryAttempts,
+      failure_kind: application.failure?.kind ?? null,
+      failure_code: application.failure?.kind === "kbaError" ? application.failure.code : null,
       next_poll_at: application.polling.nextPollAt ?? null,
       poll_attempts: application.polling.attempts,
     }
@@ -182,6 +187,7 @@ export class PostgresApplicationRepository implements ApplicationRepository {
       payment: { id: row.stripe_payment_intent_id, total: Money.ofCents(row.total_cents) },
       zulexApplicationId: row.zulex_application_id ?? undefined,
       retryAttempts: row.retry_attempts,
+      failure: toFailure(row),
       polling: { nextPollAt: row.next_poll_at ?? undefined, attempts: row.poll_attempts },
     }
   }
@@ -204,6 +210,11 @@ export class PostgresApplicationRepository implements ApplicationRepository {
       client.release()
     }
   }
+}
+
+function toFailure({ failure_kind, failure_code }: ApplicationRow): Failure | undefined {
+  if (!failure_kind) return undefined
+  return failure_kind === "kbaError" ? { kind: failure_kind, code: failure_code! } : { kind: failure_kind }
 }
 
 async function appendHistory(client: PoolClient, reference: ApplicationReference, changes: readonly StatusChange[]) {
