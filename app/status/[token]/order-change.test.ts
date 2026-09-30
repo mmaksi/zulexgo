@@ -155,7 +155,7 @@ describe("correctOrder", () => {
   it("logs a failure by kind, never its message or a code", async () => {
     const error = jest.spyOn(console, "error").mockImplementation(() => {})
     const { deps, token } = await correctableAtTheKba()
-    jest.spyOn(deps.mailer, "send").mockRejectedValue(new Error("Resend refused customer@example.test AAAAAA9"))
+    jest.spyOn(deps.registration, "correct").mockRejectedValue(new Error("Zulex refused customer@example.test AAAAAA9"))
 
     expect(await correctOrder(deps, headers, token, fix)).toEqual({ status: "failed" })
 

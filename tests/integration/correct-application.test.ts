@@ -8,6 +8,7 @@ import { PaymentNoLongerWhole } from "@/src/core/errors/payment-no-longer-whole"
 import { StaleApplication } from "@/src/core/errors/stale-application"
 import { cancelApplication } from "@/src/core/use-cases/cancel-application"
 import { correctApplication } from "@/src/core/use-cases/correct-application"
+import { InMemoryApplicationRepository } from "@/src/adapters/repository/fake/in-memory-application-repository"
 import { CODES, setupFlow } from "./flow-harness"
 
 /** M6, 5b option A: the customer corrects, the service resubmits to the KBA, and the order is back at status 4. */
@@ -108,19 +109,51 @@ describe("correctApplication, an order the service holds", () => {
     expect(await correctApplication(flow.deps, flow.token, newVin)).toBe("resubmitted")
   })
 
-  it("does not patch twice when the first attempt got as far as the service and failed after it", async () => {
+  it("puts the order back at the KBA even when the email cannot be sent, and says in the log which email was lost", async () => {
+    const error = jest.spyOn(console, "error").mockImplementation(() => {})
+    const flow = await refusedByKba()
+    jest.spyOn(flow.deps.mailer, "send").mockRejectedValueOnce(new Error(`Resend refused ${flow.deps.mailer.sent.length} customer@example.test`))
+
+    expect(await correctApplication(flow.deps, flow.token, newVin)).toBe("resubmitted")
+
+    expect((await flow.stored(flow.reference)).status).toBe("submitted_to_kba")
+    const logged = error.mock.calls.flat().join(" ")
+    expect(logged).toContain(flow.reference)
+    expect(logged).toContain("Error")
+    expect(logged).not.toContain("customer@example.test")
+    error.mockRestore()
+  })
+
+  it("is polled again after a correction whose email was lost, so the order cannot be left at 5b while the service finishes it", async () => {
+    const error = jest.spyOn(console, "error").mockImplementation(() => {})
     const flow = await refusedByKba()
     jest.spyOn(flow.deps.mailer, "send").mockRejectedValueOnce(new Error("Resend is down"))
+    await correctApplication(flow.deps, flow.token, newVin)
+    flow.deps.registration.setStatus(flow.id, { state: "finished", documents: [] })
 
-    await expect(correctApplication(flow.deps, flow.token, newVin)).rejects.toThrow("Resend is down")
+    await flow.poll(2)
+
+    expect((await flow.stored(flow.reference)).status).toBe("completed")
+    expect(flow.emails().at(-1)).toBe("completed")
+    error.mockRestore()
+  })
+
+  it("does not patch twice when the first attempt got as far as the service and the order could not be saved after it", async () => {
+    const flow = await refusedByKba()
+    jest.spyOn(flow.deps.repository, "update").mockImplementation(async (application) => {
+      if (application.status === "submitted_to_kba") throw new Error("database unreachable")
+      return InMemoryApplicationRepository.prototype.update.call(flow.deps.repository, application)
+    })
+
+    await expect(correctApplication(flow.deps, flow.token, newVin)).rejects.toThrow("database unreachable")
     expect((await flow.stored(flow.reference)).status).toBe("failed_correctable")
     expect(flow.deps.registration.corrections).toHaveLength(1)
+    jest.restoreAllMocks()
 
     expect(await correctApplication(flow.deps, flow.token, newVin)).toBe("resubmitted")
 
     expect(flow.deps.registration.corrections).toHaveLength(1)
     expect((await flow.stored(flow.reference)).status).toBe("submitted_to_kba")
-    expect(flow.emails().filter((name) => name === "submittedToKba")).toHaveLength(2)
   })
 
   it.each([

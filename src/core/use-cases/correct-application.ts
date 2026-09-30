@@ -65,9 +65,12 @@ async function patch(deps: Dependencies, application: Application, zulexId: stri
     ...applyEvent(application, "correctionResubmitted", now),
     polling: { attempts: 0, nextPollAt: nextPollAt({ ikfzStatus: application.ikfzStatus, attempts: 0, now }) },
   }
-  // The email goes out before the status, as everywhere: a failed send leaves the order at 5b to ask again.
-  await mailCustomer(deps, resubmitted, "submittedToKba")
+  // The status first, unlike the other emails: the service is already working on the order, and one left at 5b would never
+  // be polled again. The email only repeats email 4, so losing it is logged, not the price of an order the customer cannot see move.
   await deps.repository.update(resubmitted)
+  await mailCustomer(deps, resubmitted, "submittedToKba").catch((error) => {
+    console.error(`[correction] ${resubmitted.reference}: the email that the order is back at the KBA was not sent: ${error instanceof Error ? error.name : "unknown error"}`)
+  })
   return "resubmitted"
 }
 
