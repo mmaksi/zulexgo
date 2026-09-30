@@ -76,6 +76,9 @@ export function advance(status: ApplicationStatus, event: ApplicationEvent): App
   return next
 }
 
+/** Paid and not finished: the orders a second order for the same vehicle would collide with (J8). */
+export const OPEN_STATUSES: readonly ApplicationStatus[] = ["submitted_and_paid", "submitted_to_kba", "failed_correctable"]
+
 /**
  * Looked at on a schedule: at the KBA, waiting for a silent resubmission after a
  * technical error, or (5b) waiting for the customer while the money is watched.

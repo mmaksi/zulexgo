@@ -1,7 +1,7 @@
 import { DatabaseError, Pool, type PoolClient } from "pg"
 import type { Application, StatusChange } from "@/src/core/domain/application"
 import { parseApplicationReference, type ApplicationReference } from "@/src/core/domain/application-reference"
-import { POLLED_STATUSES, type ApplicationStatus } from "@/src/core/domain/application-status"
+import { OPEN_STATUSES, POLLED_STATUSES, type ApplicationStatus } from "@/src/core/domain/application-status"
 import { parseDeregistrationRequest } from "@/src/core/domain/deregistration-request"
 import { emailSchema } from "@/src/core/domain/email"
 import type { Failure } from "@/src/core/domain/failure"
@@ -133,6 +133,17 @@ export class PostgresApplicationRepository implements ApplicationRepository {
       `${SELECT_APPLICATION} JOIN status_tokens t ON t.application_reference = a.reference WHERE t.token_hash = $1`,
       [this.cipher.hash(token)],
     )
+  }
+
+  async hasOpenApplication({ licencePlate, vin }: Parameters<ApplicationRepository["hasOpenApplication"]>[0]): Promise<boolean> {
+    const { rows } = await this.pool.query<{ open: boolean }>(
+      `SELECT EXISTS (
+         SELECT 1 FROM applications
+         WHERE plate_prefix = $1 AND plate_letters = $2 AND plate_numbers = $3 AND vin = $4 AND status = ANY($5)
+       ) AS open`,
+      [licencePlate.prefix, licencePlate.letters, licencePlate.numbers, vin, OPEN_STATUSES],
+    )
+    return rows[0].open
   }
 
   async findDueForPolling(now: Date, limit: number): Promise<Application[]> {

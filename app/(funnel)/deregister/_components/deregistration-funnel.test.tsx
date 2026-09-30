@@ -237,6 +237,54 @@ describe("de-registration funnel", () => {
       expect(screen.getByText("customer@example.test")).toBeInTheDocument()
     })
 
+    describe("J8, a vehicle that already has an open order", () => {
+      const startCheckout = () =>
+        jest
+          .fn<ReturnType<CheckoutActions["startCheckout"]>, Parameters<CheckoutActions["startCheckout"]>>()
+          .mockResolvedValueOnce({ ok: false, reason: "duplicate" })
+          .mockResolvedValueOnce({ ok: true, reference: "ZG-ABC123", clientSecret: "fake-secret" })
+
+      async function reachDuplicateWarning() {
+        const flow = setup({ startCheckout: startCheckout() })
+        await passEligibility(flow.user)
+        await fillVehicle(flow.user)
+        await flow.user.click(consentBoxes()[0])
+        await flow.user.click(consentBoxes()[1])
+        await flow.user.click(payButton())
+        return flow
+      }
+
+      it("warns that an order is already open, and takes no payment until the customer says they want another", async () => {
+        const { user, actions } = await reachDuplicateWarning()
+
+        expect(await screen.findByRole("alert")).toHaveTextContent(/bereits ein Antrag/)
+        expect(actions.completeSimulatedPayment).not.toHaveBeenCalled()
+        expect(payButton()).toBeDisabled()
+
+        await user.click(screen.getByRole("checkbox", { name: /trotzdem einen weiteren Antrag/ }))
+
+        expect(payButton()).toBeEnabled()
+      })
+
+      it("goes ahead, telling the server the customer confirmed, once they do", async () => {
+        const { user, actions } = await reachDuplicateWarning()
+        await user.click(await screen.findByRole("checkbox", { name: /trotzdem einen weiteren Antrag/ }))
+
+        await user.click(payButton())
+
+        expect(actions.startCheckout).toHaveBeenLastCalledWith(expect.objectContaining({ acknowledgedDuplicate: true }))
+        expect(await screen.findByText("ZG-ABC123")).toBeInTheDocument()
+      })
+
+      it("does not ask when there is no other order", async () => {
+        const { user } = setup()
+        await passEligibility(user)
+        await fillVehicle(user)
+
+        expect(screen.queryByRole("checkbox", { name: /trotzdem einen weiteren Antrag/ })).not.toBeInTheDocument()
+      })
+    })
+
     it("retries a failed payment on the same order instead of opening a second one", async () => {
       const completeSimulatedPayment = jest.fn().mockResolvedValueOnce({ ok: false }).mockResolvedValueOnce({ ok: true })
       const { user, actions } = setup({ completeSimulatedPayment })

@@ -2,6 +2,7 @@
 
 import { getContainer } from "@/src/config/container"
 import { parseApplicationReference } from "@/src/core/domain/application-reference"
+import { OpenApplicationExists } from "@/src/core/errors/open-application-exists"
 import { ValidationError } from "@/src/core/errors/validation-error"
 import { checkEligibility } from "@/src/core/use-cases/check-eligibility"
 import { confirmPayment } from "@/src/core/use-cases/confirm-payment"
@@ -29,16 +30,18 @@ export const checkEligibilityAction: CheckoutActions["checkEligibility"] = async
   }
 }
 
-export const startCheckoutAction: CheckoutActions["startCheckout"] = async ({ plateCount, vehicle, consents }) => {
+export const startCheckoutAction: CheckoutActions["startCheckout"] = async ({ plateCount, vehicle, consents, acknowledgedDuplicate }) => {
   if (consents?.terms !== true || consents?.earlyStart !== true) return { ok: false, reason: "consent" }
   try {
     const { reference, clientSecret } = await submitCheckout(getContainer(), {
       request: toRequest(vehicle, plateCount),
       email: vehicle.email,
+      acknowledgedDuplicate: acknowledgedDuplicate === true,
     })
     return { ok: true, reference, clientSecret }
   } catch (error) {
     if (error instanceof ValidationError) return { ok: false, reason: "invalid" }
+    if (error instanceof OpenApplicationExists) return { ok: false, reason: "duplicate" }
     failedBecause("checkout", error)
     return { ok: false, reason: "unavailable" }
   }

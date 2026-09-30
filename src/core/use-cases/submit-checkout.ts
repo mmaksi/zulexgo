@@ -6,6 +6,7 @@ import { DEREGISTRATION_TOTAL } from "@/src/core/domain/pricing"
 import { combinedIkfzStatus } from "@/src/core/domain/registration-authority"
 import { validate } from "@/src/core/domain/validate"
 import { DuplicateApplication } from "@/src/core/errors/duplicate-application"
+import { OpenApplicationExists } from "@/src/core/errors/open-application-exists"
 import type { Dependencies } from "./dependencies"
 
 const REFERENCE_ATTEMPTS = 3
@@ -13,13 +14,19 @@ const REFERENCE_ATTEMPTS = 3
 /**
  * The customer presses "pay": store the details (payment is confirmed later,
  * by webhook) and open a payment the browser confirms with `clientSecret`.
+ *
+ * J8: the same plate and VIN with a paid order still open would be filed
+ * twice, and the KBA rejects the second, so the customer is warned first and
+ * goes on only by saying so (`acknowledgedDuplicate`). An earlier checkout that
+ * was never paid does not count: a refresh must not block the customer.
  */
 export async function submitCheckout(
   deps: Dependencies,
-  input: { request: unknown; email: unknown },
+  input: { request: unknown; email: unknown; acknowledgedDuplicate?: boolean },
 ): Promise<{ reference: Application["reference"]; clientSecret: string }> {
   const request = parseDeregistrationRequest(input.request)
   const email = validate(emailSchema, input.email, "email")
+  if (!input.acknowledgedDuplicate && (await deps.repository.hasOpenApplication(request))) throw new OpenApplicationExists()
   const ikfzStatus = combinedIkfzStatus(await deps.registration.findAuthorities(request.licencePlate.prefix))
 
   for (let attempt = 1; ; attempt++) {

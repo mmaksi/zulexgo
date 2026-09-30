@@ -8,7 +8,11 @@ export interface CheckoutActions {
     plateCount: PlateCount
     vehicle: VehicleData
     consents: { terms: boolean; earlyStart: boolean }
-  }): Promise<{ ok: true; reference: string; clientSecret: string } | { ok: false; reason: "invalid" | "consent" | "unavailable" }>
+    /** The customer was told an order for this vehicle is already open and wants another. */
+    acknowledgedDuplicate?: boolean
+  }): Promise<
+    { ok: true; reference: string; clientSecret: string } | { ok: false; reason: "invalid" | "consent" | "duplicate" | "unavailable" }
+  >
   /** Only where no real payment provider is configured: plays the customer paying. */
   completeSimulatedPayment(reference: string): Promise<{ ok: boolean }>
 }

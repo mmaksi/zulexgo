@@ -4,6 +4,7 @@ import { DEREGISTRATION_TOTAL, PROCESSING_FEE } from "@/src/core/domain/pricing"
 import { GatewayRejected } from "@/src/core/errors/gateway-rejected"
 import { GatewayUnavailable } from "@/src/core/errors/gateway-unavailable"
 import { confirmPayment } from "@/src/core/use-cases/confirm-payment"
+import { OpenApplicationExists } from "@/src/core/errors/open-application-exists"
 import { confirmRefund } from "@/src/core/use-cases/confirm-refund"
 import { submitCheckout } from "@/src/core/use-cases/submit-checkout"
 import { CODES, keepServiceDown, MINUTE, setupFlow as setup } from "./flow-harness"
@@ -103,6 +104,52 @@ describe("de-registration flow on fakes", () => {
 
       expect((await stored(reference)).status).toBe("awaiting_payment")
       expect(emails()).toEqual([])
+    })
+  })
+
+  describe("J8, a second order for a vehicle that already has one open", () => {
+    const again = (flow: ReturnType<typeof setup>, options: { acknowledgedDuplicate?: boolean; vin?: string } = {}) =>
+      submitCheckout(flow.deps, {
+        request: { ...FAKE_REQUEST, vin: options.vin ?? FAKE_REQUEST.vin },
+        email: "customer@example.test",
+        acknowledgedDuplicate: options.acknowledgedDuplicate,
+      })
+
+    it("warns instead of opening a second payment for the same plate and VIN while the first is with the KBA", async () => {
+      const flow = setup()
+      await flow.checkoutAndPay()
+      const createPayment = jest.spyOn(flow.deps.payments, "createPayment")
+
+      await expect(again(flow)).rejects.toBeInstanceOf(OpenApplicationExists)
+
+      expect(createPayment).not.toHaveBeenCalled()
+    })
+
+    it("goes ahead once the customer has confirmed that they mean it", async () => {
+      const flow = setup()
+      const first = await flow.checkoutAndPay()
+
+      const second = await again(flow, { acknowledgedDuplicate: true })
+
+      expect(second.reference).not.toBe(first)
+    })
+
+    it("does not warn for another vehicle, or for an earlier checkout that was never paid", async () => {
+      const flow = setup()
+      await flow.payForCheckout()
+
+      await expect(again(flow)).resolves.toMatchObject({ reference: expect.any(String) })
+      await flow.checkoutAndPay()
+      await expect(again(flow, { vin: "FAKEVIN0000000002" })).resolves.toMatchObject({ reference: expect.any(String) })
+    })
+
+    it("does not warn once the earlier order is over", async () => {
+      const flow = setup()
+      const first = await flow.checkoutAndPay()
+      flow.deps.registration.setStatus(await flow.zulexId(first), { state: "finished", documents: [] })
+      await flow.poll(1)
+
+      await expect(again(flow)).resolves.toMatchObject({ reference: expect.any(String) })
     })
   })
 

@@ -231,6 +231,42 @@ export function applicationRepositoryContract(name: string, makeSubject: () => A
       })
     })
 
+    describe("hasOpenApplication", () => {
+      const vehicle = { licencePlate: FAKE_REQUEST.licencePlate, vin: parseDeregistrationRequest(FAKE_REQUEST).vin }
+      const otherVehicle = (overrides: object) => parseDeregistrationRequest({ ...FAKE_REQUEST, ...overrides })
+
+      it.each(["submitted_and_paid", "submitted_to_kba", "failed_correctable"] as const)(
+        "finds a paid order for the same plate and VIN that is still %s",
+        async (status) => {
+          await repository.create(anApplication({ status, history: [{ status, at: NOW }] }))
+
+          expect(await repository.hasOpenApplication(vehicle)).toBe(true)
+        },
+      )
+
+      it.each(["awaiting_payment", "completed", "failed_final", "cancelled"] as const)(
+        "does not count an order that is %s: nothing is unpaid or unfinished about it",
+        async (status) => {
+          await repository.create(anApplication({ status, history: [{ status, at: NOW }] }))
+
+          expect(await repository.hasOpenApplication(vehicle)).toBe(false)
+        },
+      )
+
+      it("needs the plate and the VIN both to match", async () => {
+        await repository.create(anApplication({ status: "submitted_to_kba", history: [{ status: "submitted_to_kba", at: NOW }] }))
+
+        expect(await repository.hasOpenApplication({ ...vehicle, vin: otherVehicle({ vin: "FAKEVIN0000000002" }).vin })).toBe(false)
+        expect(
+          await repository.hasOpenApplication({ ...vehicle, licencePlate: { ...vehicle.licencePlate, numbers: "222" } }),
+        ).toBe(false)
+      })
+
+      it("finds nothing when there are no orders", async () => {
+        expect(await repository.hasOpenApplication(vehicle)).toBe(false)
+      })
+    })
+
     describe("findDueForPolling", () => {
       it("returns only applications whose KBA check, silent resubmission or hold check (a 5b waiting on the customer) is due, soonest first, up to the limit", async () => {
         const atKba = (nextPollAt: Date) => anApplication({ status: "submitted_to_kba", polling: { nextPollAt, attempts: 1 } })

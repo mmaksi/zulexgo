@@ -1,5 +1,6 @@
 import type { Application } from "@/src/core/domain/application"
 import type { ApplicationReference } from "@/src/core/domain/application-reference"
+import type { DeregistrationRequest } from "@/src/core/domain/deregistration-request"
 
 /**
  * Where applications live between requests. Owns our status machine's state,
@@ -19,6 +20,9 @@ import type { ApplicationReference } from "@/src/core/domain/application-referen
  * - A status token can be matched and read back, so every email can carry the
  *   same link; adapters that persist it keep it encrypted and look it up by
  *   hash. Setting a new one revokes the old one.
+ * - `hasOpenApplication` says whether a paid order that is not finished exists
+ *   for the plate and VIN; one still awaiting payment, completed, failed for
+ *   good or cancelled does not count. It says nothing more: no reference, no status.
  * - `findDueForPolling` returns applications whose next check is due, soonest
  *   first: a status check at the KBA, a silent resubmission after a technical
  *   failure, or a look at the money of a 5b that waits for the customer.
@@ -30,5 +34,6 @@ export interface ApplicationRepository {
   setStatusToken(reference: ApplicationReference, token: string): Promise<void>
   getStatusToken(reference: ApplicationReference): Promise<string | undefined>
   findByStatusToken(token: string): Promise<Application | undefined>
+  hasOpenApplication(vehicle: Pick<DeregistrationRequest, "licencePlate" | "vin">): Promise<boolean>
   findDueForPolling(now: Date, limit: number): Promise<Application[]>
 }
