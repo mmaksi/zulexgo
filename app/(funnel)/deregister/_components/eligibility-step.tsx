@@ -6,7 +6,7 @@ import { Button } from "@/src/ui/button"
 import { RadioGroup, RadioGroupItem } from "@/src/ui/radio-group"
 import type { CheckoutActions } from "./checkout-actions"
 import { TextField } from "@/app/_components/text-field"
-import type { PlateCount } from "./vehicle-data"
+import type { PlateCount } from "@/app/_components/vehicle-data"
 import { Alert } from "@/src/ui/alert"
 
 export interface Eligibility {

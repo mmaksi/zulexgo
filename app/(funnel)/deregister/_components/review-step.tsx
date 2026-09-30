@@ -9,7 +9,7 @@ import { Checkbox } from "@/src/ui/checkbox"
 import type { CheckoutActions, PaymentDriver, PaymentMode } from "./checkout-actions"
 import { SimulatedPaymentFields } from "./simulated-payment-fields"
 import { StripePaymentFields } from "./stripe/stripe-payment-fields"
-import type { PlateCount, VehicleData } from "./vehicle-data"
+import type { PlateCount, VehicleData } from "@/app/_components/vehicle-data"
 import { Alert } from "@/src/ui/alert"
 import { PlateFrame } from "@/src/ui/plate-frame"
 

@@ -7,7 +7,7 @@ import { checkEligibility } from "@/src/core/use-cases/check-eligibility"
 import { confirmPayment } from "@/src/core/use-cases/confirm-payment"
 import { submitCheckout } from "@/src/core/use-cases/submit-checkout"
 import type { CheckoutActions } from "./_components/checkout-actions"
-import { toRequest } from "./_components/vehicle-data"
+import { toRequest } from "@/app/_components/vehicle-data"
 
 /**
  * Reachable by any POST, so every input is treated as untrusted and validated

@@ -1,5 +1,5 @@
 import type { IkfzStatus } from "@/src/core/domain/registration-authority"
-import type { PlateCount, VehicleData } from "./vehicle-data"
+import type { PlateCount, VehicleData } from "@/app/_components/vehicle-data"
 
 /** The server actions the funnel calls, passed in by the page so the funnel can be tested without a server. */
 export interface CheckoutActions {

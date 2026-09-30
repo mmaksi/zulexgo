@@ -17,7 +17,7 @@ import type { CheckoutActions, PaymentMode } from "./checkout-actions"
 import { Confirmation } from "./confirmation"
 import { EligibilityStep, type Eligibility } from "./eligibility-step"
 import { ReviewStep } from "./review-step"
-import { EMPTY_VEHICLE, type VehicleData } from "./vehicle-data"
+import { EMPTY_VEHICLE, type VehicleData } from "@/app/_components/vehicle-data"
 import { VehicleStep } from "./vehicle-step"
 
 const STEPS = [
