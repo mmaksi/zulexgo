@@ -4,16 +4,11 @@ import { z } from "zod"
 /**
  * The single place this application interprets `process.env`; the container
  * only hands it over.
- *
- * `next build` sets `NODE_ENV=production` for the staging build too, so the
- * stage is carried by `APP_ENV` and nothing else. Everything here fails at
- * boot, naming the variable, rather than halfway through a customer's checkout.
  */
 
 export const STAGES = ["dev", "staging", "production"] as const
 export type Stage = (typeof STAGES)[number]
 
-/** From the Zulex API spec. A stage must never point at the other one's host. */
 export const ZULEX_BASE_URLS = {
   integration: "https://integration-zulex.de/zulex-api/v1",
   production: "https://app.zulex.de/zulex-api/v1",
@@ -96,7 +91,6 @@ function requireDeployedStageVariables(env: Parsed, ctx: Ctx) {
   }
 }
 
-/** A deployed stage that quietly runs on a fake serves nobody and charges nobody. */
 function rejectFakesInProduction(env: Parsed, ctx: Ctx, isProduction: boolean) {
   if (!isProduction) return
 

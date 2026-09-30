@@ -1,9 +1,15 @@
+import { Download } from "lucide-react"
+import Link from "next/link"
+import { SUPPORT_EMAIL } from "@/src/core/domain/contact"
 import type { CustomerStep } from "@/src/core/domain/customer-steps"
+import type { DocumentKind } from "@/src/core/domain/document"
+import { formatEuros } from "@/src/core/domain/money"
+import { PROCESSING_FEE } from "@/src/core/domain/pricing"
 import type { StatusView as View } from "@/src/core/use-cases/get-status-by-token"
 import { cn } from "@/src/lib/utils"
+import { Alert } from "@/src/ui/alert"
+import { buttonLink } from "@/src/ui/button"
 import { PlateFrame } from "@/src/ui/plate-frame"
-
-const SUPPORT_EMAIL = "kontakt@gm-gastro.com"
 
 /** Titles are the customer statuses, status lines the internal labels (launch plan § Context). */
 function describe(step: CustomerStep): { title: string; line?: string; text?: string } {
@@ -23,21 +29,32 @@ function describe(step: CustomerStep): { title: string; line?: string; text?: st
     case "completed":
       return { title: "Abmeldung abgeschlossen", line: "Vorgang abgeschlossen", text: "Ihr Fahrzeug ist abgemeldet. Kfz-Steuer und Versicherung enden automatisch." }
     case "failed_correctable":
-      return { title: "Korrektur erforderlich", line: "Korrektur erforderlich", text: "Die Zulassungsbehörde konnte den Antrag mit diesen Angaben nicht bearbeiten. Schreiben Sie uns, dann klären wir mit Ihnen die Korrektur oder die Stornierung." }
+      return { title: "Korrektur erforderlich", line: "Korrektur erforderlich", text: "Die Zulassungsstelle konnte den Antrag mit diesen Angaben nicht bearbeiten." }
     case "failed_final":
-      return { title: "Antrag abgelehnt", line: "Erstattung", text: "Der Antrag konnte nicht abgeschlossen werden. Wie viel Sie zurückerhalten, steht in unserer E-Mail dazu." }
+      return { title: "Antrag abgelehnt", line: "Erstattung", text: "Der Antrag konnte nicht abgeschlossen werden. Eine Korrektur ist nicht möglich." }
     case "cancelled":
-      return { title: "Antrag storniert", line: "Storniert", text: "Sie haben den Antrag storniert. Die Erstattung ist unterwegs." }
+      return { title: "Antrag storniert", line: "Storniert", text: "Sie haben den Antrag storniert." }
     default:
       return { title: "Ergebnis" }
   }
 }
 
+const DOCUMENT_LABELS: Record<DocumentKind, string> = {
+  confirmation: "Bestätigung der Abmeldung",
+  rejection: "Ablehnung",
+  fee: "Gebührenbeleg",
+  unknown: "Dokument",
+}
+
 const when = (date: Date) =>
   new Intl.DateTimeFormat("de-DE", { dateStyle: "medium", timeStyle: "short", timeZone: "Europe/Berlin" }).format(date)
 
-/** site-contract §2.6: plate and the end of the VIN, never a security code; a vertical stepper at every size. */
-export function StatusView({ view }: { view: View }) {
+/**
+ * site-contract §2.6: plate and the end of the VIN, never a security code; a
+ * vertical stepper at every size. `documentHref` builds a download link, the
+ * one place a page repeats its own token.
+ */
+export function StatusView({ view, documentHref }: { view: View; documentHref: (documentId: string) => string }) {
   const { licencePlate } = view
   return (
     <div className="flex flex-col gap-(--heading-space-above)">
@@ -69,19 +86,105 @@ export function StatusView({ view }: { view: View }) {
         </ol>
       </section>
 
+      <OutcomeBlock view={view} documentHref={documentHref} />
+
       <section aria-labelledby="status-help" className="measure flex flex-col gap-2">
         <h2 id="status-help" className="text-h4 text-grau-dark">
           Hilfe
         </h2>
         <p className="text-body text-grau">
-          Fragen zu Ihrem Antrag? Schreiben Sie uns an{" "}
-          <a href={`mailto:${SUPPORT_EMAIL}`} className="underline underline-offset-4 hover:text-orange-dark">
-            {SUPPORT_EMAIL}
-          </a>{" "}
-          und nennen Sie Ihre Auftragsnummer.
+          Fragen zu Ihrem Antrag? Schreiben Sie uns an <MailLink /> und nennen Sie Ihre Auftragsnummer.
+        </p>
+        <p className="text-body text-grau">
+          Statuslink verloren?{" "}
+          <Link href="/status/link-anfordern" className="underline underline-offset-4 hover:text-orange-dark">
+            Wir senden ihn erneut
+          </Link>
+          .
         </p>
       </section>
     </div>
+  )
+}
+
+function MailLink() {
+  return (
+    <a href={`mailto:${SUPPORT_EMAIL}`} className="underline underline-offset-4 hover:text-orange-dark">
+      {SUPPORT_EMAIL}
+    </a>
+  )
+}
+
+/** site-contract §2.6: what to do next, by outcome. Correcting and cancelling arrive with M6, so for now they go through support. */
+function OutcomeBlock({ view, documentHref }: { view: View; documentHref: (documentId: string) => string }) {
+  const outcome = view.steps.find((step) => step.id === "outcome")?.outcome
+  if (!outcome) return null
+
+  switch (outcome) {
+    case "completed":
+      return <Documents view={view} documentHref={documentHref} />
+    case "failed_correctable":
+      return (
+        <Alert variant="warning" className="measure flex flex-col gap-2">
+          <p>
+            Schreiben Sie uns an <MailLink /> und nennen Sie Ihre Auftragsnummer {view.reference}. Wir korrigieren den Antrag gemeinsam
+            mit Ihnen. Sie zahlen nur die Differenz, falls Mehrkosten entstehen.
+          </p>
+          <p>
+            Sie können den Antrag auch stornieren. Wir behalten dann die Bearbeitungsgebühr von {formatEuros(PROCESSING_FEE)} ein und
+            erstatten den Rest.
+          </p>
+        </Alert>
+      )
+    case "failed_final":
+    case "cancelled":
+      return (
+        <div className="measure flex flex-col items-start gap-4">
+          <Alert variant={outcome === "failed_final" ? "error" : "info"} className="w-full">
+            <RefundInfo refund={view.refund} />
+          </Alert>
+          <Link href="/deregister" className={buttonLink({ variant: "outline" })}>
+            Neuen Antrag stellen
+          </Link>
+        </div>
+      )
+  }
+}
+
+function RefundInfo({ refund }: { refund: View["refund"] }) {
+  if (!refund) return <p>Wie viel Sie zurückerhalten, steht in unserer E-Mail dazu.</p>
+  return (
+    <p>
+      Sie erhalten {formatEuros(refund.returned)} zurück.
+      {refund.retained.cents > 0 ? ` Die Bearbeitungsgebühr von ${formatEuros(refund.retained)} behalten wir ein.` : ""} Je nach Bank
+      ist der Betrag in 3 bis 5 Werktagen auf Ihrem Konto.
+    </p>
+  )
+}
+
+function Documents({ view, documentHref }: { view: View; documentHref: (documentId: string) => string }) {
+  return (
+    <section aria-labelledby="status-documents" className="flex flex-col gap-4">
+      <h2 id="status-documents" className="text-h4 text-grau-dark">
+        Ihre Bestätigung
+      </h2>
+      {view.documents.length > 0 ? (
+        <ul className="flex flex-col items-start gap-3">
+          {view.documents.map(({ id, kind }) => (
+            <li key={id}>
+              <a href={documentHref(id)} className={buttonLink({ variant: "outline", className: "h-auto min-h-12 py-3 text-left whitespace-normal" })}>
+                <Download aria-hidden="true" />
+                {DOCUMENT_LABELS[kind]} herunterladen
+              </a>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="measure text-body text-grau">
+          Die Bestätigung steht hier zum Download bereit, sobald sie vorliegt. Fehlt sie länger, schreiben Sie uns an <MailLink />.
+        </p>
+      )}
+    </section>
   )
 }
 

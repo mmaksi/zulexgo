@@ -15,4 +15,19 @@ describe("FakeMailer", () => {
 
     expect(mailer.sent.map((message) => message.template.name)).toEqual(["orderConfirmation", "completed"])
   })
+
+  it("delivers a message once however often it is sent with the same key, as the real mailer does", async () => {
+    const mailer = new FakeMailer()
+    const { reference, email } = anApplication()
+    const message = {
+      to: email,
+      template: { name: "completed", reference, statusLink: "https://zulexgo.example.test/status/faketoken" },
+      idempotencyKey: "same",
+    } as const
+
+    await mailer.send(message)
+    await mailer.send(message)
+
+    expect(mailer.sent).toHaveLength(1)
+  })
 })

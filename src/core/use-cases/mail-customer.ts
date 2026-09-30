@@ -9,7 +9,7 @@ export async function mailCustomer(
   deps: Pick<Dependencies, "repository" | "mailer" | "statusLink">,
   application: Application,
   name: LinkedEmail,
-  extra: { refund?: Money } = {},
+  extra: { refund?: Money; retained?: Money } = {},
 ): Promise<void> {
   const token = await deps.repository.getStatusToken(application.reference)
   if (!token) throw new Error(`Application ${application.reference} has no status token`)
@@ -19,9 +19,15 @@ export async function mailCustomer(
     name === "submittedToKba"
       ? { name, ...common, manualProcessing: application.ikfzStatus !== "online" }
       : name === "rejected"
-        ? { name, ...common, refund: extra.refund! }
+        ? { name, ...common, refund: extra.refund!, retained: extra.retained! }
         : { name, ...common }
   // The history length names the transition, so an email repeated by a later transition (a correction back at the KBA) is still sent.
   const idempotencyKey = `${application.reference}/${name}/${application.history.length}`
   await deps.mailer.send({ to: application.email, template, idempotencyKey })
+}
+
+/** Email 6. One per order however it is reached: the answer to a refund and the provider's confirmation of it share a key. */
+export async function mailRefund(deps: Pick<Dependencies, "mailer">, application: Application, amount: Money): Promise<void> {
+  const { reference, email } = application
+  await deps.mailer.send({ to: email, template: { name: "refundIssued", reference, amount }, idempotencyKey: `${reference}/refundIssued` })
 }

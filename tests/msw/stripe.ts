@@ -167,6 +167,9 @@ export class StripeDouble {
           return stripeError("You cannot cancel this PaymentIntent because it has a status of succeeded.", "payment_intent_unexpected_state")
         }
         Object.assign(intent, { status: "canceled", amount_capturable: 0 })
+        // Cancelling an authorisation reverses it, which Stripe shows on the charge as fully refunded.
+        const charge = intent.chargeId ? this.charges.get(intent.chargeId) : undefined
+        if (charge && !charge.captured) charge.amount_refunded = charge.amount
         return this.intentJson(intent)
       }),
     ),

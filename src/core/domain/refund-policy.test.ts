@@ -1,5 +1,6 @@
 import { Money } from "./money"
-import { refundPolicy } from "./refund-policy"
+import { PROCESSING_FEE } from "./pricing"
+import { refundPolicy, retainedOf, settledDecision } from "./refund-policy"
 
 const euros = (amount: number) => Money.ofCents(Math.round(amount * 100))
 
@@ -74,5 +75,70 @@ describe("refundPolicy (business logic §3)", () => {
 
   it("refuses an order that does not exceed the processing fee, which cannot be priced", () => {
     expect(() => refundPolicy({ type: "cancelled" }, { state: "held", total: euros(19.99) })).toThrow(RangeError)
+  })
+})
+
+describe("settledDecision: what a rerun finds already done", () => {
+  const paid = (status: "held" | "captured" | "released", capturedCents: number, refundedCents = 0) => ({
+    status,
+    total: TOTAL,
+    captured: Money.ofCents(capturedCents),
+    refunded: Money.ofCents(refundedCents),
+  })
+
+  it.each([
+    ["a hold captured down to the fee", paid("captured", 1999)],
+    ["a captured payment refunded down to the fee", paid("captured", 6999, 5000)],
+  ])("finds the fee already retained after %s", (_, payment) => {
+    expect(summary(settledDecision({ type: "failedFinal" }, payment)!)).toEqual({
+      action: "none", amount: undefined, retained: 1999, returned: 5000,
+    })
+    expect(settledDecision({ type: "cancelled" }, payment)).toBeDefined()
+  })
+
+  it.each([
+    ["a hold that was released", paid("released", 0)],
+    ["a captured payment refunded in full", paid("captured", 6999, 6999)],
+  ])("finds our technical error already settled after %s", (_, payment) => {
+    expect(summary(settledDecision({ type: "ourTechnicalError" }, payment)!)).toEqual({
+      action: "none", amount: undefined, retained: 0, returned: 6999,
+    })
+  })
+
+  it.each([
+    ["a payment still held", paid("held", 0)],
+    ["a payment captured in full", paid("captured", 6999)],
+    ["a released hold, which is not the fee kept", paid("released", 0)],
+  ])("finds nothing done yet on %s when the fee should be kept", (_, payment) => {
+    expect(settledDecision({ type: "failedFinal" }, payment)).toBeUndefined()
+  })
+
+  it("finds nothing done on a hold or a payment that still holds money when it should all go back", () => {
+    expect(settledDecision({ type: "ourTechnicalError" }, paid("held", 0))).toBeUndefined()
+    expect(settledDecision({ type: "ourTechnicalError" }, paid("captured", 6999))).toBeUndefined()
+    expect(settledDecision({ type: "ourTechnicalError" }, paid("captured", PROCESSING_FEE.cents))).toBeUndefined()
+  })
+
+  it("leaves a completed order to the policy itself, which already skips a captured payment", () => {
+    expect(settledDecision({ type: "completed" }, paid("captured", 6999))).toBeUndefined()
+  })
+})
+
+describe("retainedOf", () => {
+  const record = (captured: number, refunded: number) => ({ captured: Money.ofCents(captured), refunded: Money.ofCents(refunded) })
+
+  it("is what was taken and not given back", () => {
+    expect(retainedOf(record(6999, 5000)).cents).toBe(1999)
+  })
+
+  it("is nothing when a provider reports a reversal of money that was never taken, rather than failing", () => {
+    expect(retainedOf(record(0, 6999)).cents).toBe(0)
+  })
+
+  it("lets settledDecision see a released hold through such a report", () => {
+    const released = { status: "released", total: TOTAL, ...record(0, 6999) } as const
+
+    expect(settledDecision({ type: "ourTechnicalError" }, released)).toBeDefined()
+    expect(settledDecision({ type: "failedFinal" }, released)).toBeUndefined()
   })
 })

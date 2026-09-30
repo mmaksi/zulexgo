@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from "react"
 import { Button } from "@/src/ui/button"
 import { PlateFrame } from "@/src/ui/plate-frame"
-import { TextField } from "./text-field"
+import { TextField } from "@/app/_components/text-field"
 import { fieldsFor, validateVehicle, type PlateCount, type VehicleData, type VehicleField } from "./vehicle-data"
 
 const MODERN_VIN_LENGTH = 17

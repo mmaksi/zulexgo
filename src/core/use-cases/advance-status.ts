@@ -55,11 +55,13 @@ async function complete(deps: Dependencies, application: Application, documents:
     await deps.documents.put(application.reference, document, await deps.registration.fetchDocument(document.id))
   }
   await settlePayment(deps, application, { type: "completed" })
-  const completed = await deps.repository.update({
+  const completed: Application = {
     ...applyEvent(application, "kbaCompleted", deps.clock.now()),
     polling: { attempts: application.polling.attempts },
-  })
+  }
+  // Email before the status, so a failed send leaves the application due and the next tick redoes these idempotent steps.
   await mailCustomer(deps, completed, "completed")
+  await deps.repository.update(completed)
 }
 
 /** `attempts` counts checks made, so it indexes the delay before the next one. */

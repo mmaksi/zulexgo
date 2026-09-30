@@ -1,6 +1,8 @@
 import { randomBytes } from "node:crypto"
 import { join } from "node:path"
+import { setupServer } from "msw/node"
 import { anApplication, FAKE_REQUEST } from "@/tests/fixtures/applications"
+import { STORAGE_TEST_BUCKET, STORAGE_TEST_KEY, STORAGE_TEST_URL, SupabaseStorageDouble } from "@/tests/msw/supabase-storage"
 import { Migrator, readMigrations } from "@/src/adapters/repository/postgres/migrator"
 import { createTestDatabase, describeWithPostgres, type TestDatabase } from "@/src/adapters/repository/postgres/test-database"
 import { clockContract } from "@/src/core/ports/clock.contract"
@@ -74,17 +76,36 @@ describe("container ports", () => {
     expect(log.mock.calls.flat().join("\n").includes("faketoken-container-log-test")).toBe(printed)
     log.mockRestore()
   })
+})
 
-  it("refuses a driver whose real adapter does not exist yet, instead of quietly running a fake", () => {
-    expect(() =>
-      createContainer({
-        ...staging,
-        STORAGE_DRIVER: "supabase",
-        SUPABASE_STORAGE_URL: "https://storage.example.test",
-        SUPABASE_STORAGE_BUCKET: "documents",
-        SUPABASE_STORAGE_SERVICE_KEY: "placeholder",
-      }),
-    ).toThrow(/STORAGE_DRIVER=supabase/)
+describe("container documents on Supabase Storage", () => {
+  const storage = new SupabaseStorageDouble()
+  const server = setupServer(...storage.handlers)
+  beforeAll(() => server.listen({ onUnhandledRequest: "error" }))
+  afterAll(() => server.close())
+
+  it("stores and lists documents in the configured bucket when STORAGE_DRIVER is supabase", async () => {
+    const { documents } = createContainer({
+      ...staging,
+      STORAGE_DRIVER: "supabase",
+      SUPABASE_STORAGE_URL: STORAGE_TEST_URL,
+      SUPABASE_STORAGE_BUCKET: STORAGE_TEST_BUCKET,
+      SUPABASE_STORAGE_SERVICE_KEY: STORAGE_TEST_KEY,
+    })
+    const { reference } = anApplication()
+
+    await documents.put(reference, { id: "7", kind: "confirmation" }, new Uint8Array([1, 2, 3]))
+
+    expect(await documents.list(reference)).toEqual([{ id: "7", kind: "confirmation" }])
+  })
+})
+
+describe("container documents in dev", () => {
+  it("serves the seeded confirmation of the completed application from the moment the server starts", async () => {
+    const { repository, documents } = createContainer(dev)
+    const completed = (await repository.findByStatusToken("seed-status-link-completed"))!
+
+    expect(await documents.list(completed.reference)).toEqual([expect.objectContaining({ kind: "confirmation" })])
   })
 })
 
@@ -122,6 +143,23 @@ describeWithPostgres("container repository on Postgres", () => {
     const created = await container().repository.create(anApplication())
 
     expect((await container().repository.get(created.reference))?.status).toBe(created.status)
+  })
+
+  it("counts rate-limited attempts in that database too, so two instances share one count", async () => {
+    const encryptionKey = randomBytes(32).toString("base64")
+    const container = () =>
+      createContainer({
+        ...staging,
+        REPOSITORY_DRIVER: "postgres",
+        DATABASE_URL: database.url,
+        DIRECT_DATABASE_URL: database.url,
+        CODES_ENCRYPTION_KEY: encryptionKey,
+      })
+    const limit = { max: 1, windowMs: 60_000 }
+
+    await container().rateLimiter.consume("container-test", limit)
+
+    expect(await container().rateLimiter.consume("container-test", limit)).toMatchObject({ allowed: false })
   })
 })
 

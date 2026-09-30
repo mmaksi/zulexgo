@@ -27,7 +27,7 @@ export const JOURNEYS: Record<ApplicationStatus, { number: number; events: Appli
 
 export interface SeededApplication {
   readonly application: Application
-  /** Open it in dev at /status/<statusToken>. Obviously fake, never a real token's shape. */
+  /** Open it in dev at /status/<statusToken> */
   readonly statusToken: string
 }
 

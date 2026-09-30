@@ -29,6 +29,41 @@ export interface PaymentDecision {
 
 const NOTHING = Money.ofCents(0)
 
+/** What the provider shows of a payment, for telling whether an outcome was already carried out. */
+export interface PaymentRecord {
+  status: "awaitingCustomer" | "held" | "captured" | "released"
+  total: Money
+  captured: Money
+  refunded: Money
+}
+
+/** What the provider still holds of a payment after refunds: never below zero, whatever a provider calls its reversals. */
+export const retainedOf = ({ captured, refunded }: Pick<PaymentRecord, "captured" | "refunded">): Money =>
+  refunded.isGreaterThan(captured) ? NOTHING : captured.subtract(refunded)
+
+/**
+ * The decision an earlier run of the same outcome already carried out, read
+ * off the payment, so that a rerun (the email after it failed and the whole
+ * step was retried) neither refunds twice nor mistakes a released hold for an
+ * expired one. Undefined while the money has not reached the outcome's end.
+ */
+export function settledDecision(outcome: PaymentOutcome, payment: PaymentRecord): PaymentDecision | undefined {
+  const kept = retainedOf(payment)
+  const none: PaymentAction = { kind: "none" }
+
+  switch (outcome.type) {
+    case "cancelled":
+    case "failedFinal":
+      return payment.status === "captured" && kept.equals(PROCESSING_FEE) ? decide(none, payment.total, PROCESSING_FEE) : undefined
+    case "ourTechnicalError":
+      return payment.status === "released" || (payment.status === "captured" && kept.equals(NOTHING))
+        ? decide(none, payment.total, NOTHING)
+        : undefined
+    default:
+      return undefined
+  }
+}
+
 /**
  * Business logic §3 as a pure function: what to do with the payment and what
  * the customer ends up paying. Resubmitting after a cancellation is a new order

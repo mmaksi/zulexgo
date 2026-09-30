@@ -7,14 +7,19 @@ import { FakePaymentProvider } from "@/src/adapters/payment/fake/fake-payment-pr
 import { StripePaymentProvider } from "@/src/adapters/payment/stripe/stripe-payment-provider"
 import { FakeRegistrationGateway } from "@/src/adapters/registration/fake/fake-registration-gateway"
 import { ZulexRegistrationGateway } from "@/src/adapters/registration/zulex/zulex-registration-gateway"
+import { InMemoryRateLimiter } from "@/src/adapters/rate-limit/fake/in-memory-rate-limiter"
 import { InMemoryApplicationRepository } from "@/src/adapters/repository/fake/in-memory-application-repository"
 import { PostgresApplicationRepository } from "@/src/adapters/repository/postgres/postgres-application-repository"
+import { PostgresRateLimiter } from "@/src/adapters/repository/postgres/postgres-rate-limiter"
 import { InMemoryDocumentStore } from "@/src/adapters/storage/fake/in-memory-document-store"
+import { SupabaseDocumentStore } from "@/src/adapters/storage/supabase/supabase-document-store"
 import { CryptoTokenGenerator } from "@/src/adapters/tokens/crypto/crypto-token-generator"
 import type { ApplicationRepository } from "@/src/core/ports/application-repository"
+import type { Clock } from "@/src/core/ports/clock"
 import type { IdentityVerification } from "@/src/core/ports/identity-verification"
+import type { RateLimiter } from "@/src/core/ports/rate-limiter"
 import type { Dependencies } from "@/src/core/use-cases/dependencies"
-import { seedFor } from "@/db/seed/seed"
+import { seedDocumentsFor, seedFor } from "@/db/seed/seed"
 import { parseEnv, type Env, type EnvSource } from "./env"
 
 /**
@@ -48,6 +53,7 @@ export function createContainer(source: EnvSource = process.env): Container {
     clock,
     tokens: new CryptoTokenGenerator(),
     repository: createRepository(env),
+    rateLimiter: createRateLimiter(env, clock),
     registration:
       env.REGISTRATION_DRIVER === "fake"
         ? new FakeRegistrationGateway()
@@ -64,15 +70,17 @@ export function createContainer(source: EnvSource = process.env): Container {
             from: env.MAIL_FROM!,
             allowlist: env.APP_ENV === "staging" ? env.MAIL_ALLOWLIST : undefined,
           }),
-    documents: env.STORAGE_DRIVER === "fake" ? new InMemoryDocumentStore() : notBuiltYet("STORAGE_DRIVER=supabase", "M5"),
+    documents:
+      env.STORAGE_DRIVER === "fake"
+        ? new InMemoryDocumentStore(seedDocumentsFor(env.APP_ENV))
+        : new SupabaseDocumentStore({
+            url: env.SUPABASE_STORAGE_URL!,
+            bucket: env.SUPABASE_STORAGE_BUCKET!,
+            serviceKey: env.SUPABASE_STORAGE_SERVICE_KEY!,
+          }),
     identity: new FakeIdentityVerification(),
     statusLink: (token) => new URL(`/status/${token}`, env.APP_BASE_URL).toString(),
   }
-}
-
-/** A real driver without its adapter must stop the boot, never fall back to a fake. */
-function notBuiltYet(driver: string, milestone: string): never {
-  throw new Error(`${driver} is configured, but its adapter arrives in ${milestone}.`)
 }
 
 /** On the in-memory repository every boot starts from the seed; a database is seeded by its deploy instead. */
@@ -82,6 +90,12 @@ function createRepository(env: Env): ApplicationRepository {
     connectionString: env.DATABASE_URL!,
     encryptionKey: env.CODES_ENCRYPTION_KEY!,
   })
+}
+
+/** Counts must be shared by every instance, so the limiter lives wherever the repository does: in memory only while the repository is. */
+function createRateLimiter(env: Env, clock: Clock): RateLimiter {
+  if (env.REPOSITORY_DRIVER === "fake") return new InMemoryRateLimiter(clock)
+  return new PostgresRateLimiter({ connectionString: env.DATABASE_URL!, secret: env.CODES_ENCRYPTION_KEY!, clock })
 }
 
 let container: Container | undefined

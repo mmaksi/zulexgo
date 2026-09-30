@@ -39,7 +39,7 @@ describeWithPostgres("migration rehearsal", () => {
     const reverted = await schemaObjects()
     await migrator.up()
 
-    expect(migrated).toEqual(["application_status", "applications", "payments", "status_history", "status_tokens"])
+    expect(migrated).toEqual(["application_status", "applications", "payments", "rate_limits", "status_history", "status_tokens"])
     expect(reverted).toEqual([])
     expect(await schemaObjects()).toEqual(migrated)
   })
