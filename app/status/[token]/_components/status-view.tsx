@@ -19,8 +19,8 @@ function describe(step: CustomerStep, failureReason?: string): { title: string; 
       ? { title: "Antrag eingegangen", line: "Zahlung wird bestätigt" }
       : {
           title: "Antrag eingegangen",
-          line: "Betrag reserviert",
-          text: "Wir haben Ihren Antrag erhalten und den Betrag auf Ihrer Karte reserviert. Abgebucht wird er erst mit dem Ergebnis.",
+          line: "Zahlung erhalten",
+          text: "Wir haben Ihren Antrag erhalten. Ihre Karte wird belastet, sobald er eingereicht ist, spätestens kurz vor Ablauf der Kartenreservierung.",
         }
   }
   if (step.id === "kba") {

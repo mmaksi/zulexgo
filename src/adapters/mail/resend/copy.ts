@@ -32,7 +32,7 @@ export function copyFor(template: EmailTemplate): EmailCopy {
         heading: "Ihr Antrag ist eingegangen",
         paragraphs: [
           `Vielen Dank für Ihren Antrag auf Außerbetriebsetzung. Ihre Auftragsnummer lautet ${reference}.`,
-          "Den Betrag haben wir auf Ihrer Karte reserviert. Abgebucht wird er erst mit dem Ergebnis Ihres Antrags.",
+          "Ihre Zahlung ist eingegangen. Ihre Karte wird belastet, sobald Ihr Antrag eingereicht ist, spätestens kurz vor Ablauf der Kartenreservierung. Scheitert er, erstatten wir den Betrag, gegebenenfalls abzüglich der Bearbeitungsgebühr.",
           "Über Ihren persönlichen Link sehen Sie jederzeit, wie weit Ihr Antrag ist. Der Link ist nur für Sie bestimmt: Bitte geben Sie ihn nicht weiter.",
         ],
         action: { label: "Status ansehen", href: template.statusLink },
