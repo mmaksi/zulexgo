@@ -8,6 +8,7 @@ import { InMemoryApplicationRepository } from "@/src/adapters/repository/fake/in
 import { InMemoryDocumentStore } from "@/src/adapters/storage/fake/in-memory-document-store"
 import { FakeTokenGenerator } from "@/src/adapters/tokens/fake/fake-token-generator"
 import type { ApplicationReference } from "@/src/core/domain/application-reference"
+import { GatewayUnavailable } from "@/src/core/errors/gateway-unavailable"
 import type { RejectionCatalogue } from "@/src/core/domain/rejection-catalogue"
 import type { PaymentMethodKind } from "@/src/core/ports/payment-provider"
 import { confirmPayment } from "@/src/core/use-cases/confirm-payment"
@@ -21,6 +22,16 @@ export const CATALOGUE: RejectionCatalogue = {
   202: { class: "final", reason: "Das Fahrzeug ist bereits abgemeldet." },
 }
 export const CODES = Object.values(FAKE_REQUEST.codes)
+
+export const HOUR = 60 * MINUTE
+
+/** The service cannot be reached for this many hourly checks: every attempt to file a waiting application fails. */
+export async function keepServiceDown(flow: Pick<ReturnType<typeof setupFlow>, "deps" | "poll">, hours: number) {
+  for (let hour = 0; hour < hours; hour++) {
+    flow.deps.registration.failNext("submit", new GatewayUnavailable())
+    await flow.poll(60)
+  }
+}
 
 export function setupFlow() {
   const clock = new FakeClock(new Date("2026-03-01T09:00:00.000Z"))

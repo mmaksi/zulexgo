@@ -5,7 +5,7 @@ import { settledDecision } from "@/src/core/domain/refund-policy"
 import { GatewayRejected } from "@/src/core/errors/gateway-rejected"
 import { GatewayUnavailable } from "@/src/core/errors/gateway-unavailable"
 import type { Dependencies } from "./dependencies"
-import { handleFailure } from "./handle-failure"
+import { applyDecision, handleFailure } from "./handle-failure"
 import { mailCustomer } from "./mail-customer"
 import { captureHold } from "./secure-hold"
 
@@ -26,7 +26,7 @@ export async function submitToKba(deps: Dependencies, application: Application):
   // filed for: the failure is finished instead, so a service that recovered in the meantime cannot undo the refund.
   const payment = await deps.payments.getPayment(application.payment.id)
   if (settledDecision({ type: "ourTechnicalError" }, { ...payment, total: application.payment.total })) {
-    return handleFailure(deps, application, { kind: "unavailable" }, resubmitLater())
+    return applyDecision(deps, application, { kind: "unavailable" }, { action: "failFinal", refund: "full" }, resubmitLater())
   }
 
   let filed = application
@@ -36,7 +36,9 @@ export async function submitToKba(deps: Dependencies, application: Application):
       ;({ applicationId } = await deps.registration.submitDeregistration(application.request, application.idempotencyKey))
     } catch (error) {
       await handleFailure(deps, application, toFailure(error), resubmitLater(error))
-      return
+      // A refusal or an outage is expected; anything else (a wrong API key, an answer we cannot read) is rescheduled like them but left loud.
+      if (error instanceof GatewayUnavailable || error instanceof GatewayRejected) return
+      throw error
     }
     // Stored before anything else can fail, so a failed email never makes the next tick file it again:
     // how Zulex answers a replayed submission is unspecified (launch plan Q23).
@@ -67,16 +69,16 @@ async function recordRegistration(deps: Dependencies, application: Application, 
   }
 }
 
+/** Only a refusal is known not to have filed anything: whatever else went wrong, the service may hold the application. */
 function toFailure(error: unknown): Failure {
-  if (error instanceof GatewayUnavailable) return { kind: "unavailable" }
-  if (error instanceof GatewayRejected) return { kind: "rejected" }
-  throw error
+  return error instanceof GatewayRejected ? { kind: "rejected" } : { kind: "unavailable" }
 }
 
+/** `retryAttempts` counts resubmissions, so it indexes the delay before the next: a minute at first, then the online poll table. */
 const resubmitAt = (deps: Dependencies, application: Application, error: unknown) =>
   nextPollAt({
     ikfzStatus: "online",
-    attempts: 0,
+    attempts: application.retryAttempts - 1,
     now: deps.clock.now(),
     retryAfterMs: error instanceof GatewayUnavailable ? error.retryAfterMs : undefined,
   })

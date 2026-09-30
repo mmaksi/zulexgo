@@ -5,7 +5,7 @@ import { DEREGISTRATION_TOTAL, PROCESSING_FEE } from "@/src/core/domain/pricing"
 import { GatewayUnavailable } from "@/src/core/errors/gateway-unavailable"
 import type { EmailTemplate } from "@/src/core/ports/mailer"
 import { confirmRefund } from "@/src/core/use-cases/confirm-refund"
-import { CODES, setupFlow } from "./flow-harness"
+import { CODES, keepServiceDown, setupFlow } from "./flow-harness"
 
 const FINISHED = { state: "finished", documents: [] } as const
 const CORRECTABLE = { state: "failed", error: { code: 101, details: [] }, documents: [] } as const
@@ -89,8 +89,7 @@ describe("status notifications: one email per transition", () => {
     const flow = setupFlow()
     flow.deps.registration.failNext("submit", new GatewayUnavailable())
     await flow.checkoutAndPay()
-    flow.deps.registration.failNext("submit", new GatewayUnavailable())
-    await flow.poll(1)
+    await keepServiceDown(flow, 24)
 
     expect(flow.emails()).toEqual(["orderConfirmation", "rejected", "refundIssued"])
     const [, rejected, refund] = flow.deps.mailer.sent.map(({ template }) => template)
@@ -189,10 +188,11 @@ describe("status notifications: an email that could not be sent is not lost", ()
     const flow = setupFlow()
     flow.deps.registration.failNext("submit", new GatewayUnavailable())
     const reference = await flow.checkoutAndPay()
+    await keepServiceDown(flow, 23)
     failMailerOnce(flow, "refundIssued")
 
     flow.deps.registration.failNext("submit", new GatewayUnavailable())
-    expect(await flow.poll(1)).toMatchObject({ failed: 1 })
+    expect(await flow.poll(60)).toMatchObject({ failed: 1 })
     await flow.poll(0)
 
     expect((await flow.stored(reference)).status).toBe("failed_final")

@@ -6,7 +6,7 @@ import { GatewayUnavailable } from "@/src/core/errors/gateway-unavailable"
 import { confirmPayment } from "@/src/core/use-cases/confirm-payment"
 import { confirmRefund } from "@/src/core/use-cases/confirm-refund"
 import { submitCheckout } from "@/src/core/use-cases/submit-checkout"
-import { CODES, MINUTE, setupFlow as setup } from "./flow-harness"
+import { CODES, keepServiceDown, MINUTE, setupFlow as setup } from "./flow-harness"
 
 describe("de-registration flow on fakes", () => {
   describe("J1, happy path", () => {
@@ -89,7 +89,7 @@ describe("de-registration flow on fakes", () => {
       deps.registration.failNext("submit", new Error("the process died"))
 
       await expect(confirmPayment(deps, reference)).rejects.toThrow("the process died")
-      await poll(0)
+      await poll(1)
 
       expect((await stored(reference)).status).toBe("submitted_to_kba")
       expect(emails()).toEqual(["orderConfirmation", "submittedToKba"])
@@ -121,22 +121,71 @@ describe("de-registration flow on fakes", () => {
       expect(emails()).toEqual(["orderConfirmation", "submittedToKba"])
     })
 
-    it("fails for good with a full refund when the second attempt cannot reach the service either", async () => {
-      const { deps, emails, stored, payment, poll, checkoutAndPay } = setup()
-      deps.registration.failNext("submit", new GatewayUnavailable())
-      const reference = await checkoutAndPay("card")
+    it("keeps resubmitting under the same idempotency key while the service cannot be reached, telling nobody and refunding nothing (D6)", async () => {
+      const flow = setup()
+      const submit = jest.spyOn(flow.deps.registration, "submitDeregistration")
+      flow.deps.registration.failNext("submit", new GatewayUnavailable())
+      const reference = await flow.checkoutAndPay("card")
 
-      deps.registration.failNext("submit", new GatewayUnavailable())
-      await poll(1)
+      await keepServiceDown(flow, 5)
 
-      expect((await stored(reference)).status).toBe("failed_final")
-      expect(await payment(reference)).toMatchObject({ status: "released", captured: Money.ofCents(0) })
-      expect(emails()).toEqual(["orderConfirmation", "rejected", "refundIssued"])
+      expect((await flow.stored(reference)).status).toBe("submitted_and_paid")
+      expect(flow.emails()).toEqual(["orderConfirmation"])
+      expect((await flow.payment(reference)).status).toBe("held")
+      expect(submit.mock.calls.length).toBeGreaterThan(2)
+      expect(new Set(submit.mock.calls.map(([, key]) => key)).size).toBe(1)
+    })
 
-      await confirmRefund(deps, reference)
+    it("then files the application when the service comes back, however late within the day", async () => {
+      const flow = setup()
+      flow.deps.registration.failNext("submit", new GatewayUnavailable())
+      const reference = await flow.checkoutAndPay("card")
+      await keepServiceDown(flow, 20)
 
-      expect(emails()).toEqual(["orderConfirmation", "rejected", "refundIssued"])
-      expect(deps.mailer.sent.at(-1)?.template).toMatchObject({ amount: DEREGISTRATION_TOTAL })
+      await flow.poll(60)
+
+      expect((await flow.stored(reference)).status).toBe("submitted_to_kba")
+      expect(flow.emails()).toEqual(["orderConfirmation", "submittedToKba"])
+    })
+
+    it("fails for good with a full refund only once a day has passed without an answer, and flags the order for support", async () => {
+      const warn = jest.spyOn(console, "warn").mockImplementation(() => {})
+      const flow = setup()
+      flow.deps.registration.failNext("submit", new GatewayUnavailable())
+      const reference = await flow.checkoutAndPay("card")
+
+      await keepServiceDown(flow, 23)
+      expect((await flow.stored(reference)).status).toBe("submitted_and_paid")
+
+      await keepServiceDown(flow, 1)
+
+      expect((await flow.stored(reference)).status).toBe("failed_final")
+      expect(await flow.payment(reference)).toMatchObject({ status: "released", captured: Money.ofCents(0) })
+      expect(flow.emails()).toEqual(["orderConfirmation", "rejected", "refundIssued"])
+      expect(warn.mock.calls.flat().join(" ")).toContain(reference)
+      await confirmRefund(flow.deps, reference)
+      expect(flow.emails()).toEqual(["orderConfirmation", "rejected", "refundIssued"])
+      expect(flow.deps.mailer.sent.at(-1)?.template).toMatchObject({ amount: DEREGISTRATION_TOTAL })
+      warn.mockRestore()
+    })
+
+    it("backs off from a submission the service refuses for good, like a wrong API key, instead of retrying every tick (D4)", async () => {
+      const error = jest.spyOn(console, "error").mockImplementation(() => {})
+      const flow = setup()
+      const refused = new Error("Zulex POST /deregistration-applications answered 401")
+      refused.name = "ZulexRequestFailed"
+      const reference = await flow.payForCheckout("card")
+      flow.deps.registration.failNext("submit", refused)
+      await expect(flow.confirm(reference)).rejects.toThrow("answered 401")
+
+      expect(await flow.poll(0)).toEqual({ checked: 0, failed: 0 })
+
+      flow.deps.registration.failNext("submit", refused)
+      expect(await flow.poll(1)).toEqual({ checked: 1, failed: 1 })
+      expect(await flow.poll(0)).toEqual({ checked: 0, failed: 0 })
+      expect((await flow.stored(reference)).status).toBe("submitted_and_paid")
+      expect(flow.emails()).toEqual(["orderConfirmation"])
+      error.mockRestore()
     })
 
     it("gives each submission its own retry: a resubmitted application still gets one for a later KBA error", async () => {
