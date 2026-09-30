@@ -19,6 +19,7 @@ const LEGAL: [ApplicationStatus, ApplicationEvent, ApplicationStatus][] = [
   ["submitted_to_kba", "failedCorrectable", "failed_correctable"],
   ["submitted_to_kba", "failedFinal", "failed_final"],
   ["failed_correctable", "correctionResubmitted", "submitted_to_kba"],
+  ["failed_correctable", "correctionRefiled", "submitted_and_paid"],
   ["failed_correctable", "cancelledByCustomer", "cancelled"],
 ]
 

@@ -66,7 +66,7 @@ export class PostgresApplicationRepository implements ApplicationRepository {
 
   async create(application: Application): Promise<Application> {
     await this.transaction(async (client) => {
-      const columns = { reference: application.reference, version: 1, idempotency_key: application.idempotencyKey, ...this.columns(application) }
+      const columns = { reference: application.reference, version: 1, ...this.columns(application) }
       const names = Object.keys(columns)
       await client.query(
         `INSERT INTO applications (${names.join(", ")}) VALUES (${names.map((_, index) => `$${index + 1}`).join(", ")})`,
@@ -106,7 +106,7 @@ export class PostgresApplicationRepository implements ApplicationRepository {
         [application.reference],
       )
       await appendHistory(client, application.reference, application.history.slice(rows[0].stored))
-    })
+    }).catch(rethrowDuplicate)
 
     return (await this.get(application.reference))!
   }
@@ -143,7 +143,7 @@ export class PostgresApplicationRepository implements ApplicationRepository {
     return rows.map((row) => this.toApplication(row))
   }
 
-  /** Every column an update may change; the reference and idempotency key are fixed at creation. */
+  /** Every column an update may change; only the reference is fixed at creation. */
   private columns(application: Application) {
     const { request } = application
     const { rearPlate, frontPlate, certificate } = request.codes
@@ -158,6 +158,7 @@ export class PostgresApplicationRepository implements ApplicationRepository {
       vin: request.vin,
       encrypted_security_codes: this.cipher.encrypt(JSON.stringify(codes), application.reference),
       authority_ikfz_status: application.ikfzStatus,
+      idempotency_key: application.idempotencyKey,
       zulex_application_id: application.zulexApplicationId ?? null,
       retry_attempts: application.retryAttempts,
       failure_kind: application.failure?.kind ?? null,

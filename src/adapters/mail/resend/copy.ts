@@ -69,10 +69,10 @@ export function copyFor(template: EmailTemplate): EmailCopy {
         heading: "Ihr Antrag braucht eine Korrektur",
         paragraphs: [
           `${template.reason} Das lässt sich meist korrigieren.`,
-          `Schreiben Sie uns an ${SUPPORT_EMAIL} und nennen Sie Ihre Auftragsnummer ${reference}. Wir korrigieren den Antrag gemeinsam mit Ihnen. Sie zahlen nur die Differenz, falls Mehrkosten entstehen.`,
+          "Auf Ihrer Statusseite korrigieren Sie die Angaben und reichen den Antrag erneut ein. Das kostet nichts extra.",
         ],
-        note: `Sie können den Antrag auch stornieren. Wir behalten dann die Bearbeitungsgebühr von ${formatEuros(PROCESSING_FEE)} ein und erstatten den Rest.`,
-        action: { label: "Status ansehen", href: template.statusLink },
+        note: `Sie können den Antrag dort auch stornieren. Wir behalten dann die Bearbeitungsgebühr von ${formatEuros(PROCESSING_FEE)} ein und erstatten den Rest.`,
+        action: { label: "Antrag korrigieren", href: template.statusLink },
       }
     case "rejected":
       return {

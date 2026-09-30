@@ -34,6 +34,9 @@ export class InMemoryApplicationRepository implements ApplicationRepository {
   async update(application: Application): Promise<Application> {
     const stored = this.applications.get(application.reference)
     if (!stored || stored.version !== application.version) throw new StaleApplication(application.reference)
+    if (this.all().some((other) => other.reference !== stored.reference && other.idempotencyKey === application.idempotencyKey)) {
+      throw new DuplicateApplication("idempotencyKey")
+    }
     return this.store({ ...application, version: stored.version + 1 })
   }
 

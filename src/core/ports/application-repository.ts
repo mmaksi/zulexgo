@@ -11,6 +11,9 @@ import type { ApplicationReference } from "@/src/core/domain/application-referen
  * - `update` succeeds only if the stored version equals the given one, then
  *   stores version + 1; otherwise `StaleApplication` and nothing changes. The
  *   poller and a webhook can therefore never both advance one application.
+ *   Everything but the reference may change, the idempotency key included (a
+ *   correction that files the order afresh takes a new one), and it may not
+ *   take one another application holds: `DuplicateApplication`.
  * - Security codes, money and dates round-trip unchanged; what is returned is a
  *   copy, so mutating it never changes the store.
  * - A status token can be matched and read back, so every email can carry the

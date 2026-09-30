@@ -151,6 +151,24 @@ export function applicationRepositoryContract(name: string, makeSubject: () => A
         expect((await repository.get(created.reference))?.failure).toBeUndefined()
       })
 
+      it("stores a replaced idempotency key, as a correction that files the order afresh does", async () => {
+        const created = await repository.create(anApplication())
+
+        await repository.update({ ...created, idempotencyKey: "fresh-key-after-a-correction" })
+
+        expect((await repository.get(created.reference))?.idempotencyKey).toBe("fresh-key-after-a-correction")
+      })
+
+      it("rejects an update that takes an idempotency key another order holds, and keeps what is stored", async () => {
+        const first = await repository.create(anApplication())
+        const second = await repository.create(anApplication())
+
+        await expect(repository.update({ ...second, idempotencyKey: first.idempotencyKey })).rejects.toEqual(
+          new DuplicateApplication("idempotencyKey"),
+        )
+        expect((await repository.get(second.reference))?.idempotencyKey).toBe(second.idempotencyKey)
+      })
+
       it("rejects a stale version and keeps what is stored, so two writers cannot both win", async () => {
         const created = await repository.create(anApplication())
         await repository.update({ ...created, retryAttempts: 1 })

@@ -34,6 +34,10 @@ describe("getStatusByToken", () => {
     expect(view.steps.map((step) => step.id)).toEqual(["paid", "kba", "outcome"])
   })
 
+  it("says how many plates the vehicle has, so a correction asks for the right codes", async () => {
+    expect((await getStatusByToken(deps, TOKEN)).plateCount).toBe(2)
+  })
+
   it("carries no security code and no full VIN, so the page cannot render one", async () => {
     const serialised = JSON.stringify(await getStatusByToken(deps, TOKEN))
 

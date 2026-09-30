@@ -21,6 +21,8 @@ export interface StatusView {
   readonly reference: Application["reference"]
   readonly status: Application["status"]
   readonly licencePlate: LicencePlate
+  /** One or two: a correction asks for the front plate's code only when there is a front plate. */
+  readonly plateCount: 1 | 2
   readonly vinEnding: string
   readonly steps: CustomerStep[]
   /** What the customer may download: the ids to ask the download route for, confirmation first. */
@@ -50,6 +52,7 @@ export async function getStatusByToken(
     reference,
     status,
     licencePlate: request.licencePlate,
+    plateCount: request.plateCount,
     vinEnding: request.vin.slice(-VIN_VISIBLE),
     steps: customerSteps(application),
     failureReason: failureReasonOf(application, deps.errorCatalogue),

@@ -10,6 +10,7 @@ import { Alert } from "@/src/ui/alert"
 import { buttonLink } from "@/src/ui/button"
 import { PlateFrame } from "@/src/ui/plate-frame"
 import { CancelOrder, type CancelOrderAction } from "./cancel-order"
+import { CorrectOrder, type CorrectOrderAction } from "./correct-order"
 
 /** Titles are the customer statuses, status lines the internal labels (launch plan § Context). */
 function describe(step: CustomerStep, failureReason?: string): { title: string; line?: string; text?: string } {
@@ -53,16 +54,18 @@ const when = (date: Date) =>
  * site-contract §2.6: plate and the end of the VIN, never a security code; a
  * vertical stepper at every size. `documentHref` builds a download link, the
  * one place a page repeats its own token; `cancelAction` is the server action
- * bound to it.
+ * bound to it, as is `correctAction`.
  */
 export function StatusView({
   view,
   documentHref,
   cancelAction,
+  correctAction,
 }: {
   view: View
   documentHref: (documentId: string) => string
   cancelAction: CancelOrderAction
+  correctAction: CorrectOrderAction
 }) {
   const { licencePlate } = view
   return (
@@ -95,7 +98,7 @@ export function StatusView({
         </ol>
       </section>
 
-      <OutcomeBlock view={view} documentHref={documentHref} cancelAction={cancelAction} />
+      <OutcomeBlock view={view} documentHref={documentHref} cancelAction={cancelAction} correctAction={correctAction} />
 
       <section aria-labelledby="status-help" className="measure flex flex-col gap-2">
         <h2 id="status-help" className="text-h4 text-grau-dark">
@@ -129,10 +132,12 @@ function OutcomeBlock({
   view,
   documentHref,
   cancelAction,
+  correctAction,
 }: {
   view: View
   documentHref: (documentId: string) => string
   cancelAction: CancelOrderAction
+  correctAction: CorrectOrderAction
 }) {
   const outcome = view.steps.find((step) => step.id === "outcome")?.outcome
   if (!outcome) return null
@@ -142,16 +147,20 @@ function OutcomeBlock({
       return <Documents view={view} documentHref={documentHref} />
     case "failed_correctable":
       return (
-        <section aria-labelledby="status-options" className="measure flex flex-col gap-6">
+        <section aria-labelledby="status-options" className="measure flex flex-col gap-8">
           <h2 id="status-options" className="text-h4 text-grau-dark">
             Wie möchten Sie fortfahren?
           </h2>
-          <Alert variant="warning">
-            Schreiben Sie uns an <MailLink /> und nennen Sie Ihre Auftragsnummer {view.reference}. Wir korrigieren den Antrag gemeinsam
-            mit Ihnen. Sie zahlen nur die Differenz, falls Mehrkosten entstehen.
-          </Alert>
+          <div className="flex flex-col gap-4">
+            <h3 className="text-subtitle text-grau-dark">Angaben korrigieren</h3>
+            <p className="text-body text-grau">Korrigieren Sie Ihre Angaben und reichen Sie den Antrag erneut ein. Das kostet nichts extra.</p>
+            <CorrectOrder action={correctAction} plateCount={view.plateCount} />
+          </div>
           {view.cancellation ? (
-            <CancelOrder action={cancelAction} returned={formatEuros(view.cancellation.returned)} retained={formatEuros(view.cancellation.retained)} />
+            <div className="flex flex-col gap-4">
+              <h3 className="text-subtitle text-grau-dark">Oder stornieren</h3>
+              <CancelOrder action={cancelAction} returned={formatEuros(view.cancellation.returned)} retained={formatEuros(view.cancellation.retained)} />
+            </div>
           ) : null}
         </section>
       )

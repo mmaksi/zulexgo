@@ -1,7 +1,8 @@
 import { GatewayRejected } from "@/src/core/errors/gateway-rejected"
 import { CODES, setupFlow } from "@/tests/integration/flow-harness"
 import { RATE_LIMITS } from "@/src/core/domain/rate-limits"
-import { cancelOrder } from "./order-change"
+import { GatewayUnavailable } from "@/src/core/errors/gateway-unavailable"
+import { cancelOrder, correctOrder } from "./order-change"
 
 const headers = new Headers({ "x-forwarded-for": "203.0.113.7" })
 
@@ -60,6 +61,95 @@ describe("cancelOrder", () => {
     expect(logged).toContain("Error")
     expect(logged).not.toContain("customer@example.test")
     for (const code of CODES) expect(logged).not.toContain(code)
+    error.mockRestore()
+  })
+})
+
+const fix = { vin: "FAKEVIN0000000009", certificate: "AAAAAA9" }
+
+async function correctableAtTheKba() {
+  const flow = setupFlow()
+  const reference = await flow.checkoutAndPay("card")
+  flow.deps.registration.setStatus(await flow.zulexId(reference), { state: "failed", error: { code: 101, details: [] }, documents: [] })
+  await flow.poll(1)
+  return { ...flow, reference, token: (await flow.deps.repository.getStatusToken(reference))! }
+}
+
+describe("correctOrder", () => {
+  it("corrects an order that waits for it and puts it back at the KBA", async () => {
+    const { deps, stored, reference, token } = await correctableAtTheKba()
+
+    expect(await correctOrder(deps, headers, token, fix)).toEqual({ status: "done" })
+    expect((await stored(reference)).status).toBe("submitted_to_kba")
+  })
+
+  it("names each wrong field in the funnel's own words, and never echoes a value", async () => {
+    const { deps, token } = await correctableAtTheKba()
+
+    const result = await correctOrder(deps, headers, token, { vin: "not a vin!", rearPlate: "AAAA", certificate: "AAAAAA9" })
+
+    expect(result).toMatchObject({ status: "invalid", errors: { vin: expect.any(String), rearPlate: expect.any(String) } })
+    expect(JSON.stringify(result)).not.toMatch(/not a vin|AAAA|AAAAAA9/)
+    expect(result).not.toMatchObject({ errors: { certificate: expect.anything() } })
+  })
+
+  it("asks for at least one change, in a sentence for the whole form", async () => {
+    const { deps, token } = await correctableAtTheKba()
+
+    expect(await correctOrder(deps, headers, token, {})).toMatchObject({ status: "invalid", errors: {}, general: expect.any(String) })
+  })
+
+  it("ignores anything but text in the fields, since any POST can reach it", async () => {
+    const { deps, stored, reference, token } = await correctableAtTheKba()
+
+    const result = await correctOrder(deps, headers, token, { vin: 12345, certificate: { toString: "x" }, rearPlate: null } as never)
+
+    expect(result).toMatchObject({ status: "invalid" })
+    expect((await stored(reference)).status).toBe("failed_correctable")
+  })
+
+  it("tells the customer when the service refuses the corrected data", async () => {
+    const { deps, token } = await correctableAtTheKba()
+    jest.spyOn(deps.registration, "correct").mockRejectedValueOnce(new GatewayRejected())
+
+    expect(await correctOrder(deps, headers, token, fix)).toEqual({ status: "refused" })
+  })
+
+  it("tells the customer to try later when the service cannot be reached, leaving the order at 5b", async () => {
+    const { deps, stored, reference, token } = await correctableAtTheKba()
+    deps.registration.failNext("correct", new GatewayUnavailable())
+
+    expect(await correctOrder(deps, headers, token, fix)).toEqual({ status: "unavailable" })
+    expect((await stored(reference)).status).toBe("failed_correctable")
+  })
+
+  it("answers alike for a link that opens nothing and for an order that cannot be corrected", async () => {
+    const flow = setupFlow()
+    const reference = await flow.checkoutAndPay("card")
+
+    expect(await correctOrder(flow.deps, headers, "faketoken-unknown", fix)).toEqual({ status: "notPossible" })
+    expect(await correctOrder(flow.deps, headers, (await flow.deps.repository.getStatusToken(reference))!, fix)).toEqual({ status: "notPossible" })
+  })
+
+  it("shares its limit with cancelling, counts wrong links, and reaches the service no more once over it", async () => {
+    const { deps, token } = await correctableAtTheKba()
+    const correct = jest.spyOn(deps.registration, "correct")
+    for (let attempt = 0; attempt < RATE_LIMITS.orderChange.max; attempt++) await correctOrder(deps, headers, "faketoken-guess", fix)
+
+    expect(await correctOrder(deps, headers, token, fix)).toMatchObject({ status: "limited", retryAfterMinutes: expect.any(Number) })
+    expect(correct).not.toHaveBeenCalled()
+  })
+
+  it("logs a failure by kind, never its message or a code", async () => {
+    const error = jest.spyOn(console, "error").mockImplementation(() => {})
+    const { deps, token } = await correctableAtTheKba()
+    jest.spyOn(deps.mailer, "send").mockRejectedValue(new Error("Resend refused customer@example.test AAAAAA9"))
+
+    expect(await correctOrder(deps, headers, token, fix)).toEqual({ status: "failed" })
+
+    const logged = error.mock.calls.flat().join(" ")
+    expect(logged).toContain("Error")
+    for (const secret of ["customer@example.test", "AAAAAA9", ...CODES]) expect(logged).not.toContain(secret)
     error.mockRestore()
   })
 })

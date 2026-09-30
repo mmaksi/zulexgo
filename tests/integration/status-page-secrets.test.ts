@@ -20,13 +20,14 @@ const repository = new InMemoryApplicationRepository(seeded)
 const documents = new InMemoryDocumentStore(seedDocumentsFor("dev"))
 const payments = new FakePaymentProvider(new FakeClock())
 const cancelAction = async () => ({ status: "done" as const })
+const correctAction = async () => ({ status: "done" as const })
 
 describe("the rendered status page", () => {
   it.each(seeded.map(({ application, statusToken }) => [application.status, application, statusToken] as const))(
     "shows no security code, token or full VIN at %s",
     async (_, application, token) => {
       const view = await getStatusByToken({ repository, documents, payments }, token)
-      const html = renderToStaticMarkup(createElement(StatusView, { view, documentHref: (id: string) => `/status/${token}/documents/${id}`, cancelAction }))
+      const html = renderToStaticMarkup(createElement(StatusView, { view, documentHref: (id: string) => `/status/${token}/documents/${id}`, cancelAction, correctAction }))
       const { codes, vin } = application.request
 
       expect(html).toContain(application.reference)
@@ -42,7 +43,7 @@ describe("the rendered status page", () => {
   it("offers the seeded confirmation for download on the completed order, and no download anywhere else", async () => {
     for (const { application, statusToken } of seeded) {
       const view = await getStatusByToken({ repository, documents, payments }, statusToken)
-      const html = renderToStaticMarkup(createElement(StatusView, { view, documentHref: (id: string) => `/status/${statusToken}/documents/${id}`, cancelAction }))
+      const html = renderToStaticMarkup(createElement(StatusView, { view, documentHref: (id: string) => `/status/${statusToken}/documents/${id}`, cancelAction, correctAction }))
 
       expect(html.includes("/documents/")).toBe(application.status === "completed")
     }
