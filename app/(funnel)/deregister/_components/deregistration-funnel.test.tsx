@@ -185,7 +185,8 @@ describe("de-registration funnel", () => {
       await passEligibility(user)
       await fillVehicle(user)
 
-      expect(screen.getByText(/behalten wir 19,99\s€ Bearbeitungsgebühr ein/)).toBeInTheDocument()
+      const notice = screen.getByText(/behalten wir 19,99\s€ Bearbeitungsgebühr ein/)
+      expect(notice).toHaveTextContent(/erstatten den Rest innerhalb von 3–5 Werktagen/)
       expect(payButton()).toBeDisabled()
 
       await user.click(consentBoxes()[0])

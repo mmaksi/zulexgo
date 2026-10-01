@@ -38,6 +38,7 @@ Statuses, emails, the error algorithm, payment and refund amounts: [launch-plan.
 - Plate/VIN scan via camera (OCR)
 - SMS status notifications
 - Post-completion cross-sell (reactivation reminder for seasonal vehicles)
+- Add-ons for the registration services (plates, fine-dust sticker, shipping), ordered and charged only after the KBA has completed the service: launch plan Q41
 
 ## 4. Technical Constraints
 Each constraint has one home; this section only points to it.

@@ -1,3 +1,5 @@
+import { formatEuros } from "@/src/core/domain/money"
+import { PROCESSING_FEE } from "@/src/core/domain/pricing"
 import { Section, SectionHeading } from "@/src/ui/section"
 
 // site-contract.md §2.1 — exactly four steps, title <=30, text <=120 chars.
@@ -12,7 +14,7 @@ const STEPS = [
   },
   {
     title: "Sicher bezahlen",
-    text: "Gesamtpreis inklusive Behördengebühr. Scheitert der Antrag, erstatten wir den Betrag, unter Umständen abzüglich 19,99 €.",
+    text: `Gesamtpreis inklusive Behördengebühr. Scheitert der Antrag, erstatten wir den Betrag, unter Umständen abzüglich ${formatEuros(PROCESSING_FEE)}.`,
   },
   {
     title: "Bestätigung erhalten",

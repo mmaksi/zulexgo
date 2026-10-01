@@ -43,16 +43,16 @@ describe("cancelling a 5b, through Stripe", () => {
     expect(world.stripe.intents.get(paymentId)).toMatchObject({ status: "succeeded", amount_received: 1999 })
     expect(world.stripe.sent.some((body) => body.includes("amount_to_capture=1999"))).toBe(true)
     expect((await stored(reference)).status).toBe("cancelled")
-    expect(world.mailer.sent.at(-1)?.template).toMatchObject({ name: "refundIssued", amount: { cents: 5000 } })
+    expect(world.mailer.sent.at(-1)?.template).toMatchObject({ name: "refundIssued", amount: { cents: 2901 } })
   })
 
   it("refunds all but the fee of a card that was taken when the KBA refused the data", async () => {
     const { reference, paymentId, token } = await rejectedByKba()
-    expect(world.stripe.intents.get(paymentId)).toMatchObject({ status: "succeeded", amount_received: 6999 })
+    expect(world.stripe.intents.get(paymentId)).toMatchObject({ status: "succeeded", amount_received: 4900 })
 
     await cancelApplication(world.deps, token)
 
-    expect(world.stripe.sent.filter((body) => body.includes(`payment_intent=${paymentId}`) && body.includes("amount=5000"))).toHaveLength(1)
+    expect(world.stripe.sent.filter((body) => body.includes(`payment_intent=${paymentId}`) && body.includes("amount=2901"))).toHaveLength(1)
     expect((await stored(reference)).status).toBe("cancelled")
     expect(emails().filter((name) => name === "refundIssued")).toHaveLength(1)
   })
@@ -63,7 +63,7 @@ describe("cancelling a 5b, through Stripe", () => {
     await cancelApplication(world.deps, token)
     await cancelApplication(world.deps, token)
 
-    expect(world.stripe.sent.filter((body) => body.includes(`payment_intent=${paymentId}`) && body.includes("amount=5000"))).toHaveLength(1)
+    expect(world.stripe.sent.filter((body) => body.includes(`payment_intent=${paymentId}`) && body.includes("amount=2901"))).toHaveLength(1)
   })
 })
 

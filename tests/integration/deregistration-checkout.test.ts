@@ -35,7 +35,7 @@ describe("de-registration checkout", () => {
     expect(world.zulex.applications.has(application.zulexApplicationId!)).toBe(true)
     expect(world.stripe.intents.get(paymentId)).toMatchObject({
       status: "succeeded",
-      amount_received: 6999,
+      amount_received: 4900,
       metadata: { order_id: reference, service_type: "deregistration" },
     })
     expect(emails()).toEqual(["orderConfirmation", "submittedToKba"])

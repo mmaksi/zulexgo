@@ -37,7 +37,7 @@ Per section, page order: fields with constraints (length / format / tone). Tone:
 - **Header** — logo, nav links, language toggle. Nav ≤3 items, labels ≤20 chars.
 - **Headline** — value proposition ("De-register your vehicle online"). ≤60 chars.
 - **Subline** — how it works, one sentence, mentions "official, via KBA". ≤140 chars.
-- **Service cards** (1 active + disabled "coming soon") — title ≤30, one-line description ≤90, price from €X, CTA ≤20 chars.
+- **Service cards** (1 active + disabled "coming soon") — title ≤30, one-line description ≤90, fixed final price from the price list, CTA ≤20 chars. A note under the cards lists the add-on prices and says plates and sticker are ordered and charged only after the KBA has completed the service.
 - **Trust strip** — 3 items (official process, secure payment, status tracking): icon + label ≤40 chars.
 - **How-it-works steps** — exactly 4: title ≤30, text ≤120 chars.
 - **FAQ** — 5–8 items: question ≤80, answer ≤400 chars.
@@ -90,7 +90,7 @@ Six emails now, eight once Verimi is added (trigger, subject, content): table in
 2. **Rejection reason copy and 5b/5c split** — depend on undocumented `errorInfo` code catalogue, Q10, Q18. Until it exists, unrecognised error → 5b (launch-plan fallback).
 3. **Timestamps** — only backend-owned steps have them; API-side transitions don't, so we timestamp at poll time (approximate; acceptable, note it).
 4. **Status 1 wording** — "Payment captured" vs "payment authorised" depends on when a held card payment is captured (Q7).
-5. **Authority fee amount** — API returns fees only as post-hoc `FEE` document; displayed price comes from our own table (launch-plan assumption: one all-inclusive price per plate count). Source and maintenance owner undefined.
+5. **Authority fee amount** — API returns fees only as post-hoc `FEE` document; displayed price comes from our own table (the founder's price list: one all-inclusive price per service, in `src/core/domain/pricing.ts`). The monthly reconciliation against the `FEE` documents has no owner yet.
 6. **Special plates (E/H/seasonal)** — eligibility warns "may be rejected" until API provider clarifies.
 
 ## 3. Behaviour Spec

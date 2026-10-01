@@ -29,7 +29,7 @@ export function anApplication(overrides: Partial<Application> = {}): Application
     email: emailSchema.parse(`customer-${sequence}@example.test`),
     ikfzStatus: "online",
     idempotencyKey: `fake-idempotency-${sequence}`,
-    payment: { id: `fake-payment-${sequence}`, total: Money.ofCents(6999) },
+    payment: { id: `fake-payment-${sequence}`, total: Money.ofCents(4900) },
     retryAttempts: 0,
     polling: { attempts: 0 },
     ...overrides,
