@@ -1,5 +1,7 @@
 "use client"
 
+import { formatEuros } from "@/src/core/domain/money"
+import { DEREGISTRATION_TOTAL, PROCESSING_FEE } from "@/src/core/domain/pricing"
 import {
   Accordion,
   AccordionContent,
@@ -14,6 +16,10 @@ const FAQ = [
     question: "Ist die Online-Abmeldung offiziell gültig?",
     answer:
       "Ja. Die Abmeldung läuft über die amtliche i-Kfz-Schnittstelle des Kraftfahrt-Bundesamtes. Sie erhalten dieselbe Bestätigung wie am Schalter der Zulassungsstelle.",
+  },
+  {
+    question: "Was kostet die Abmeldung, und was ist enthalten?",
+    answer: `${formatEuros(DEREGISTRATION_TOTAL)} als Endpreis: Behördengebühr, Mehrwertsteuer und unsere Bearbeitung sind enthalten, weitere Kosten gibt es nicht. Brechen Sie nach einem Fehler ab oder lässt sich der Antrag nicht korrigieren, behalten wir ${formatEuros(PROCESSING_FEE)} Bearbeitungsgebühr ein und erstatten den Rest innerhalb von 3–5 Werktagen.`,
   },
   {
     question: "Welche Unterlagen brauche ich?",

@@ -16,10 +16,10 @@ export const SERVICE_PRICES: Record<Service, Money> = {
 
 export const DEREGISTRATION_TOTAL = SERVICE_PRICES.deregistration
 
-const PLATE_PRICE = Money.ofCents(1250)
-const CARBON_SURCHARGE = Money.ofCents(400)
-const FINE_DUST_STICKER_PRICE = Money.ofCents(999)
-const PLATE_SHIPPING = Money.ofCents(495)
+export const PLATE_PRICE = Money.ofCents(1250)
+export const CARBON_SURCHARGE = Money.ofCents(400)
+export const FINE_DUST_STICKER_PRICE = Money.ofCents(999)
+export const PLATE_SHIPPING = Money.ofCents(495)
 const NOTHING = Money.ofCents(0)
 
 /** A service and what the customer adds to it. */

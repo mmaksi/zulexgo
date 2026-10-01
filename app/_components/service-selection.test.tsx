@@ -1,4 +1,6 @@
-import { render, screen } from "@testing-library/react"
+import { render, screen, within } from "@testing-library/react"
+import { formatEuros } from "@/src/core/domain/money"
+import { DEREGISTRATION_TOTAL, SERVICE_PRICES } from "@/src/core/domain/pricing"
 import { ServiceSelection } from "./service-selection"
 
 /**
@@ -26,5 +28,31 @@ describe("ServiceSelection", () => {
 
     expect(unavailable).toHaveLength(items.length - 1)
     expect(screen.getAllByText("Bald verfügbar")).toHaveLength(unavailable.length)
+  })
+})
+
+/**
+ * One price everywhere (PAngV): a card that quoted a different amount than the
+ * checkout charges would be an offer the business has to honour or break.
+ */
+describe("ServiceSelection prices", () => {
+  const cards = () => screen.getAllByRole("listitem")
+
+  it("shows on the de-registration card what the checkout charges", () => {
+    render(<ServiceSelection />)
+
+    const card = cards().find((item) => within(item).queryByRole("link"))!
+    expect(card.textContent).toContain(formatEuros(DEREGISTRATION_TOTAL))
+  })
+
+  it("quotes every service at its price from the price list, as a final price", () => {
+    render(<ServiceSelection />)
+
+    const listed = Object.values(SERVICE_PRICES).map(formatEuros)
+    const shown = cards().map((card) => card.textContent!.match(/\d+,\d{2}\s€/)?.[0])
+
+    expect(shown).toHaveLength(Object.keys(SERVICE_PRICES).length)
+    shown.forEach((price) => expect(listed).toContain(price))
+    expect(screen.queryByText(/\bab\b\s*\d/)).not.toBeInTheDocument()
   })
 })
