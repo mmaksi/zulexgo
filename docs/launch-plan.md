@@ -69,8 +69,8 @@ Funnel UI (M4 Track B) starts once M2's fakes exist, parallel to M3.
 | Payment | **Stripe Payment Element**: card (Visa, Mastercard), SEPA Direct Debit, Apple Pay, Google Pay; PaymentIntent created at checkout; **manual capture**, the document's preferred option "if technically feasible" — otherwise the document's default, automatic capture. Stripe has no manual capture for SEPA Direct Debit (verified in Stripe's docs), so capture is set per payment method: `payment_method_options[card][capture_method]=manual` holds cards, SEPA Direct Debit captured automatically. A single PaymentIntent with top-level `capture_method=manual` cannot offer card and SEPA together (Q12). No custom card processing — Payment Element keeps ZulexGO PCI-DSS compliant without separate certification. Refunds only via Refunds API, never by hand in the Stripe dashboard. Webhooks `payment_intent.succeeded`, `payment_intent.payment_failed`, `charge.refunded`, each signature-verified. Metadata `order_id`, `service_type`, `customer_email`, `application_id`. ZulexGO stores only Stripe Customer ID and PaymentIntent ID, never payment data | All fixed by business-logic document §4. Manual capture conflicts with two other requirements in that section — Q6, Q7. Stripe facts here and in Q6–Q8, Q12 checked against Stripe's documentation. |
 | Encryption of codes at rest | Application-level AES-GCM in the Postgres adapter, key from env (rotatable), from migration `0001` onward | Key stays off the DB host; in-memory fake stays plaintext; no later data migration. |
 | Icon library | **lucide** (installed, Shadcn default), `ChevronRight` as bullet. **Settled in M0:** `docs/design-standard.md` §5.5 amended from Font Awesome to lucide, deviation from the print style guide recorded in that section. | One library, not two. Shadcn writes lucide imports into every generated component, so a second set is hand-maintained. Font Awesome trialled in M0 and reverted for that reason; it is also not a Shadcn `iconLibrary` value (`lucide`, `tabler`, `hugeicons`, `phosphor`, `remixicon`), so the CLI couldn't target it. Icons are decorative, no brand mark, so no brand sign-off outstanding. |
-| Refund policy | **Fixed by business-logic document §3:** success → full capture, no refund · correct & resubmit → charge the difference only, if any · cancel at 5b → refund minus 19.99 € · non-correctable (5c) → refund minus 19.99 € · technical error on our side → 100 % refund · resubmit after cancel → new order, new PaymentIntent, full price. 19.99 € lives in `src/config/pricing.ts` as one constant. | Not a plan decision. Executing "refund minus 19.99 €" on an only-authorised payment is Q8. |
-| Price display (PAngV) | **[plan assumption]** One all-inclusive price per plate count incl. authority fee, from `src/config/pricing.ts`; reconciled monthly against `FEE` documents | Document names no service price. API reports fees only after the fact; customer needs the total before paying. |
+| Refund policy | **Fixed by business-logic document §3:** success → full capture, no refund · correct & resubmit → charge the difference only, if any · cancel at 5b → refund minus 19.99 € · non-correctable (5c) → refund minus 19.99 € · technical error on our side → 100 % refund · resubmit after cancel → new order, new PaymentIntent, full price. 19.99 € lives in `src/core/domain/pricing.ts` as one constant. | Not a plan decision. Executing "refund minus 19.99 €" on an only-authorised payment is Q8. |
+| Price display (PAngV) | One all-inclusive price per service incl. authority fee and the 19.99 € processing fee, from the founder's price list in `src/core/domain/pricing.ts` (read by the landing page and the checkout); reconciled monthly against `FEE` documents | The founder's price list (September 2026) fixes the prices. API reports fees only after the fact; customer needs the total before paying. |
 
 ---
 
@@ -283,7 +283,7 @@ Funnel UI (M4 Track B) starts once M2's fakes exist, parallel to M3.
 
 **How:**
 - Lawyer-reviewed AGB/Impressum/Datenschutz replace placeholders. AGB carry the 19.99 € processing-fee clause for cancellation and non-correctable failure, stating what it covers (Zulex API fee and administration); Datenschutz covers Verimi's processing of ID and selfie data once Verimi is added. AGB version + right-of-withdrawal consent stored per application (tests: checkout impossible without them). Right of withdrawal vs 19.99 € fee: Q13.
-- PAngV price from `src/config/pricing.ts`; VAT and authority fee itemised.
+- PAngV price from `src/core/domain/pricing.ts`; VAT and authority fee itemised.
 - `next.config.ts` CSP (Stripe domains), `frame-ancestors`, permissions policy — asserted in route tests.
 - Rate limiting on eligibility and checkout, with tests, through the `RateLimiter` port. Status lookup, document downloads and "resend my link" are limited since M5 (per address, and per order for resend).
 - Log-redaction layer + required test that codes/tokens never appear in logs; `audit_log` migration for status changes and refunds.
@@ -335,7 +335,7 @@ Funnel UI (M4 Track B) starts once M2's fakes exist, parallel to M3.
 | Euro Plate web licence | M7 | existing `plate-text` Kanit fallback, checked in browser — not tested, presentation |
 | Semantic colour sign-off | M7 | ship the derived palette already in `app/globals.css` |
 | Icon library decision | resolved in M0 | lucide; §5.5 amended, no sign-off outstanding |
-| Fee table / price | M7 | flat all-inclusive price per plate count, monthly reconciliation |
+| Fee table / price | M7 | flat all-inclusive price per service, monthly reconciliation |
 | Stripe live / Zulex production key | M8 | beta runs founder-owned vehicles first; public gate stays closed |
 | Special plates (E/H/seasonal) | M6 | eligibility warns "may be rejected" |
 | Zulex status-change webhook | M4 (route) | per-application polling with backoff is complete on its own; webhook only shortens latency |
@@ -370,7 +370,7 @@ Funnel UI (M4 Track B) starts once M2's fakes exist, parallel to M3.
 
 ## Known defects (docs vs code audit, 2026-09-29)
 
-Found on `main` @ `1ed5034`. Numbered D1–D11; D2, D3, D4, D5, D6 and D11 are fixed.
+Found on `main` @ `1ed5034`. Numbered D1–D11; D2, D3, D4, D5, D6, D7 and D11 are fixed.
 
 | # | Defect | Status |
 |---|---|---|
@@ -380,7 +380,7 @@ Found on `main` @ `1ed5034`. Numbered D1–D11; D2, D3, D4, D5, D6 and D11 are f
 | D4 | Zulex 401/403/404 on create loops forever | Fixed |
 | D5 | Emails 4, 5a, 5b and 5c are lost if sending fails | Fixed |
 | D6 | A create timeout ends in 5c with a full refund | Fixed (provisional answer to Q23) |
-| D7 | Landing price ("ab 29,00 €") differs from checkout (69,99 €) | Parked (Q19) |
+| D7 | Landing price ("ab 29,00 €") differs from checkout (69,99 €) | Fixed: both read the founder's price list (Q19) |
 | D8 | Legal pages are wrong or missing | Parked (M7) |
 | D9 | Consent (`agb_version`, `consent_at`) is never stored | Planned |
 | D10 | Checked radio contrast is 2.31:1 | Planned |
@@ -407,7 +407,7 @@ Nothing below is decided here. Numbers are stable — milestones refer to them. 
 |---|---|---|
 | 1 — blocks the M4 walking skeleton | Q5, Q6 | M4 is critical-path; can't run end to end without knowing when Zulex is called and what starts the application. |
 | 2 — blocks the status model in M2/M3 | Q1–Q4, Q7, Q8, Q9, Q18 | Status list, error algorithm and refund function are built in M2 and encoded in the M3 schema. |
-| 3 — blocks launch, not the skeleton | Q10–Q16, Q19–Q40 | Needed for M5–M7; earlier work proceeds on fakes and placeholders. |
+| 3 — blocks launch, not the skeleton | Q10–Q16, Q19–Q42 | Needed for M5–M7; earlier work proceeds on fakes and placeholders. |
 | 4 — non-blocking | Q17 | A placeholder processing time can ship and be replaced. |
 
 **Identity verification (Verimi)**
@@ -488,9 +488,10 @@ Nothing below is decided here. Numbers are stable — milestones refer to them. 
 
 **Added 2026-09-29 (docs vs code audit)**
 
-19. **Price and VAT:** real service price; different for one plate vs two? Is 19.99 € a separate line on top of the price? Authority fee passed through or subject to VAT? Does the customer get a Rechnung?
-   **Blocks:** M7 (PAngV price display).
-   **Provisional answer in code (not approved by the founder):** placeholder 50.00 € + 19.99 € = 69.99 € for one or two plates (`src/core/domain/pricing.ts`); the landing page says "ab 29,00 €".
+19. **Price and VAT:** the founder's price list (September 2026) fixes the prices: Neuzulassung 129 €, Wiederzulassung 99 €, Ummeldung 99 €, Abmeldung 49 €, Adressänderung 99 €, the same for one plate or two, with the 19.99 € processing fee inside the price and not on top of it. Still open: are these prices gross of VAT, is the authority fee passed through or subject to VAT, and does the customer get a Rechnung?
+   **Blocks:** M7 (PAngV price display, invoice).
+   **Provisional answer in code (not approved by the founder):** the prices are shown as final prices "inkl. Behördengebühr und MwSt." (`src/core/domain/pricing.ts`, read by the landing page and the checkout); no invoice is issued.
+   **If the founder answers differently:** change the VAT wording in `app/(funnel)/deregister/_components/review-step.tsx`, `app/_components/service-selection.tsx` and `app/_components/faq.tsx`; an invoice is a new email template and document, not a pricing change.
 20. **Hold lapse:** a card hold lasts 7 days; with capture at `FINISHED`, manual-processing authorities and a 5b waiting on the customer, it can lapse first. Capture earlier, email a re-authorisation request, or absorb the loss?
    **Blocks:** M6 (hold policy), Known defects D3 (fixed with this provisional answer).
    **Provisional answer in code (not approved by the founder; the safest of the options, chosen because the founder has not answered):** capture in full ahead of expiry. A hand-processed order's hold is checked on every poll, and a 5b is polled daily for its money; a hold inside 48 hours of lapsing is captured in full (`HOLD_CAPTURE_MARGIN_MS` in `src/core/domain/hold-policy.ts`), so nothing lapses and the customer does nothing. A captured payment refunds like a held one is settled (total minus the fee on a failure). A hold that lapsed anyway (the poller down for days) ends the order as the KBA decided, with nothing kept: a finished order is completed unpaid, a failed one returns everything, the log names the order, the loss is ours. Any `canceled` PaymentIntent reads this way whatever the cause (a lapse, a cancel in the Stripe dashboard, an issuer void), and only a log line says so. A 5b that existed before M6 (only staging's seed) has no daily look at its money.
@@ -571,6 +572,17 @@ Nothing below is decided here. Numbers are stable — milestones refer to them. 
    **Blocks:** M8 (runbook "Zulex outage"), Q27.
    **Provisional answer in code:** the log names the order and asks support to check the Zulex portal; nothing else is done.
    **If the founder answers differently:** write the check into the runbook (`docs/runbooks/`), and give it an alert (Q27).
+
+**Added 2026-10-01 (the founder's price list)**
+
+41. **Plates, fine-dust sticker and shipping: who supplies them, and how are they paid for?** The price list prices them (plate 12,50 € each, carbon +4,00 € per plate, sticker 9,99 €, shipping 4,95 € with plates only) and requires that they are ordered and charged only after the KBA has completed the service, and not at all if it rejects it. A card hold is captured once, so they cannot ride on the service's payment: they need a second payment after completion (the customer pays again, or a saved card is charged without them present, which needs their consent). Also open: who makes and ships the plates, where the shipping address is collected and how long it is kept, and which services offer them (a de-registration has no use for plates or a sticker).
+   **Blocks:** the registration services, none of which is sold yet. Nothing in the MVP.
+   **Provisional answer in code (not approved by the founder):** nothing is sold. `quote()` in `src/core/domain/pricing.ts` already splits a basket into what is charged at checkout (the service, never an add-on) and what is due after completion, and its tests pin the founder's scenario totals. The landing page lists the add-on prices as "bald verfügbar" and states the rule. The only live service, de-registration, offers no add-ons.
+   **If the founder answers differently:** (a) *sell them with a service:* put a basket in the review step and `submit-checkout.ts` (the payment keeps opening for `quote(...).atCheckout`), store it on `Application` (a migration, both repositories, the seed), and from `complete()` in `advance-status.ts` open the second payment for `afterCompletion`; on 5b, 5c and cancellation drop the basket unpaid, so `refund-policy.ts` needs no new row. (b) *a supplier:* a port per `external-services`, called after that payment, never from the checkout.
+42. **THG-Quote through carbonify.de:** the price list offers electric-vehicle owners the THG-Quote, free for the customer. How is the customer handed over (a link with our partner identifier, an API), after which service, and what do we store about it?
+   **Blocks:** nothing in the MVP.
+   **Provisional answer in code (not approved by the founder):** not offered, and not mentioned on the site, since there is no hand-over to carbonify.de yet.
+   **If the founder answers differently:** a link on the confirmation page and in email 5a, or a port per `external-services` if carbonify.de has an API; the price stays unaffected, since the quota costs the customer nothing.
 
 ## Verification
 
