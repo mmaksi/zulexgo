@@ -37,6 +37,7 @@ Per section, page order: fields with constraints (length / format / tone). Tone:
 - **Header** — logo, nav links, language toggle. Nav ≤3 items, labels ≤20 chars.
 - **Headline** — value proposition ("De-register your vehicle online"). ≤60 chars.
 - **Subline** — how it works, one sentence, mentions "official, via KBA". ≤140 chars.
+- **Hero seal** — the founder's "KBA-zertifiziert" seal (`public/kba-zertifiziert.jpg`), shown unaltered and only on a white surface (the file has a white background): beside the headline from 1024 px, below the buttons on smaller screens so it never pushes the CTA down. The alt text repeats the claim the seal prints.
 - **Service cards** (1 active + disabled "coming soon") — title ≤30, one-line description ≤90, fixed final price from the price list, CTA ≤20 chars. A note under the cards lists the add-on prices and says plates and sticker are ordered and charged only after the KBA has completed the service.
 - **Trust strip** — 3 items (official process, secure payment, status tracking): icon + label ≤40 chars.
 - **How-it-works steps** — exactly 4: title ≤30, text ≤120 chars.
