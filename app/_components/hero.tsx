@@ -1,3 +1,4 @@
+import Image from "next/image"
 import { ArrowRight } from "lucide-react"
 import { buttonLink } from "@/src/ui/button"
 
@@ -12,27 +13,43 @@ export function Hero() {
   return (
     <section className="py-(--section-gap)">
       <div className="page-frame">
-        <p className="text-small font-normal tracking-[0.1em] text-grau-bright uppercase">
-          Amtlicher Vorgang über das Kraftfahrt-Bundesamt
-        </p>
+        <div className="lg:grid lg:grid-cols-[1fr_auto] lg:items-center lg:gap-16">
+          <div>
+            <p className="text-small font-normal tracking-[0.1em] text-grau-bright uppercase">
+              Amtlicher Vorgang über das Kraftfahrt-Bundesamt
+            </p>
 
-        <h1 className="mt-5 max-w-[18ch] text-grau-dark sm:mt-6">
-          Fahrzeug online abmelden
-        </h1>
+            <h1 className="mt-5 max-w-[18ch] text-grau-dark sm:mt-6">
+              Fahrzeug online abmelden
+            </h1>
 
-        <p className="measure mt-(--heading-space-below) text-subtitle text-grau">
-          Die Außerbetriebsetzung erledigen Sie in unter 10 Minuten — offiziell
-          über das KBA, ohne Termin bei der Zulassungsstelle.
-        </p>
+            <p className="measure mt-(--heading-space-below) text-subtitle text-grau">
+              Die Außerbetriebsetzung erledigen Sie in unter 10 Minuten —
+              offiziell über das KBA, ohne Termin bei der Zulassungsstelle.
+            </p>
 
-        <div className="mt-8 flex flex-col gap-3 sm:mt-10 sm:flex-row sm:items-start">
-          <a href="#leistungen" className={buttonLink()}>
-            Jetzt abmelden
-            <ArrowRight aria-hidden="true" />
-          </a>
-          <a href="#ablauf" className={buttonLink({ variant: "outline" })}>
-            So funktioniert es
-          </a>
+            <div className="mt-8 flex flex-col gap-3 sm:mt-10 sm:flex-row sm:items-start">
+              <a href="#leistungen" className={buttonLink()}>
+                Jetzt abmelden
+                <ArrowRight aria-hidden="true" />
+              </a>
+              <a href="#ablauf" className={buttonLink({ variant: "outline" })}>
+                So funktioniert es
+              </a>
+            </div>
+          </div>
+
+          {/* The file has a white background, so the seal stays on a white
+              surface and is shown unaltered. Below the buttons on small
+              screens, so it never pushes the call to action down. */}
+          <Image
+            src="/kba-zertifiziert.jpg"
+            alt="ZulexGO ist KBA-zertifiziert: deutschlandweit digital zugelassen"
+            width={1254}
+            height={1254}
+            sizes="(min-width: 1024px) 256px, 144px"
+            className="mt-10 size-36 lg:mt-0 lg:size-64"
+          />
         </div>
 
         {/* §7 numeric values sit in grau-dark and are never orange */}
