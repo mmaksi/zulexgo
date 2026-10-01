@@ -1,6 +1,6 @@
-import Image from "next/image"
 import { ArrowRight } from "lucide-react"
 import { buttonLink } from "@/src/ui/button"
+import { KbaSeal } from "./kba-seal"
 
 // site-contract.md §2.1 — headline <=60, subline <=140, CTA <=25 chars, verb-first.
 const STATS = [
@@ -39,14 +39,9 @@ export function Hero() {
             </div>
           </div>
 
-          {/* The file has a white background, so the seal stays on a white
-              surface and is shown unaltered. Below the buttons on small
-              screens, so it never pushes the call to action down. */}
-          <Image
-            src="/kba-zertifiziert.jpg"
-            alt="ZulexGO ist KBA-zertifiziert: deutschlandweit digital zugelassen"
-            width={1254}
-            height={1254}
+          {/* Below the buttons on small screens, so it never pushes the call
+              to action down. */}
+          <KbaSeal
             sizes="(min-width: 1024px) 256px, 144px"
             className="mt-10 size-36 lg:mt-0 lg:size-64"
           />
