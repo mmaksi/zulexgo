@@ -54,7 +54,7 @@ export function SiteFooter() {
 
           <KbaSeal
             sizes="(min-width: 768px) 128px, 112px"
-            className="size-28 md:size-32"
+            className="size-28 bg-white md:size-32"
           />
         </div>
 
