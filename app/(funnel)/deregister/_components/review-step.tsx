@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { useRef, useState, type FormEvent } from "react"
 import { formatEuros } from "@/src/core/domain/money"
-import { DEREGISTRATION_TOTAL, PROCESSING_FEE, SERVICE_PRICE } from "@/src/core/domain/pricing"
+import { DEREGISTRATION_TOTAL, PROCESSING_FEE } from "@/src/core/domain/pricing"
 import { Button } from "@/src/ui/button"
 import { Checkbox } from "@/src/ui/checkbox"
 import type { CheckoutActions, PaymentDriver, PaymentMode } from "./checkout-actions"
@@ -97,11 +97,7 @@ export function ReviewStep({
           Preis
         </h2>
         <dl className="grid max-w-md grid-cols-[1fr_auto] gap-x-6 gap-y-2 text-body">
-          <dt>Abmeldung inkl. behördlicher Gebühr</dt>
-          <dd className="text-right">{formatEuros(SERVICE_PRICE)}</dd>
-          <dt>Bearbeitungsgebühr</dt>
-          <dd className="text-right">{formatEuros(PROCESSING_FEE)}</dd>
-          <dt className="font-normal text-grau-dark">Gesamt inkl. MwSt.</dt>
+          <dt className="font-normal text-grau-dark">Abmeldung, Gesamtpreis inkl. Behördengebühr und MwSt.</dt>
           <dd className="text-right text-h3 text-grau-dark">{formatEuros(DEREGISTRATION_TOTAL)}</dd>
         </dl>
         <Alert variant="warning" className="measure">

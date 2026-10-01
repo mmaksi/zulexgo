@@ -1,12 +1,7 @@
 import { Money } from "./money"
 
-/** Retained on cancellation and on a non-correctable failure, whatever the service (business logic §3). */
+/** Retained on cancellation and on a non-correctable failure, whatever the service (business logic §3). It is part of the price, not added to it. */
 export const PROCESSING_FEE = Money.ofCents(1999)
 
-/**
- * PLACEHOLDER until the founder sets the price (PAngV: one all-inclusive price,
- * launch plan). Every order is service price plus the processing fee.
- */
-export const SERVICE_PRICE = Money.ofCents(5000)
-
-export const DEREGISTRATION_TOTAL = SERVICE_PRICE.add(PROCESSING_FEE)
+/** The founder's price: one all-inclusive amount, authority fee and processing fee included (PAngV). */
+export const DEREGISTRATION_TOTAL = Money.ofCents(4900)

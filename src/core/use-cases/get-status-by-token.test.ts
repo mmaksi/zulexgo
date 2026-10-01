@@ -11,7 +11,7 @@ const TOKEN = "faketoken-status"
 const application = anApplication({ status: "submitted_to_kba" })
 const repository = { findByStatusToken: async (token: string) => (token === TOKEN ? application : undefined) }
 const storeOf = (stored: Map<ApplicationReference, DocumentRef[]> = new Map()) => ({ list: async (reference: ApplicationReference) => stored.get(reference) ?? [] })
-const held = Money.ofCents(6999)
+const held = Money.ofCents(4900)
 const paymentOf = (captured: number, refunded = 0) => async () => ({
   id: "fake-payment",
   status: "captured" as const,
@@ -102,7 +102,7 @@ describe("getStatusByToken", () => {
     }
 
     it("states what the order would get back and what the fee keeps, before the customer decides", async () => {
-      expect((await viewOf("failed_correctable")).cancellation).toEqual({ returned: Money.ofCents(5000), retained: Money.ofCents(1999) })
+      expect((await viewOf("failed_correctable")).cancellation).toEqual({ returned: Money.ofCents(2901), retained: Money.ofCents(1999) })
     })
 
     it.each(["submitted_to_kba", "completed", "failed_final", "cancelled"] as const)("states nothing for an order that is %s", async (status) => {
@@ -114,11 +114,11 @@ describe("getStatusByToken", () => {
     const orderAt5b = anApplication({ status: "failed_correctable" })
     const viewWith = (getPayment: PaymentProvider["getPayment"]) =>
       getStatusByToken({ repository: { findByStatusToken: async () => orderAt5b }, documents: storeOf(), payments: { getPayment } }, TOKEN)
-    const held = async () => ({ id: "p", status: "held" as const, amount: Money.ofCents(6999), captured: Money.ofCents(0), refunded: Money.ofCents(0) })
+    const held = async () => ({ id: "p", status: "held" as const, amount: Money.ofCents(4900), captured: Money.ofCents(0), refunded: Money.ofCents(0) })
 
     it("can while its money is whole, held or taken in full", async () => {
       expect((await viewWith(held)).correctable).toBe(true)
-      expect((await viewWith(paymentOf(6999))).correctable).toBe(true)
+      expect((await viewWith(paymentOf(4900))).correctable).toBe(true)
     })
 
     it("cannot once part of its money has gone back: only the cancel is left to finish", async () => {
@@ -180,7 +180,7 @@ describe("getStatusByToken", () => {
     }
 
     it.each(["failed_final", "cancelled"] as const)("states, for a %s order, what the provider returned and what it kept", async (status) => {
-      expect((await viewOf(status)).refund).toEqual({ returned: Money.ofCents(5000), retained: Money.ofCents(1999) })
+      expect((await viewOf(status)).refund).toEqual({ returned: Money.ofCents(2901), retained: Money.ofCents(1999) })
     })
 
     it("counts a released hold as everything returned", async () => {
