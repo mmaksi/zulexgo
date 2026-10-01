@@ -3,6 +3,7 @@ import { FakeClock } from "@/src/adapters/clock/fake/fake-clock"
 import { ConsoleMailer } from "@/src/adapters/mail/console/console-mailer"
 import { FakePaymentProvider } from "@/src/adapters/payment/fake/fake-payment-provider"
 import { FakeRegistrationGateway } from "@/src/adapters/registration/fake/fake-registration-gateway"
+import { InMemoryRateLimiter } from "@/src/adapters/rate-limit/fake/in-memory-rate-limiter"
 import { InMemoryApplicationRepository } from "@/src/adapters/repository/fake/in-memory-application-repository"
 import { InMemoryDocumentStore } from "@/src/adapters/storage/fake/in-memory-document-store"
 import { FakeTokenGenerator } from "@/src/adapters/tokens/fake/fake-token-generator"
@@ -10,6 +11,7 @@ import { GatewayUnavailable } from "@/src/core/errors/gateway-unavailable"
 import { confirmPayment } from "@/src/core/use-cases/confirm-payment"
 import { confirmRefund } from "@/src/core/use-cases/confirm-refund"
 import { pollDueApplications } from "@/src/core/use-cases/poll-due-applications"
+import { resendStatusLink } from "@/src/core/use-cases/resend-status-link"
 import { submitCheckout } from "@/src/core/use-cases/submit-checkout"
 
 /**
@@ -31,7 +33,7 @@ function captureConsole() {
   return { output: () => lines.join("\n"), restore: () => spies.forEach((spy) => spy.mockRestore()) }
 }
 
-/** Every path that logs: each email, a silent retry, a final failure with its refund, and a rejected checkout. */
+/** Every path that logs: each email, a silent retry, a final failure with its refund, a re-sent link, and a rejected checkout. */
 async function runEveryPath(revealStatusLinks: boolean): Promise<string[]> {
   const clock = new FakeClock(new Date("2026-03-01T09:00:00.000Z"))
   const deps = {
@@ -40,10 +42,11 @@ async function runEveryPath(revealStatusLinks: boolean): Promise<string[]> {
     payments: new FakePaymentProvider(clock),
     mailer: new ConsoleMailer({ revealStatusLinks }),
     documents: new InMemoryDocumentStore(),
+    rateLimiter: new InMemoryRateLimiter(clock),
     clock,
     tokens: new FakeTokenGenerator(),
     statusLink: (token: string) => `https://zulexgo.example.test/status/${token}`,
-    errorCatalogue: { 202: "final" as const },
+    errorCatalogue: { 202: { class: "final" as const, reason: "Das Fahrzeug ist bereits abgemeldet." } },
   }
   const poll = (minutes: number) => {
     clock.advance(minutes * 60_000)
@@ -68,6 +71,7 @@ async function runEveryPath(revealStatusLinks: boolean): Promise<string[]> {
   deps.registration.setStatus(await zulexId(rejected), { state: "failed", error: { code: 202, details: [] }, documents: [] })
   await poll(5)
   await confirmRefund(deps, rejected)
+  await resendStatusLink(deps, { reference: completed, email: "customer@example.test" })
 
   const badCodes = { ...FAKE_REQUEST, codes: { ...FAKE_REQUEST.codes, certificate: `${FAKE_REQUEST.codes.certificate}X` } }
   await submitCheckout(deps, { request: badCodes, email: "customer@example.test" }).catch((error) => console.error(error))

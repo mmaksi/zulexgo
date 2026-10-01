@@ -18,12 +18,15 @@ export function toPayment(intent: Stripe.PaymentIntent): Payment {
   const charge = typeof intent.latest_charge === "object" ? intent.latest_charge : null
   const captureBefore = charge?.payment_method_details?.card?.capture_before
 
+  const captured = status === "captured" ? intent.amount_received : 0
+
   return {
     id: intent.id,
     status,
     amount: Money.ofCents(intent.amount),
-    captured: Money.ofCents(status === "captured" ? intent.amount_received : 0),
-    refunded: Money.ofCents(charge?.amount_refunded ?? 0),
+    captured: Money.ofCents(captured),
+    // Stripe shows a cancelled authorisation as a charge fully refunded; nothing was taken, so nothing was returned.
+    refunded: Money.ofCents(Math.min(charge?.amount_refunded ?? 0, captured)),
     holdExpiresAt: status === "held" && captureBefore ? new Date(captureBefore * 1000) : undefined,
     registrationId: intent.metadata?.application_id,
   }

@@ -1,12 +1,19 @@
 import { anApplication, FAKE_REQUEST } from "@/tests/fixtures/applications"
 import { applyEvent } from "@/src/core/domain/application"
 import { APPLICATION_STATUSES } from "@/src/core/domain/application-status"
+import type { Failure } from "@/src/core/domain/failure"
 import { parseDeregistrationRequest } from "@/src/core/domain/deregistration-request"
 import { DuplicateApplication } from "@/src/core/errors/duplicate-application"
 import { StaleApplication } from "@/src/core/errors/stale-application"
 import type { ApplicationRepository } from "./application-repository"
 
 const NOW = new Date("2026-03-01T09:00:00.000Z")
+const FAILURES: Failure[] = [
+  { kind: "unavailable" },
+  { kind: "rejected" },
+  { kind: "rejectionDocument" },
+  { kind: "kbaError", code: 101 },
+]
 const minutes = (count: number) => new Date(NOW.getTime() + count * 60_000)
 
 /** Every ApplicationRepository adapter must pass this, including the fake. */
@@ -127,6 +134,41 @@ export function applicationRepositoryContract(name: string, makeSubject: () => A
         expect((await repository.get(created.reference))?.request.codes.certificate.reveal()).toBe("AAAAAA9")
       })
 
+      it.each(FAILURES)("stores why an application failed: %j", async (failure) => {
+        const created = await repository.create(anApplication())
+
+        await repository.update({ ...created, status: "failed_correctable", failure })
+
+        expect((await repository.get(created.reference))?.failure).toEqual(failure)
+      })
+
+      it("forgets the failure once an update clears it, as a correction does", async () => {
+        const created = await repository.create(anApplication())
+        const failed = await repository.update({ ...created, failure: { kind: "kbaError", code: 101 } })
+
+        await repository.update({ ...failed, failure: undefined })
+
+        expect((await repository.get(created.reference))?.failure).toBeUndefined()
+      })
+
+      it("stores a replaced idempotency key, as a correction that files the order afresh does", async () => {
+        const created = await repository.create(anApplication())
+
+        await repository.update({ ...created, idempotencyKey: "fresh-key-after-a-correction" })
+
+        expect((await repository.get(created.reference))?.idempotencyKey).toBe("fresh-key-after-a-correction")
+      })
+
+      it("rejects an update that takes an idempotency key another order holds, and keeps what is stored", async () => {
+        const first = await repository.create(anApplication())
+        const second = await repository.create(anApplication())
+
+        await expect(repository.update({ ...second, idempotencyKey: first.idempotencyKey })).rejects.toEqual(
+          new DuplicateApplication("idempotencyKey"),
+        )
+        expect((await repository.get(second.reference))?.idempotencyKey).toBe(second.idempotencyKey)
+      })
+
       it("rejects a stale version and keeps what is stored, so two writers cannot both win", async () => {
         const created = await repository.create(anApplication())
         await repository.update({ ...created, retryAttempts: 1 })
@@ -189,8 +231,44 @@ export function applicationRepositoryContract(name: string, makeSubject: () => A
       })
     })
 
+    describe("hasOpenApplication", () => {
+      const vehicle = { licencePlate: FAKE_REQUEST.licencePlate, vin: parseDeregistrationRequest(FAKE_REQUEST).vin }
+      const otherVehicle = (overrides: object) => parseDeregistrationRequest({ ...FAKE_REQUEST, ...overrides })
+
+      it.each(["submitted_and_paid", "submitted_to_kba", "failed_correctable"] as const)(
+        "finds a paid order for the same plate and VIN that is still %s",
+        async (status) => {
+          await repository.create(anApplication({ status, history: [{ status, at: NOW }] }))
+
+          expect(await repository.hasOpenApplication(vehicle)).toBe(true)
+        },
+      )
+
+      it.each(["awaiting_payment", "completed", "failed_final", "cancelled"] as const)(
+        "does not count an order that is %s: nothing is unpaid or unfinished about it",
+        async (status) => {
+          await repository.create(anApplication({ status, history: [{ status, at: NOW }] }))
+
+          expect(await repository.hasOpenApplication(vehicle)).toBe(false)
+        },
+      )
+
+      it("needs the plate and the VIN both to match", async () => {
+        await repository.create(anApplication({ status: "submitted_to_kba", history: [{ status: "submitted_to_kba", at: NOW }] }))
+
+        expect(await repository.hasOpenApplication({ ...vehicle, vin: otherVehicle({ vin: "FAKEVIN0000000002" }).vin })).toBe(false)
+        expect(
+          await repository.hasOpenApplication({ ...vehicle, licencePlate: { ...vehicle.licencePlate, numbers: "222" } }),
+        ).toBe(false)
+      })
+
+      it("finds nothing when there are no orders", async () => {
+        expect(await repository.hasOpenApplication(vehicle)).toBe(false)
+      })
+    })
+
     describe("findDueForPolling", () => {
-      it("returns only applications whose KBA check or silent resubmission is due, soonest first, up to the limit", async () => {
+      it("returns only applications whose KBA check, silent resubmission or hold check (a 5b waiting on the customer) is due, soonest first, up to the limit", async () => {
         const atKba = (nextPollAt: Date) => anApplication({ status: "submitted_to_kba", polling: { nextPollAt, attempts: 1 } })
         const dueLater = await repository.create(atKba(minutes(-1)))
         const dueFirst = await repository.create(atKba(minutes(-10)))
@@ -198,6 +276,9 @@ export function applicationRepositoryContract(name: string, makeSubject: () => A
           anApplication({ status: "submitted_and_paid", polling: { nextPollAt: minutes(-5), attempts: 0 } }),
         )
         const dueNow = await repository.create(atKba(NOW))
+        const waitingOnCustomer = await repository.create(
+          anApplication({ status: "failed_correctable", polling: { nextPollAt: minutes(-3), attempts: 1 } }),
+        )
         await repository.create(atKba(minutes(5)))
         await repository.create(anApplication({ status: "completed", polling: { nextPollAt: minutes(-20), attempts: 3 } }))
         await repository.create(anApplication({ status: "submitted_to_kba", polling: { attempts: 0 } }))
@@ -208,6 +289,7 @@ export function applicationRepositoryContract(name: string, makeSubject: () => A
         expect(due.map((application) => application.reference)).toEqual([
           dueFirst.reference,
           resubmission.reference,
+          waitingOnCustomer.reference,
           dueLater.reference,
           dueNow.reference,
         ])

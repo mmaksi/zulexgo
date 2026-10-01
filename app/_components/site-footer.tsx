@@ -1,4 +1,5 @@
 import Link from "next/link"
+import { SUPPORT_EMAIL } from "@/src/core/domain/contact"
 import { Wedge } from "@/src/ui/wedge"
 import { Wordmark } from "@/src/ui/wordmark"
 import { CurrentYear } from "./current-year"
@@ -9,8 +10,6 @@ const LEGAL = [
   { label: "AGB", href: "/agb" },
   { label: "Datenschutz", href: "/datenschutz" },
 ] as const
-
-const SUPPORT_EMAIL = "kontakt@gm-gastro.com"
 
 export function SiteFooter() {
   return (

@@ -12,13 +12,13 @@ import nextTs from "eslint-config-next/typescript";
  * always carries the vendor and parent-import bans.
  */
 const VENDORS = [
-  { sdk: { name: "stripe" }, folder: "src/adapters/payment/stripe", port: "PaymentProvider" },
-  { sdk: { name: "pg" }, folder: "src/adapters/repository/postgres", port: "ApplicationRepository" },
-  { sdk: { name: "resend" }, folder: "src/adapters/mail/resend", port: "Mailer" },
-  { sdk: { group: ["@supabase/*"] }, folder: "src/adapters/storage/supabase", port: "DocumentStore" },
+  { sdks: [{ name: "stripe" }], folder: "src/adapters/payment/stripe", port: "PaymentProvider" },
+  { sdks: [{ name: "pg" }], folder: "src/adapters/repository/postgres", port: "ApplicationRepository" },
+  { sdks: [{ name: "resend" }, { name: "react-email" }], folder: "src/adapters/mail/resend", port: "Mailer" },
+  { sdks: [{ group: ["@supabase/*"] }], folder: "src/adapters/storage/supabase", port: "DocumentStore" },
 ].map((vendor) => ({
   ...vendor,
-  sdk: { ...vendor.sdk, message: `Import the ${vendor.port} port; the SDK lives in ${vendor.folder}/ only.` },
+  sdks: vendor.sdks.map((sdk) => ({ ...sdk, message: `Import the ${vendor.port} port; the SDK lives in ${vendor.folder}/ only.` })),
 }));
 
 // Stripe's browser SDKs are UI, so they cannot live in an adapter; they get one
@@ -46,7 +46,7 @@ const CONCRETE_ADAPTERS = {
 };
 
 function restrict({ paths = [], patterns = [], allowSdk, allowStripeUi = false } = {}) {
-  const sdks = VENDORS.filter((vendor) => vendor !== allowSdk).map((vendor) => vendor.sdk);
+  const sdks = VENDORS.filter((vendor) => vendor !== allowSdk).flatMap((vendor) => vendor.sdks);
   return ["error", {
     paths: [...sdks.filter((sdk) => sdk.name), ...paths],
     patterns: [...sdks.filter((sdk) => sdk.group), ...(allowStripeUi ? [] : [STRIPE_UI]), PARENT_IMPORTS, ...patterns],

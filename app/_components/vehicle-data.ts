@@ -47,10 +47,16 @@ const RULES: Record<VehicleField, { schema: z.ZodType; message: string }> = {
 export const fieldsFor = (plateCount: PlateCount): VehicleField[] =>
   ["prefix", "letters", "numbers", "vin", "rearPlate", ...(plateCount === 2 ? (["frontPlate"] as const) : []), "certificate", "email"]
 
+/** The wording for a field's value, or nothing when it is fine. */
+export function validateField(field: VehicleField, value: string): string | undefined {
+  return RULES[field].schema.safeParse(value).success ? undefined : RULES[field].message
+}
+
 export function validateVehicle(data: VehicleData, plateCount: PlateCount): Partial<Record<VehicleField, string>> {
   const errors: Partial<Record<VehicleField, string>> = {}
   for (const field of fieldsFor(plateCount)) {
-    if (!RULES[field].schema.safeParse(data[field]).success) errors[field] = RULES[field].message
+    const message = validateField(field, data[field])
+    if (message) errors[field] = message
   }
   return errors
 }

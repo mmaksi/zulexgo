@@ -1,4 +1,5 @@
 import { applyEvent, type Application } from "@/src/core/domain/application"
+import type { Failure } from "@/src/core/domain/failure"
 import { parseApplicationReference } from "@/src/core/domain/application-reference"
 import type { ApplicationEvent, ApplicationStatus } from "@/src/core/domain/application-status"
 import { parseDeregistrationRequest } from "@/src/core/domain/deregistration-request"
@@ -15,23 +16,23 @@ const HOUR = 60 * 60 * 1000
  * number, which fixes its reference: staging keeps seeded rows across deploys,
  * so numbering by position would move references when a status is inserted.
  */
-export const JOURNEYS: Record<ApplicationStatus, { number: number; events: ApplicationEvent[] }> = {
+export const JOURNEYS: Record<ApplicationStatus, { number: number; events: ApplicationEvent[]; failure?: Failure }> = {
   awaiting_payment: { number: 1, events: [] },
   submitted_and_paid: { number: 2, events: ["paymentConfirmed"] },
   submitted_to_kba: { number: 3, events: ["paymentConfirmed", "submittedToKba"] },
   completed: { number: 4, events: ["paymentConfirmed", "submittedToKba", "kbaCompleted"] },
-  failed_correctable: { number: 5, events: ["paymentConfirmed", "submittedToKba", "failedCorrectable"] },
-  failed_final: { number: 6, events: ["paymentConfirmed", "submittedToKba", "failedFinal"] },
+  failed_correctable: { number: 5, events: ["paymentConfirmed", "submittedToKba", "failedCorrectable"], failure: { kind: "rejectionDocument" } },
+  failed_final: { number: 6, events: ["paymentConfirmed", "submittedToKba", "failedFinal"], failure: { kind: "kbaError", code: 202 } },
   cancelled: { number: 7, events: ["paymentConfirmed", "submittedToKba", "failedCorrectable", "cancelledByCustomer"] },
 }
 
 export interface SeededApplication {
   readonly application: Application
-  /** Open it in dev at /status/<statusToken>. Obviously fake, never a real token's shape. */
+  /** Open it in dev at /status/<statusToken> */
   readonly statusToken: string
 }
 
-function seeded(status: ApplicationStatus, { number, events }: (typeof JOURNEYS)[ApplicationStatus]): SeededApplication {
+function seeded(status: ApplicationStatus, { number, events, failure }: (typeof JOURNEYS)[ApplicationStatus]): SeededApplication {
   const digits = String(number).padStart(2, "0")
   const slug = status.replaceAll("_", "-")
   const created: Application = {
@@ -62,6 +63,7 @@ function seeded(status: ApplicationStatus, { number, events }: (typeof JOURNEYS)
   return {
     application: {
       ...application,
+      failure,
       zulexApplicationId: atKba ? `seed-zulex-${slug}` : undefined,
       polling: status === "submitted_to_kba" ? { nextPollAt: CREATED_AT, attempts: 1 } : application.polling,
     },

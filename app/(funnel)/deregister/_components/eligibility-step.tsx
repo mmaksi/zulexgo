@@ -5,9 +5,10 @@ import type { IkfzStatus } from "@/src/core/domain/registration-authority"
 import { Button } from "@/src/ui/button"
 import { RadioGroup, RadioGroupItem } from "@/src/ui/radio-group"
 import type { CheckoutActions } from "./checkout-actions"
-import { TextField } from "./text-field"
-import type { PlateCount } from "./vehicle-data"
+import { TextField } from "@/app/_components/text-field"
+import type { PlateCount } from "@/app/_components/vehicle-data"
 import { Alert } from "@/src/ui/alert"
+import { Checkbox } from "@/src/ui/checkbox"
 
 export interface Eligibility {
   plateCount: PlateCount
@@ -28,6 +29,7 @@ export function EligibilityStep({
   const [plateCount, setPlateCount] = useState<PlateCount | undefined>(initial?.plateCount)
   const [hasDocuments, setHasDocuments] = useState<boolean | undefined>(initial?.hasDocuments)
   const [prefix, setPrefix] = useState(initial?.prefix ?? "")
+  const [specialPlate, setSpecialPlate] = useState(false)
   const [error, setError] = useState<string>()
   const [checking, setChecking] = useState(false)
 
@@ -95,6 +97,18 @@ export function EligibilityStep({
         maxLength={3}
         className="max-w-60"
       />
+
+      {/* Launch plan J11: a de-registration request cannot say E, H or seasonal, and the provider has not said whether such plates go through. */}
+      <label className="measure flex cursor-pointer items-start gap-3 text-body text-grau-dark">
+        <Checkbox checked={specialPlate} onCheckedChange={(value) => setSpecialPlate(value === true)} />
+        <span>Mein Kennzeichen ist ein E-, H- oder Saisonkennzeichen.</span>
+      </label>
+      {specialPlate ? (
+        <Alert role="status" variant="warning" className="measure">
+          Für E-, H- und Saisonkennzeichen ist noch nicht geklärt, ob das KBA den Antrag annimmt. Er kann abgelehnt werden. Sie können
+          trotzdem fortfahren.
+        </Alert>
+      ) : null}
 
       <div>
         <Button type="submit" disabled={!plateCount || hasDocuments !== true || !prefix || checking}>

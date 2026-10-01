@@ -1,6 +1,11 @@
 import { randomBytes } from "node:crypto"
+import { join } from "node:path"
+import { readMigrations } from "@/src/adapters/repository/postgres/migrator"
 import { createTestDatabase, describeWithPostgres, type TestDatabase } from "@/src/adapters/repository/postgres/test-database"
 import { SEEDED_APPLICATIONS } from "@/db/seed/data/applications"
+import { SEEDED_DOCUMENTS } from "@/db/seed/data/documents"
+import { setupServer } from "msw/node"
+import { STORAGE_TEST_BUCKET, STORAGE_TEST_KEY, STORAGE_TEST_URL, SupabaseStorageDouble } from "@/tests/msw/supabase-storage"
 import { runDatabaseCommand } from "./database"
 
 const UNREACHABLE = "postgres://nobody:nothing@127.0.0.1:1/none"
@@ -44,12 +49,10 @@ describeWithPostgres("runDatabaseCommand on a database", () => {
 
   const run = (...args: string[]) => runDatabaseCommand(args, onPostgres({ DIRECT_DATABASE_URL: database.url }))
 
+  const migrationNames = async () => (await readMigrations(join(process.cwd(), "db", "migrations"))).map(({ name }) => name)
+
   it("migrates over the direct connection and reports what ran", async () => {
-    expect(await run("up")).toBe(
-      ["0001_create_applications", "0002_create_payments", "0003_create_status_history", "0004_create_status_tokens"]
-        .map((name) => `Applied ${name}`)
-        .join("\n"),
-    )
+    expect(await run("up")).toBe((await migrationNames()).map((name) => `Applied ${name}`).join("\n"))
     expect(await run("up")).toBe("Nothing to apply.")
     expect(await run("status")).toMatch(/^applied .* 0001_create_applications$/m)
   })
@@ -67,11 +70,42 @@ describeWithPostgres("runDatabaseCommand on a database", () => {
 
   it("reverts one migration by default, or all of them", async () => {
     await run("up")
+    const [newest, ...older] = (await migrationNames()).reverse()
 
-    expect(await run("down")).toBe("Reverted 0004_create_status_tokens")
-    expect(await run("down", "all")).toBe(
-      ["0003_create_status_history", "0002_create_payments", "0001_create_applications"].map((name) => `Reverted ${name}`).join("\n"),
-    )
+    expect(await run("down")).toBe(`Reverted ${newest}`)
+    expect(await run("down", "all")).toBe(older.map((name) => `Reverted ${name}`).join("\n"))
     expect(await run("status")).toMatch(/^pending 0001_create_applications$/m)
+  })
+
+  describe("seeding the documents", () => {
+    const storage = new SupabaseStorageDouble()
+    const server = setupServer(...storage.handlers)
+    beforeAll(() => server.listen({ onUnhandledRequest: "error" }))
+    beforeEach(() => storage.objects.clear())
+    afterAll(() => server.close())
+
+    const runWithStorage = () =>
+      runDatabaseCommand(
+        ["seed"],
+        onPostgres({
+          DIRECT_DATABASE_URL: database.url,
+          STORAGE_DRIVER: "supabase",
+          SUPABASE_STORAGE_URL: STORAGE_TEST_URL,
+          SUPABASE_STORAGE_BUCKET: STORAGE_TEST_BUCKET,
+          SUPABASE_STORAGE_SERVICE_KEY: STORAGE_TEST_KEY,
+        }),
+      )
+
+    it("puts them in the bucket beside the applications, once, however often it runs", async () => {
+      await run("up")
+
+      const first = await runWithStorage()
+      const second = await runWithStorage()
+
+      expect(first).toContain(`Seeded ${SEEDED_APPLICATIONS.length} applications.`)
+      expect(first).toContain(`Seeded ${SEEDED_DOCUMENTS.length} documents.`)
+      expect(second).toBe("Seed already loaded.")
+      expect(storage.objects.size).toBe(SEEDED_DOCUMENTS.length)
+    })
   })
 })

@@ -1,8 +1,12 @@
 import { APPLICATION_STATUSES } from "@/src/core/domain/application-status"
 import { InMemoryApplicationRepository } from "@/src/adapters/repository/fake/in-memory-application-repository"
+import { InMemoryDocumentStore } from "@/src/adapters/storage/fake/in-memory-document-store"
 import { anApplication } from "@/tests/fixtures/applications"
 import { JOURNEYS, seededApplications } from "./data/applications"
-import { loadSeed, seedFor } from "./seed"
+import { FakePaymentProvider } from "@/src/adapters/payment/fake/fake-payment-provider"
+import { retainedOf } from "@/src/core/domain/refund-policy"
+import { PROCESSING_FEE } from "@/src/core/domain/pricing"
+import { loadDocuments, loadSeed, seedDocumentsFor, seedFor, seedPaymentsFor } from "./seed"
 
 describe("seedFor", () => {
   it("refuses to load in production", () => {
@@ -42,6 +46,34 @@ describe("seedFor", () => {
     expect(await repository.findDueForPolling(new Date("2100-01-01"), 100)).toHaveLength(
       seed.filter(({ application }) => application.polling.nextPollAt).length,
     )
+  })
+})
+
+describe("seedPaymentsFor", () => {
+  const provider = () => new FakePaymentProvider({ now: () => new Date("2026-01-05T09:00:00.000Z") }, seedPaymentsFor("dev"))
+
+  it("refuses to load in production", () => {
+    expect(() => seedPaymentsFor("production")).toThrow(/production/)
+  })
+
+  it("gives every seeded application the payment its own record names, so the fake provider can answer for it", async () => {
+    for (const { application } of seedFor("dev")) {
+      expect((await provider().getPayment(application.payment.id)).amount).toEqual(application.payment.total)
+    }
+  })
+
+  it.each(["failed_final", "cancelled"] as const)("shows %s as the fee kept and the rest returned, as the status page and email 6 read it", async (status) => {
+    const { application } = seedFor("dev").find(({ application }) => application.status === status)!
+
+    expect(retainedOf(await provider().getPayment(application.payment.id))).toEqual(PROCESSING_FEE)
+  })
+
+  it("shows an order still at the KBA, or waiting for a correction, as a held card, so cancelling it in dev works", async () => {
+    for (const status of ["submitted_to_kba", "failed_correctable"] as const) {
+      const { application } = seedFor("dev").find(({ application }) => application.status === status)!
+
+      expect((await provider().getPayment(application.payment.id)).status).toBe("held")
+    }
   })
 })
 
@@ -87,5 +119,32 @@ describe("loadSeed", () => {
     await repository.create(anApplication({ idempotencyKey: first.application.idempotencyKey }))
 
     await expect(loadSeed(repository, [first])).rejects.toThrow(/idempotencyKey/)
+  })
+})
+
+describe("the seeded documents", () => {
+  it("refuses to load in production, like the applications", () => {
+    expect(() => seedDocumentsFor("production")).toThrow(/production/)
+  })
+
+  it("belong to seeded applications, and the completed one has its confirmation to download", () => {
+    const applications = new Map(seedFor("dev").map(({ application }) => [application.reference, application.status]))
+    const documents = seedDocumentsFor("dev")
+
+    for (const { reference } of documents) expect(applications.has(reference)).toBe(true)
+    expect(documents.filter(({ reference, document }) => applications.get(reference) === "completed" && document.kind === "confirmation")).toHaveLength(1)
+  })
+
+  it("are real PDFs, so the download opens in a viewer", () => {
+    for (const { bytes } of seedDocumentsFor("dev")) expect(new TextDecoder().decode(bytes.slice(0, 5))).toBe("%PDF-")
+  })
+
+  it("load once, and a rerun leaves them alone", async () => {
+    const store = new InMemoryDocumentStore()
+    const documents = seedDocumentsFor("staging")
+
+    expect(await loadDocuments(store, documents)).toBe(documents.length)
+    expect(await loadDocuments(store, documents)).toBe(0)
+    for (const { reference, document } of documents) expect(await store.list(reference)).toEqual([document])
   })
 })

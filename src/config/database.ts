@@ -2,8 +2,9 @@ import "server-only"
 import { join } from "node:path"
 import { Migrator, readMigrations, type Migration } from "@/src/adapters/repository/postgres/migrator"
 import { PostgresApplicationRepository } from "@/src/adapters/repository/postgres/postgres-application-repository"
-import { loadSeed, seedFor } from "@/db/seed/seed"
-import { parseEnv, type EnvSource } from "./env"
+import { SupabaseDocumentStore } from "@/src/adapters/storage/supabase/supabase-document-store"
+import { loadDocuments, loadSeed, seedDocumentsFor, seedFor } from "@/db/seed/seed"
+import { parseEnv, type Env, type EnvSource } from "./env"
 
 const MIGRATIONS_DIRECTORY = join(process.cwd(), "db", "migrations")
 
@@ -11,9 +12,7 @@ const USAGE = "Usage: db up | db down [count | all] | db status | db seed"
 
 /**
  * `npm run db:migrate`, `db:migrate:down`, `db:status` and `db:seed`. They use
- * the direct (session) connection, never the transaction pooler the app uses.
- * Reverting drops data, so it runs in dev only; staging and production move
- * forward with a new migration instead. Seeding refuses production.
+ * the direct session pooler connection, never the transaction pooler the app uses.
  */
 export async function runDatabaseCommand([command, count]: string[], source: EnvSource = process.env): Promise<string> {
   const env = parseEnv(source)
@@ -36,7 +35,9 @@ export async function runDatabaseCommand([command, count]: string[], source: Env
       encryptionKey: env.CODES_ENCRYPTION_KEY!,
     })
     const added = await loadSeed(repository, seedFor(env.APP_ENV))
-    return added === 0 ? "Seed already loaded." : `Seeded ${added} applications.`
+    const documents = env.STORAGE_DRIVER === "supabase" ? await loadSeededDocuments(env) : 0
+    if (added === 0 && documents === 0) return "Seed already loaded."
+    return [added > 0 && `Seeded ${added} applications.`, documents > 0 && `Seeded ${documents} documents.`].filter(Boolean).join("\n")
   }
   if (command === "down") {
     const steps = parseSteps(count)
@@ -44,6 +45,16 @@ export async function runDatabaseCommand([command, count]: string[], source: Env
     return report("Reverted", await (await migrator()).down(steps), "Nothing to revert.")
   }
   throw new Error(USAGE)
+}
+
+/** Only a database-backed stage has a bucket to fill; in dev the document store is seeded in memory at boot. */
+function loadSeededDocuments(env: Env): Promise<number> {
+  const store = new SupabaseDocumentStore({
+    url: env.SUPABASE_STORAGE_URL!,
+    bucket: env.SUPABASE_STORAGE_BUCKET!,
+    serviceKey: env.SUPABASE_STORAGE_SERVICE_KEY!,
+  })
+  return loadDocuments(store, seedDocumentsFor(env.APP_ENV))
 }
 
 function parseSteps(count = "1"): number {

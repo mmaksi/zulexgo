@@ -42,6 +42,8 @@ export type PaymentNotification =
  *   second capture returns the payment unchanged. Capturing from a payment that
  *   is no longer held throws `HoldExpired`.
  * - `release` is safe to call twice.
+ * - `refunded` never exceeds `captured`: a released hold reports nothing refunded, whatever
+ *   the provider calls its reversal.
  * - `refund` needs captured money and never exceeds captured minus refunded.
  *   The same idempotency key refunds once, however often it is sent.
  * - `recordRegistration` works in every payment state; recording the same id

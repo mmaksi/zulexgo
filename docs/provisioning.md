@@ -19,7 +19,7 @@ Nothing here belongs in code; no value from here belongs in git.
 | Mail | console | Resend, allowlisted recipients | Resend |
 | Identity (Verimi, added later) | fake | fake until Verimi is added | Verimi |
 | Database | in-memory, seeded at boot | Supabase project (Frankfurt), seeded on deploy | separate Supabase project (Frankfurt), never seeded |
-| Document storage | in-memory | Storage in the staging Supabase project (from M5) | Storage in the production Supabase project |
+| Document storage | in-memory, seeded at boot | Supabase Storage in the staging project, bucket `kba-documents` (§9) | Storage in the production Supabase project |
 | Money | none | none | real |
 
 Two Vercel **projects**, not two branches of one: secrets are scoped per project, so production physically cannot read a staging key. The `environments` skill requires this separation; one project cannot give it.
@@ -50,7 +50,7 @@ Do §3 first: step 5 needs the database values.
    CODES_ENCRYPTION_KEY=<openssl rand -base64 32>    # Sensitive
    ```
 
-   These are the first deploy's values: payment, registration, mail and storage start fake because those vendors come later. §8 has since switched payment and mail to Stripe and Resend; registration switches once the Zulex API is back, storage in M5. The app refuses to boot if a driver is flipped without its key.
+   These are the first deploy's values: payment, registration, mail and storage start fake because those vendors come later. §8 has since switched payment and mail to Stripe and Resend, and §9 covers storage; registration switches once the Zulex API is back. The app refuses to boot if a driver is flipped without its key.
 
 6. **Deployments → Create Deployment** → branch `staging`. The marketing site must serve at `APP_BASE_URL`. Once M3 is merged, the build log also shows the migrations running.
 7. Region needs nothing: `vercel.json` pins Frankfurt (`fra1`).
@@ -168,7 +168,30 @@ MAIL_ALLOWLIST=<the inboxes staging may mail, comma-separated>
 
 `RESEND_API_KEY` is already set (§7). Redeploy `staging`; the app refuses to boot if one of these is missing. Mail only goes out once Resend shows `mail.gm-gastro.com` as **Verified**.
 
+**Checked 2026-09-30 (names only, through the Vercel connector):** `zulexgo-staging` holds `APP_ENV`, `APP_BASE_URL`, `CRON_SECRET`, the five driver variables, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, `RESEND_API_KEY`, `MAIL_FROM`, `MAIL_ALLOWLIST`, `DATABASE_URL`, `DIRECT_DATABASE_URL`, `CODES_ENCRYPTION_KEY` and the three `SUPABASE_STORAGE_*`; no `ZULEX_*`, which `REGISTRATION_DRIVER=fake` does not need. That is everything `src/config/env.ts` requires for these drivers, and M6 added no variable. Migrations `0006` and `0007` run by themselves on the next deploy of `staging` (`scripts/vercel-build`).
+
 **Dev** (`.env.local`), for a real Stripe checkout on a laptop: `PAYMENT_DRIVER=stripe` with the keys of the test mode of `G&M Gastro Event GmbH`, and the secret `stripe listen --forward-to localhost:3000/api/webhooks/stripe` prints as `STRIPE_WEBHOOK_SECRET`. Without them dev runs a simulated payment. Mail stays on the console.
+
+## 9. Document storage  *(M5)*
+
+The KBA's confirmation is cached in a private Supabase Storage bucket and streamed to the customer only behind their status link (`docs/launch-plan.md` M5). Per stage, in the stage's own Supabase project.
+
+**Staging, done (2026-09-29, through the Supabase and Vercel MCPs at Mark's request):**
+
+- Bucket **`kba-documents`** in `zulexgo-staging` (`nkojumzoqtqmkzxbpmil`): private, 10 MB per file. `storage.objects` has row-level security on and no policy, so only a secret key reads or writes it.
+- In the Vercel project `zulexgo-staging`, environment Production: `SUPABASE_STORAGE_URL=https://nkojumzoqtqmkzxbpmil.supabase.co` and `SUPABASE_STORAGE_BUCKET=kba-documents`.
+
+**Staging, still to do by hand:**
+
+1. Supabase → `zulexgo-staging` → Project Settings → API Keys → **Publishable and secret API keys** → create a secret key named `zulexgo-staging-documents` (its own name, so it can be rotated alone). Copy the `sb_secret_…` value.
+2. Vercel → `zulexgo-staging` → Settings → Environment Variables → `SUPABASE_STORAGE_SERVICE_KEY` = that value, environment **Production** only, marked **Sensitive**.
+3. Change `STORAGE_DRIVER` from `fake` to `supabase` in the same place. **Only after step 2**: the app refuses to boot with the driver switched on and the key missing.
+4. Redeploy `staging`. The build log shows `Seeded 1 documents.` on the first deploy (the test confirmation of the seeded completed order, stored in the bucket) and `Seed already loaded.` after. A wrong key or bucket fails the deploy, so the previous one keeps serving.
+5. Check: open `https://zulexgo-staging.vercel.app/status/seed-status-link-completed` and download the test confirmation. In the Supabase dashboard, Storage → `kba-documents` holds `ZG-SEED04/9100000000000004.confirmation`. If the seeded link says "Link nicht gültig", someone used the resend form on the seeded order (its reference and address are in the repo); the next deploy restores it.
+
+**Production** (M8): the same in the production Supabase project, with its own bucket and its own secret key; never seeded.
+
+The secret key bypasses row-level security. It stays server-side (`SUPABASE_STORAGE_SERVICE_KEY` has no `NEXT_PUBLIC_` twin), and `tests/integration/client-bundle-secrets.test.ts` walks the client import graph to keep it so.
 
 ---
 

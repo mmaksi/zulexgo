@@ -17,14 +17,27 @@ export type EmailTemplate =
       readonly manualProcessing: boolean
     }
   | { readonly name: "completed"; readonly reference: ApplicationReference; readonly statusLink: string }
-  | { readonly name: "correctionRequired"; readonly reference: ApplicationReference; readonly statusLink: string }
+  | {
+      readonly name: "correctionRequired"
+      readonly reference: ApplicationReference
+      readonly statusLink: string
+      /** What went wrong, in our words (the rejection catalogue), never the vendor's. */
+      readonly reason: string
+    }
   | {
       readonly name: "rejected"
       readonly reference: ApplicationReference
       readonly statusLink: string
+      /** What went wrong, in our words (the rejection catalogue), never the vendor's. */
+      readonly reason: string
+      /** What goes back to the customer. */
       readonly refund: Money
+      /** What we keep of the payment: the processing fee, or nothing when the failure was ours. */
+      readonly retained: Money
     }
   | { readonly name: "refundIssued"; readonly reference: ApplicationReference; readonly amount: Money }
+  /** Not in the business logic document: the recovery for a lost link (launch plan M5). */
+  | { readonly name: "statusLinkResent"; readonly reference: ApplicationReference; readonly statusLink: string }
 
 export interface MailMessage {
   readonly to: Email

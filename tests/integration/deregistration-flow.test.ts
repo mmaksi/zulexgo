@@ -1,59 +1,13 @@
 import { FAKE_REQUEST } from "@/tests/fixtures/applications"
-import { FakeClock } from "@/src/adapters/clock/fake/fake-clock"
-import { FakeMailer } from "@/src/adapters/mail/fake/fake-mailer"
-import { FakePaymentProvider } from "@/src/adapters/payment/fake/fake-payment-provider"
-import { FakeRegistrationGateway } from "@/src/adapters/registration/fake/fake-registration-gateway"
-import { InMemoryApplicationRepository } from "@/src/adapters/repository/fake/in-memory-application-repository"
-import { InMemoryDocumentStore } from "@/src/adapters/storage/fake/in-memory-document-store"
-import { FakeTokenGenerator } from "@/src/adapters/tokens/fake/fake-token-generator"
-import type { ApplicationReference } from "@/src/core/domain/application-reference"
-import type { ErrorCatalogue } from "@/src/core/domain/error-algorithm"
 import { Money } from "@/src/core/domain/money"
 import { DEREGISTRATION_TOTAL, PROCESSING_FEE } from "@/src/core/domain/pricing"
 import { GatewayRejected } from "@/src/core/errors/gateway-rejected"
 import { GatewayUnavailable } from "@/src/core/errors/gateway-unavailable"
-import type { PaymentMethodKind } from "@/src/core/ports/payment-provider"
 import { confirmPayment } from "@/src/core/use-cases/confirm-payment"
+import { OpenApplicationExists } from "@/src/core/errors/open-application-exists"
 import { confirmRefund } from "@/src/core/use-cases/confirm-refund"
-import { pollDueApplications } from "@/src/core/use-cases/poll-due-applications"
 import { submitCheckout } from "@/src/core/use-cases/submit-checkout"
-
-const MINUTE = 60_000
-const CATALOGUE: ErrorCatalogue = { 101: "correctable", 202: "final" }
-const CODES = Object.values(FAKE_REQUEST.codes)
-
-function setup() {
-  const clock = new FakeClock(new Date("2026-03-01T09:00:00.000Z"))
-  const deps = {
-    repository: new InMemoryApplicationRepository(),
-    registration: new FakeRegistrationGateway(),
-    payments: new FakePaymentProvider(clock),
-    mailer: new FakeMailer(),
-    documents: new InMemoryDocumentStore(),
-    clock,
-    tokens: new FakeTokenGenerator(),
-    statusLink: (token: string) => `https://zulexgo.example.test/status/${token}`,
-    errorCatalogue: CATALOGUE,
-  }
-
-  const emails = () => deps.mailer.sent.map((message) => message.template.name)
-  const stored = async (reference: ApplicationReference) => (await deps.repository.get(reference))!
-  const zulexId = async (reference: ApplicationReference) => (await stored(reference)).zulexApplicationId!
-  const payment = async (reference: ApplicationReference) => deps.payments.getPayment((await stored(reference)).payment.id)
-  const poll = async (afterMinutes: number) => {
-    clock.advance(afterMinutes * MINUTE)
-    return pollDueApplications(deps, 50)
-  }
-
-  async function checkoutAndPay(method: PaymentMethodKind = "card") {
-    const { reference } = await submitCheckout(deps, { request: FAKE_REQUEST, email: "customer@example.test" })
-    await deps.payments.customerPays((await stored(reference)).payment.id, method)
-    await confirmPayment(deps, reference)
-    return reference
-  }
-
-  return { deps, clock, emails, stored, zulexId, payment, poll, checkoutAndPay }
-}
+import { CODES, keepServiceDown, MINUTE, setupFlow as setup } from "./flow-harness"
 
 describe("de-registration flow on fakes", () => {
   describe("J1, happy path", () => {
@@ -136,7 +90,7 @@ describe("de-registration flow on fakes", () => {
       deps.registration.failNext("submit", new Error("the process died"))
 
       await expect(confirmPayment(deps, reference)).rejects.toThrow("the process died")
-      await poll(0)
+      await poll(1)
 
       expect((await stored(reference)).status).toBe("submitted_to_kba")
       expect(emails()).toEqual(["orderConfirmation", "submittedToKba"])
@@ -150,6 +104,52 @@ describe("de-registration flow on fakes", () => {
 
       expect((await stored(reference)).status).toBe("awaiting_payment")
       expect(emails()).toEqual([])
+    })
+  })
+
+  describe("J8, a second order for a vehicle that already has one open", () => {
+    const again = (flow: ReturnType<typeof setup>, options: { acknowledgedDuplicate?: boolean; vin?: string } = {}) =>
+      submitCheckout(flow.deps, {
+        request: { ...FAKE_REQUEST, vin: options.vin ?? FAKE_REQUEST.vin },
+        email: "customer@example.test",
+        acknowledgedDuplicate: options.acknowledgedDuplicate,
+      })
+
+    it("warns instead of opening a second payment for the same plate and VIN while the first is with the KBA", async () => {
+      const flow = setup()
+      await flow.checkoutAndPay()
+      const createPayment = jest.spyOn(flow.deps.payments, "createPayment")
+
+      await expect(again(flow)).rejects.toBeInstanceOf(OpenApplicationExists)
+
+      expect(createPayment).not.toHaveBeenCalled()
+    })
+
+    it("goes ahead once the customer has confirmed that they mean it", async () => {
+      const flow = setup()
+      const first = await flow.checkoutAndPay()
+
+      const second = await again(flow, { acknowledgedDuplicate: true })
+
+      expect(second.reference).not.toBe(first)
+    })
+
+    it("does not warn for another vehicle, or for an earlier checkout that was never paid", async () => {
+      const flow = setup()
+      await flow.payForCheckout()
+
+      await expect(again(flow)).resolves.toMatchObject({ reference: expect.any(String) })
+      await flow.checkoutAndPay()
+      await expect(again(flow, { vin: "FAKEVIN0000000002" })).resolves.toMatchObject({ reference: expect.any(String) })
+    })
+
+    it("does not warn once the earlier order is over", async () => {
+      const flow = setup()
+      const first = await flow.checkoutAndPay()
+      flow.deps.registration.setStatus(await flow.zulexId(first), { state: "finished", documents: [] })
+      await flow.poll(1)
+
+      await expect(again(flow)).resolves.toMatchObject({ reference: expect.any(String) })
     })
   })
 
@@ -168,22 +168,123 @@ describe("de-registration flow on fakes", () => {
       expect(emails()).toEqual(["orderConfirmation", "submittedToKba"])
     })
 
-    it("fails for good with a full refund when the second attempt cannot reach the service either", async () => {
-      const { deps, emails, stored, payment, poll, checkoutAndPay } = setup()
-      deps.registration.failNext("submit", new GatewayUnavailable())
-      const reference = await checkoutAndPay("card")
+    it("keeps resubmitting under the same idempotency key while the service cannot be reached, telling nobody and refunding nothing (D6)", async () => {
+      const flow = setup()
+      const submit = jest.spyOn(flow.deps.registration, "submitDeregistration")
+      flow.deps.registration.failNext("submit", new GatewayUnavailable())
+      const reference = await flow.checkoutAndPay("card")
 
-      deps.registration.failNext("submit", new GatewayUnavailable())
-      await poll(1)
+      await keepServiceDown(flow, 5)
 
-      expect((await stored(reference)).status).toBe("failed_final")
-      expect(await payment(reference)).toMatchObject({ status: "released", captured: Money.ofCents(0) })
-      expect(emails()).toEqual(["orderConfirmation", "rejected"])
+      expect((await flow.stored(reference)).status).toBe("submitted_and_paid")
+      expect(flow.emails()).toEqual(["orderConfirmation"])
+      expect((await flow.payment(reference)).status).toBe("held")
+      expect(submit.mock.calls.length).toBeGreaterThan(2)
+      expect(new Set(submit.mock.calls.map(([, key]) => key)).size).toBe(1)
+    })
 
-      await confirmRefund(deps, reference)
+    it.each([
+      ["taking the money", (flow: ReturnType<typeof setup>) => jest.spyOn(flow.deps.payments, "capture").mockRejectedValueOnce(new Error("Stripe is down"))],
+      ["sending email 4", (flow: ReturnType<typeof setup>) => jest.spyOn(flow.deps.mailer, "send").mockImplementation(async ({ template }) => {
+        if (template.name === "submittedToKba") throw new Error("Resend is down")
+      })],
+    ])("backs off when %s fails after the application was filed, instead of retrying it every tick (D4's twin)", async (_, breakIt) => {
+      const error = jest.spyOn(console, "error").mockImplementation(() => {})
+      const flow = setup()
+      const reference = await flow.payForCheckout("card")
+      const broken = breakIt(flow)
 
-      expect(emails()).toEqual(["orderConfirmation", "rejected", "refundIssued"])
-      expect(deps.mailer.sent.at(-1)?.template).toMatchObject({ amount: DEREGISTRATION_TOTAL })
+      await expect(flow.confirm(reference)).rejects.toThrow()
+
+      expect(await flow.poll(0)).toEqual({ checked: 0, failed: 0 })
+      expect((await flow.stored(reference)).status).toBe("submitted_and_paid")
+      broken.mockRestore()
+
+      await flow.poll(1)
+
+      expect((await flow.stored(reference)).status).toBe("submitted_to_kba")
+      expect(flow.deps.registration.submissions).toHaveLength(1)
+      error.mockRestore()
+    })
+
+    it("does not take a 400 on a retry as proof that nothing was filed: the first attempt may have been accepted, so it never becomes a correction that files a second application", async () => {
+      const warn = jest.spyOn(console, "warn").mockImplementation(() => {})
+      const flow = setup()
+      flow.deps.registration.failNext("submit", new GatewayUnavailable())
+      const reference = await flow.checkoutAndPay("card")
+
+      flow.deps.registration.failNext("submit", new GatewayRejected())
+      await flow.poll(2)
+
+      expect((await flow.stored(reference)).status).toBe("submitted_and_paid")
+      expect(flow.emails()).toEqual(["orderConfirmation"])
+      expect((await flow.stored(reference)).failure).toBeUndefined()
+
+      await keepServiceDown(flow, 24)
+      expect((await flow.stored(reference)).status).toBe("failed_final")
+      expect(warn.mock.calls.flat().join(" ")).toContain(reference)
+      warn.mockRestore()
+    })
+
+    it("still sends data refused at the first attempt straight to a correction", async () => {
+      const flow = setup()
+      flow.deps.registration.failNext("submit", new GatewayRejected())
+
+      const reference = await flow.checkoutAndPay("card")
+
+      expect((await flow.stored(reference)).status).toBe("failed_correctable")
+    })
+
+    it("then files the application when the service comes back, however late within the day", async () => {
+      const flow = setup()
+      flow.deps.registration.failNext("submit", new GatewayUnavailable())
+      const reference = await flow.checkoutAndPay("card")
+      await keepServiceDown(flow, 20)
+
+      await flow.poll(60)
+
+      expect((await flow.stored(reference)).status).toBe("submitted_to_kba")
+      expect(flow.emails()).toEqual(["orderConfirmation", "submittedToKba"])
+    })
+
+    it("fails for good with a full refund only once a day has passed without an answer, and flags the order for support", async () => {
+      const warn = jest.spyOn(console, "warn").mockImplementation(() => {})
+      const flow = setup()
+      flow.deps.registration.failNext("submit", new GatewayUnavailable())
+      const reference = await flow.checkoutAndPay("card")
+
+      await keepServiceDown(flow, 23)
+      expect((await flow.stored(reference)).status).toBe("submitted_and_paid")
+
+      await keepServiceDown(flow, 1)
+
+      expect((await flow.stored(reference)).status).toBe("failed_final")
+      expect(await flow.payment(reference)).toMatchObject({ status: "released", captured: Money.ofCents(0) })
+      expect(flow.emails()).toEqual(["orderConfirmation", "rejected", "refundIssued"])
+      expect(warn.mock.calls.flat().join(" ")).toContain(reference)
+      await confirmRefund(flow.deps, reference)
+      expect(flow.emails()).toEqual(["orderConfirmation", "rejected", "refundIssued"])
+      expect(flow.deps.mailer.sent.at(-1)?.template).toMatchObject({ amount: DEREGISTRATION_TOTAL })
+      warn.mockRestore()
+    })
+
+    it("backs off from a submission the service refuses for good, like a wrong API key, instead of retrying every tick (D4)", async () => {
+      const error = jest.spyOn(console, "error").mockImplementation(() => {})
+      const flow = setup()
+      const refused = new Error("Zulex POST /deregistration-applications answered 401")
+      refused.name = "ZulexRequestFailed"
+      const reference = await flow.payForCheckout("card")
+      flow.deps.registration.failNext("submit", refused)
+      await expect(flow.confirm(reference)).rejects.toThrow("answered 401")
+
+      expect(await flow.poll(0)).toEqual({ checked: 0, failed: 0 })
+
+      flow.deps.registration.failNext("submit", refused)
+      expect(await flow.poll(1)).toEqual({ checked: 1, failed: 1 })
+      expect(await flow.poll(0)).toEqual({ checked: 0, failed: 0 })
+      expect((await flow.stored(reference)).status).toBe("submitted_and_paid")
+      expect(flow.emails()).toEqual(["orderConfirmation"])
+      error.mockRestore()
     })
 
     it("gives each submission its own retry: a resubmitted application still gets one for a later KBA error", async () => {
@@ -311,8 +412,12 @@ describe("de-registration flow on fakes", () => {
       await poll(1)
 
       expect((await stored(reference)).status).toBe("failed_final")
-      expect(await payment(reference)).toMatchObject({ status: "captured", captured: PROCESSING_FEE })
-      expect(emails()).toEqual(["orderConfirmation", "submittedToKba", "rejected"])
+      expect(await payment(reference)).toMatchObject({
+        status: "captured",
+        captured: DEREGISTRATION_TOTAL,
+        refunded: DEREGISTRATION_TOTAL.subtract(PROCESSING_FEE),
+      })
+      expect(emails()).toEqual(["orderConfirmation", "submittedToKba", "rejected", "refundIssued"])
     })
 
     it("completes a finished application that has a confirmation, even alongside a rejection document", async () => {
@@ -338,9 +443,50 @@ describe("de-registration flow on fakes", () => {
     })
   })
 
+  describe("what the application remembers of a failure, for the page and the email", () => {
+    it("keeps the KBA's code of a correctable and of a non-correctable error", async () => {
+      const { deps, stored, zulexId, poll, checkoutAndPay } = setup()
+      const correctable = await checkoutAndPay()
+      const final = await checkoutAndPay()
+      deps.registration.setStatus(await zulexId(correctable), { state: "failed", error: { code: 101, details: [] }, documents: [] })
+      deps.registration.setStatus(await zulexId(final), { state: "failed", error: { code: 202, details: [] }, documents: [] })
+
+      await poll(1)
+
+      expect((await stored(correctable)).failure).toEqual({ kind: "kbaError", code: 101 })
+      expect((await stored(final)).failure).toEqual({ kind: "kbaError", code: 202 })
+    })
+
+    it("puts the catalogue's reason in the correction email and in the rejection email", async () => {
+      const { deps, zulexId, poll, checkoutAndPay } = setup()
+      const correctable = await checkoutAndPay()
+      const final = await checkoutAndPay()
+      deps.registration.setStatus(await zulexId(correctable), { state: "failed", error: { code: 101, details: [] }, documents: [] })
+      deps.registration.setStatus(await zulexId(final), { state: "failed", error: { code: 202, details: [] }, documents: [] })
+
+      await poll(1)
+
+      const sent = (name: string) => deps.mailer.sent.map(({ template }) => template).find((template) => template.name === name)
+      expect(sent("correctionRequired")).toMatchObject({ reason: "Die FIN wurde nicht akzeptiert." })
+      expect(sent("rejected")).toMatchObject({ reason: "Das Fahrzeug ist bereits abgemeldet." })
+    })
+
+    it("keeps that data was refused at submission, and that a rejection document came back", async () => {
+      const { deps, stored, zulexId, poll, checkoutAndPay } = setup()
+      deps.registration.failNext("submit", new GatewayRejected())
+      const refused = await checkoutAndPay()
+      const documented = await checkoutAndPay()
+      deps.registration.setStatus(await zulexId(documented), { state: "finished", documents: [{ id: "8", kind: "rejection" }] })
+
+      await poll(1)
+
+      expect((await stored(refused)).failure).toEqual({ kind: "rejected" })
+      expect((await stored(documented)).failure).toEqual({ kind: "rejectionDocument" })
+    })
+  })
+
   it.each([
     ["completed", { state: "finished", documents: [] }],
-    ["failed_correctable", { state: "failed", error: { code: 101, details: [] }, documents: [] }],
     ["failed_final", { state: "failed", error: { code: 202, details: [] }, documents: [] }],
   ] as const)("stops scheduling checks once an application is %s, so nothing looks overdue", async (status, gatewayStatus) => {
     const { deps, stored, zulexId, poll, checkoutAndPay } = setup()

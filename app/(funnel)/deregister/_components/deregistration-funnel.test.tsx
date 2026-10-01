@@ -69,6 +69,34 @@ describe("de-registration funnel", () => {
       expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Können Sie online abmelden?")
     })
 
+    describe("J11, a special plate", () => {
+      const special = () => screen.getByRole("checkbox", { name: /E-, H- oder Saisonkennzeichen/ })
+
+      it("says the application may be rejected once the customer names such a plate, and says nothing before", async () => {
+        const { user } = setup()
+        expect(screen.queryByText(/abgelehnt werden/)).not.toBeInTheDocument()
+
+        await user.click(special())
+
+        expect(screen.getByRole("status")).toHaveTextContent(/abgelehnt werden/)
+        await user.click(special())
+        expect(screen.queryByText(/abgelehnt werden/)).not.toBeInTheDocument()
+      })
+
+      it("does not stop the customer: it is a warning, not a gate", async () => {
+        const { user, actions } = setup()
+        await user.click(screen.getByRole("radio", { name: /^Zwei Kennzeichen/ }))
+        await user.click(screen.getByRole("radio", { name: "Ja, beides liegt mir vor" }))
+        await user.type(screen.getByLabelText("Ortskürzel Ihres Kennzeichens"), "AAA")
+        await user.click(special())
+
+        await user.click(screen.getByRole("button", { name: "Weiter" }))
+
+        expect(actions.checkEligibility).toHaveBeenCalledWith("AAA")
+        expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Ihr Fahrzeug")
+      })
+    })
+
     it("warns before any data entry when the authority processes by hand", async () => {
       const { user } = setup({
         checkEligibility: jest.fn(async (prefix: string) => ({ ok: true as const, prefix, ikfzStatus: "offline" as const })),
@@ -157,7 +185,8 @@ describe("de-registration funnel", () => {
       await passEligibility(user)
       await fillVehicle(user)
 
-      expect(screen.getByText(/behalten wir 19,99\s€ Bearbeitungsgebühr ein/)).toBeInTheDocument()
+      const notice = screen.getByText(/behalten wir 19,99\s€ Bearbeitungsgebühr ein/)
+      expect(notice).toHaveTextContent(/erstatten den Rest innerhalb von 3–5 Werktagen/)
       expect(payButton()).toBeDisabled()
 
       await user.click(consentBoxes()[0])
@@ -235,6 +264,54 @@ describe("de-registration funnel", () => {
       expect(actions.completeSimulatedPayment).toHaveBeenCalledWith("ZG-ABC123")
       expect(await screen.findByText("ZG-ABC123")).toBeInTheDocument()
       expect(screen.getByText("customer@example.test")).toBeInTheDocument()
+    })
+
+    describe("J8, a vehicle that already has an open order", () => {
+      const startCheckout = () =>
+        jest
+          .fn<ReturnType<CheckoutActions["startCheckout"]>, Parameters<CheckoutActions["startCheckout"]>>()
+          .mockResolvedValueOnce({ ok: false, reason: "duplicate" })
+          .mockResolvedValueOnce({ ok: true, reference: "ZG-ABC123", clientSecret: "fake-secret" })
+
+      async function reachDuplicateWarning() {
+        const flow = setup({ startCheckout: startCheckout() })
+        await passEligibility(flow.user)
+        await fillVehicle(flow.user)
+        await flow.user.click(consentBoxes()[0])
+        await flow.user.click(consentBoxes()[1])
+        await flow.user.click(payButton())
+        return flow
+      }
+
+      it("warns that an order is already open, and takes no payment until the customer says they want another", async () => {
+        const { user, actions } = await reachDuplicateWarning()
+
+        expect(await screen.findByRole("alert")).toHaveTextContent(/bereits ein Antrag/)
+        expect(actions.completeSimulatedPayment).not.toHaveBeenCalled()
+        expect(payButton()).toBeDisabled()
+
+        await user.click(screen.getByRole("checkbox", { name: /trotzdem einen weiteren Antrag/ }))
+
+        expect(payButton()).toBeEnabled()
+      })
+
+      it("goes ahead, telling the server the customer confirmed, once they do", async () => {
+        const { user, actions } = await reachDuplicateWarning()
+        await user.click(await screen.findByRole("checkbox", { name: /trotzdem einen weiteren Antrag/ }))
+
+        await user.click(payButton())
+
+        expect(actions.startCheckout).toHaveBeenLastCalledWith(expect.objectContaining({ acknowledgedDuplicate: true }))
+        expect(await screen.findByText("ZG-ABC123")).toBeInTheDocument()
+      })
+
+      it("does not ask when there is no other order", async () => {
+        const { user } = setup()
+        await passEligibility(user)
+        await fillVehicle(user)
+
+        expect(screen.queryByRole("checkbox", { name: /trotzdem einen weiteren Antrag/ })).not.toBeInTheDocument()
+      })
     })
 
     it("retries a failed payment on the same order instead of opening a second one", async () => {

@@ -6,6 +6,7 @@ import { FakeClock } from "@/src/adapters/clock/fake/fake-clock"
 import { FakeMailer } from "@/src/adapters/mail/fake/fake-mailer"
 import { StripePaymentProvider } from "@/src/adapters/payment/stripe/stripe-payment-provider"
 import { ZulexRegistrationGateway } from "@/src/adapters/registration/zulex/zulex-registration-gateway"
+import { InMemoryRateLimiter } from "@/src/adapters/rate-limit/fake/in-memory-rate-limiter"
 import { InMemoryApplicationRepository } from "@/src/adapters/repository/fake/in-memory-application-repository"
 import { InMemoryDocumentStore } from "@/src/adapters/storage/fake/in-memory-document-store"
 import { FakeTokenGenerator } from "@/src/adapters/tokens/fake/fake-token-generator"
@@ -40,6 +41,7 @@ export function withVendorsAtTheNetwork() {
       payments: new StripePaymentProvider({ secretKey: STRIPE_TEST_SECRET_KEY, webhookSecret: STRIPE_TEST_WEBHOOK_SECRET }),
       mailer: world.mailer,
       documents: new InMemoryDocumentStore(),
+      rateLimiter: new InMemoryRateLimiter(world.clock),
       clock: world.clock,
       tokens: new FakeTokenGenerator(),
       statusLink: (token) => `https://zulexgo.example.test/status/${token}`,

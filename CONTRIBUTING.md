@@ -91,3 +91,7 @@ TEST_DATABASE_URL=postgres://postgres:postgres@localhost:55432/postgres npm test
 ```
 
 Each suite creates and drops its own database on that server.
+
+Run tests through `npm test` (`npm test -- path/to/file.test.ts` for one file),
+not `npx jest`: the script sets `--experimental-vm-modules`, which React Email's
+renderer needs for its dynamic `import()` under Jest.

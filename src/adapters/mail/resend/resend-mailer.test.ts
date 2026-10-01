@@ -58,7 +58,14 @@ describe("ResendMailer", () => {
   })
 
   it("states in the rejection email the amount that is returned", async () => {
-    const rejected = { name: "rejected", reference, statusLink: "https://zulexgo.example.test/status/t", refund: Money.ofCents(5001) } as const
+    const rejected = {
+      name: "rejected",
+      reference,
+      statusLink: "https://zulexgo.example.test/status/t",
+      reason: "Das Fahrzeug ist bereits abgemeldet.",
+      refund: Money.ofCents(5001),
+      retained: Money.ofCents(1998),
+    } as const
 
     await mailer().send({ to: email, template: rejected, idempotencyKey: "r" })
 

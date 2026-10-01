@@ -1,9 +1,10 @@
 import { DatabaseError, Pool, type PoolClient } from "pg"
 import type { Application, StatusChange } from "@/src/core/domain/application"
 import { parseApplicationReference, type ApplicationReference } from "@/src/core/domain/application-reference"
-import { POLLED_STATUSES, type ApplicationStatus } from "@/src/core/domain/application-status"
+import { OPEN_STATUSES, POLLED_STATUSES, type ApplicationStatus } from "@/src/core/domain/application-status"
 import { parseDeregistrationRequest } from "@/src/core/domain/deregistration-request"
 import { emailSchema } from "@/src/core/domain/email"
+import type { Failure } from "@/src/core/domain/failure"
 import { Money } from "@/src/core/domain/money"
 import type { IkfzStatus } from "@/src/core/domain/registration-authority"
 import { DuplicateApplication } from "@/src/core/errors/duplicate-application"
@@ -26,6 +27,8 @@ interface ApplicationRow {
   idempotency_key: string
   zulex_application_id: string | null
   retry_attempts: number
+  failure_kind: Failure["kind"] | null
+  failure_code: number | null
   next_poll_at: Date | null
   poll_attempts: number
   stripe_payment_intent_id: string
@@ -63,7 +66,7 @@ export class PostgresApplicationRepository implements ApplicationRepository {
 
   async create(application: Application): Promise<Application> {
     await this.transaction(async (client) => {
-      const columns = { reference: application.reference, version: 1, idempotency_key: application.idempotencyKey, ...this.columns(application) }
+      const columns = { reference: application.reference, version: 1, ...this.columns(application) }
       const names = Object.keys(columns)
       await client.query(
         `INSERT INTO applications (${names.join(", ")}) VALUES (${names.map((_, index) => `$${index + 1}`).join(", ")})`,
@@ -103,7 +106,7 @@ export class PostgresApplicationRepository implements ApplicationRepository {
         [application.reference],
       )
       await appendHistory(client, application.reference, application.history.slice(rows[0].stored))
-    })
+    }).catch(rethrowDuplicate)
 
     return (await this.get(application.reference))!
   }
@@ -132,6 +135,17 @@ export class PostgresApplicationRepository implements ApplicationRepository {
     )
   }
 
+  async hasOpenApplication({ licencePlate, vin }: Parameters<ApplicationRepository["hasOpenApplication"]>[0]): Promise<boolean> {
+    const { rows } = await this.pool.query<{ open: boolean }>(
+      `SELECT EXISTS (
+         SELECT 1 FROM applications
+         WHERE plate_prefix = $1 AND plate_letters = $2 AND plate_numbers = $3 AND vin = $4 AND status = ANY($5)
+       ) AS open`,
+      [licencePlate.prefix, licencePlate.letters, licencePlate.numbers, vin, OPEN_STATUSES],
+    )
+    return rows[0].open
+  }
+
   async findDueForPolling(now: Date, limit: number): Promise<Application[]> {
     const { rows } = await this.pool.query<ApplicationRow>(
       `${SELECT_APPLICATION} WHERE a.status = ANY($1) AND a.next_poll_at <= $2 ORDER BY a.next_poll_at LIMIT $3`,
@@ -140,7 +154,7 @@ export class PostgresApplicationRepository implements ApplicationRepository {
     return rows.map((row) => this.toApplication(row))
   }
 
-  /** Every column an update may change; the reference and idempotency key are fixed at creation. */
+  /** Every column an update may change; only the reference is fixed at creation. */
   private columns(application: Application) {
     const { request } = application
     const { rearPlate, frontPlate, certificate } = request.codes
@@ -155,8 +169,11 @@ export class PostgresApplicationRepository implements ApplicationRepository {
       vin: request.vin,
       encrypted_security_codes: this.cipher.encrypt(JSON.stringify(codes), application.reference),
       authority_ikfz_status: application.ikfzStatus,
+      idempotency_key: application.idempotencyKey,
       zulex_application_id: application.zulexApplicationId ?? null,
       retry_attempts: application.retryAttempts,
+      failure_kind: application.failure?.kind ?? null,
+      failure_code: application.failure?.kind === "kbaError" ? application.failure.code : null,
       next_poll_at: application.polling.nextPollAt ?? null,
       poll_attempts: application.polling.attempts,
     }
@@ -182,6 +199,7 @@ export class PostgresApplicationRepository implements ApplicationRepository {
       payment: { id: row.stripe_payment_intent_id, total: Money.ofCents(row.total_cents) },
       zulexApplicationId: row.zulex_application_id ?? undefined,
       retryAttempts: row.retry_attempts,
+      failure: toFailure(row),
       polling: { nextPollAt: row.next_poll_at ?? undefined, attempts: row.poll_attempts },
     }
   }
@@ -204,6 +222,11 @@ export class PostgresApplicationRepository implements ApplicationRepository {
       client.release()
     }
   }
+}
+
+function toFailure({ failure_kind, failure_code }: ApplicationRow): Failure | undefined {
+  if (!failure_kind) return undefined
+  return failure_kind === "kbaError" ? { kind: failure_kind, code: failure_code! } : { kind: failure_kind }
 }
 
 async function appendHistory(client: PoolClient, reference: ApplicationReference, changes: readonly StatusChange[]) {

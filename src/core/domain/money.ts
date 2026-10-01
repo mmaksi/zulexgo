@@ -23,3 +23,8 @@ export class Money {
     return this.cents === other.cents
   }
 }
+
+const EURO_FORMAT = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" })
+
+/** The one way an amount is written for a customer: on the page, in an email, at checkout. */
+export const formatEuros = (money: Money) => EURO_FORMAT.format(money.cents / 100)

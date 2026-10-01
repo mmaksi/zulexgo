@@ -1,19 +1,26 @@
+import { Download } from "lucide-react"
+import Link from "next/link"
+import { SUPPORT_EMAIL } from "@/src/core/domain/contact"
 import type { CustomerStep } from "@/src/core/domain/customer-steps"
+import type { DocumentKind } from "@/src/core/domain/document"
+import { formatEuros } from "@/src/core/domain/money"
 import type { StatusView as View } from "@/src/core/use-cases/get-status-by-token"
 import { cn } from "@/src/lib/utils"
+import { Alert } from "@/src/ui/alert"
+import { buttonLink } from "@/src/ui/button"
 import { PlateFrame } from "@/src/ui/plate-frame"
-
-const SUPPORT_EMAIL = "kontakt@gm-gastro.com"
+import { CancelOrder, type CancelOrderAction } from "./cancel-order"
+import { CorrectOrder, type CorrectOrderAction } from "./correct-order"
 
 /** Titles are the customer statuses, status lines the internal labels (launch plan § Context). */
-function describe(step: CustomerStep): { title: string; line?: string; text?: string } {
+function describe(step: CustomerStep, failureReason?: string): { title: string; line?: string; text?: string } {
   if (step.id === "paid") {
     return step.state === "current"
       ? { title: "Antrag eingegangen", line: "Zahlung wird bestätigt" }
       : {
           title: "Antrag eingegangen",
-          line: "Betrag reserviert",
-          text: "Wir haben Ihren Antrag erhalten und den Betrag auf Ihrer Karte reserviert. Abgebucht wird er erst mit dem Ergebnis.",
+          line: "Zahlung erhalten",
+          text: "Wir haben Ihren Antrag erhalten. Ihre Karte wird belastet, sobald er eingereicht ist, spätestens kurz vor Ablauf der Kartenreservierung.",
         }
   }
   if (step.id === "kba") {
@@ -23,21 +30,43 @@ function describe(step: CustomerStep): { title: string; line?: string; text?: st
     case "completed":
       return { title: "Abmeldung abgeschlossen", line: "Vorgang abgeschlossen", text: "Ihr Fahrzeug ist abgemeldet. Kfz-Steuer und Versicherung enden automatisch." }
     case "failed_correctable":
-      return { title: "Korrektur erforderlich", line: "Korrektur erforderlich", text: "Die Zulassungsbehörde konnte den Antrag mit diesen Angaben nicht bearbeiten. Schreiben Sie uns, dann klären wir mit Ihnen die Korrektur oder die Stornierung." }
+      return { title: "Korrektur erforderlich", line: "Korrektur erforderlich", text: failureReason }
     case "failed_final":
-      return { title: "Antrag abgelehnt", line: "Erstattung", text: "Der Antrag konnte nicht abgeschlossen werden. Wie viel Sie zurückerhalten, steht in unserer E-Mail dazu." }
+      return { title: "Antrag abgelehnt", line: "Erstattung", text: `${failureReason ?? ""} Eine Korrektur ist nicht möglich.`.trim() }
     case "cancelled":
-      return { title: "Antrag storniert", line: "Storniert", text: "Sie haben den Antrag storniert. Die Erstattung ist unterwegs." }
+      return { title: "Antrag storniert", line: "Storniert", text: "Sie haben den Antrag storniert." }
     default:
       return { title: "Ergebnis" }
   }
 }
 
+const DOCUMENT_LABELS: Record<DocumentKind, string> = {
+  confirmation: "Bestätigung der Abmeldung",
+  rejection: "Ablehnung",
+  fee: "Gebührenbeleg",
+  unknown: "Dokument",
+}
+
 const when = (date: Date) =>
   new Intl.DateTimeFormat("de-DE", { dateStyle: "medium", timeStyle: "short", timeZone: "Europe/Berlin" }).format(date)
 
-/** site-contract §2.6: plate and the end of the VIN, never a security code; a vertical stepper at every size. */
-export function StatusView({ view }: { view: View }) {
+/**
+ * site-contract §2.6: plate and the end of the VIN, never a security code; a
+ * vertical stepper at every size. `documentHref` builds a download link, the
+ * one place a page repeats its own token; `cancelAction` is the server action
+ * bound to it, as is `correctAction`.
+ */
+export function StatusView({
+  view,
+  documentHref,
+  cancelAction,
+  correctAction,
+}: {
+  view: View
+  documentHref: (documentId: string) => string
+  cancelAction: CancelOrderAction
+  correctAction: CorrectOrderAction
+}) {
   const { licencePlate } = view
   return (
     <div className="flex flex-col gap-(--heading-space-above)">
@@ -64,24 +93,133 @@ export function StatusView({ view }: { view: View }) {
         </h2>
         <ol className="flex max-w-xl flex-col">
           {view.steps.map((step) => (
-            <Step key={step.id} step={step} />
+            <Step key={step.id} step={step} failureReason={view.failureReason} />
           ))}
         </ol>
       </section>
+
+      <OutcomeBlock view={view} documentHref={documentHref} cancelAction={cancelAction} correctAction={correctAction} />
 
       <section aria-labelledby="status-help" className="measure flex flex-col gap-2">
         <h2 id="status-help" className="text-h4 text-grau-dark">
           Hilfe
         </h2>
         <p className="text-body text-grau">
-          Fragen zu Ihrem Antrag? Schreiben Sie uns an{" "}
-          <a href={`mailto:${SUPPORT_EMAIL}`} className="underline underline-offset-4 hover:text-orange-dark">
-            {SUPPORT_EMAIL}
-          </a>{" "}
-          und nennen Sie Ihre Auftragsnummer.
+          Fragen zu Ihrem Antrag? Schreiben Sie uns an <MailLink /> und nennen Sie Ihre Auftragsnummer.
+        </p>
+        <p className="text-body text-grau">
+          Statuslink verloren?{" "}
+          <Link href="/status/link-anfordern" className="underline underline-offset-4 hover:text-orange-dark">
+            Wir senden ihn erneut
+          </Link>
+          .
         </p>
       </section>
     </div>
+  )
+}
+
+function MailLink() {
+  return (
+    <a href={`mailto:${SUPPORT_EMAIL}`} className="underline underline-offset-4 hover:text-orange-dark">
+      {SUPPORT_EMAIL}
+    </a>
+  )
+}
+
+/** site-contract §2.6: what to do next, by outcome. */
+function OutcomeBlock({
+  view,
+  documentHref,
+  cancelAction,
+  correctAction,
+}: {
+  view: View
+  documentHref: (documentId: string) => string
+  cancelAction: CancelOrderAction
+  correctAction: CorrectOrderAction
+}) {
+  const outcome = view.steps.find((step) => step.id === "outcome")?.outcome
+  if (!outcome) return null
+
+  switch (outcome) {
+    case "completed":
+      return <Documents view={view} documentHref={documentHref} />
+    case "failed_correctable":
+      return (
+        <section aria-labelledby="status-options" className="measure flex flex-col gap-8">
+          <h2 id="status-options" className="text-h4 text-grau-dark">
+            Wie möchten Sie fortfahren?
+          </h2>
+          {view.correctable === false ? (
+            <Alert role="status" variant="warning">
+              Ihre Stornierung wurde begonnen, aber noch nicht abgeschlossen. Ein Teil Ihres Geldes ist schon unterwegs, deshalb lässt sich
+              der Antrag nicht mehr korrigieren. Bitte schließen Sie die Stornierung ab.
+            </Alert>
+          ) : (
+            <div className="flex flex-col gap-4">
+              <h3 className="text-subtitle text-grau-dark">Angaben korrigieren</h3>
+              <p className="text-body text-grau">Korrigieren Sie Ihre Angaben und reichen Sie den Antrag erneut ein. Das kostet nichts extra.</p>
+              <CorrectOrder action={correctAction} plateCount={view.plateCount} />
+            </div>
+          )}
+          {view.cancellation ? (
+            <div className="flex flex-col gap-4">
+              <h3 className="text-subtitle text-grau-dark">Oder stornieren</h3>
+              <CancelOrder action={cancelAction} returned={formatEuros(view.cancellation.returned)} retained={formatEuros(view.cancellation.retained)} />
+            </div>
+          ) : null}
+        </section>
+      )
+    case "failed_final":
+    case "cancelled":
+      return (
+        <div className="measure flex flex-col items-start gap-4">
+          <Alert variant={outcome === "failed_final" ? "error" : "info"} className="w-full">
+            <RefundInfo refund={view.refund} />
+          </Alert>
+          <Link href="/deregister" className={buttonLink({ variant: "outline" })}>
+            Neuen Antrag stellen
+          </Link>
+        </div>
+      )
+  }
+}
+
+function RefundInfo({ refund }: { refund: View["refund"] }) {
+  if (!refund) return <p>Wie viel Sie zurückerhalten, steht in unserer E-Mail dazu.</p>
+  return (
+    <p>
+      Sie erhalten {formatEuros(refund.returned)} zurück.
+      {refund.retained.cents > 0 ? ` Die Bearbeitungsgebühr von ${formatEuros(refund.retained)} behalten wir ein.` : ""} Je nach Bank
+      ist der Betrag in 3 bis 5 Werktagen auf Ihrem Konto.
+    </p>
+  )
+}
+
+function Documents({ view, documentHref }: { view: View; documentHref: (documentId: string) => string }) {
+  return (
+    <section aria-labelledby="status-documents" className="flex flex-col gap-4">
+      <h2 id="status-documents" className="text-h4 text-grau-dark">
+        Ihre Bestätigung
+      </h2>
+      {view.documents.length > 0 ? (
+        <ul className="flex flex-col items-start gap-3">
+          {view.documents.map(({ id, kind }) => (
+            <li key={id}>
+              <a href={documentHref(id)} className={buttonLink({ variant: "outline", className: "h-auto min-h-12 py-3 text-left whitespace-normal" })}>
+                <Download aria-hidden="true" />
+                {DOCUMENT_LABELS[kind]} herunterladen
+              </a>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="measure text-body text-grau">
+          Die Bestätigung steht hier zum Download bereit, sobald sie vorliegt. Fehlt sie länger, schreiben Sie uns an <MailLink />.
+        </p>
+      )}
+    </section>
   )
 }
 
@@ -106,8 +244,8 @@ const STATE_LABELS: Record<CustomerStep["state"], string> = {
   failed: "nicht erfolgreich",
 }
 
-function Step({ step }: { step: CustomerStep }) {
-  const { title, line, text } = describe(step)
+function Step({ step, failureReason }: { step: CustomerStep; failureReason?: string }) {
+  const { title, line, text } = describe(step, failureReason)
   return (
     <li aria-current={step.state === "current" ? "step" : undefined} className={cn("flex gap-4 rounded-md p-4", ROWS[step.state])}>
       <span aria-hidden="true" className={cn("mt-1 size-3 shrink-0 rounded-full", MARKS[step.state])} />

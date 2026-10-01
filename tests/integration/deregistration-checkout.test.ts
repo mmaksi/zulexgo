@@ -20,7 +20,7 @@ async function checkout() {
 }
 
 describe("de-registration checkout", () => {
-  it("starts the application from Stripe's signed webhook once the card is held, and files it with Zulex", async () => {
+  it("starts the application from Stripe's signed webhook once the card is held, files it with Zulex, and takes an online authority's money", async () => {
     const { reference, paymentId } = await checkout()
     world.stripe.customerPays(paymentId, "card")
 
@@ -34,7 +34,8 @@ describe("de-registration checkout", () => {
     expect(application.status).toBe("submitted_to_kba")
     expect(world.zulex.applications.has(application.zulexApplicationId!)).toBe(true)
     expect(world.stripe.intents.get(paymentId)).toMatchObject({
-      status: "requires_capture",
+      status: "succeeded",
+      amount_received: 4900,
       metadata: { order_id: reference, service_type: "deregistration" },
     })
     expect(emails()).toEqual(["orderConfirmation", "submittedToKba"])

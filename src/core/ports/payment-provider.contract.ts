@@ -108,6 +108,15 @@ export function paymentProviderContract(name: string, makeSubject: () => Payment
       expect(await provider.release(paymentId)).toMatchObject({ status: "released", captured: Money.ofCents(0) })
     })
 
+    it("never reports more refunded than captured: a released hold returned nothing that was taken", async () => {
+      const paymentId = await paid("card")
+      await provider.release(paymentId)
+
+      const { captured, refunded } = await provider.getPayment(paymentId)
+
+      expect(refunded.cents).toBeLessThanOrEqual(captured.cents)
+    })
+
     describe("notifications", () => {
       it("reads a signed notification that a payment is ready, naming the order it belongs to", async () => {
         const { reference, email } = anApplication()

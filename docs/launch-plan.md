@@ -2,16 +2,18 @@
 
 ## Context
 
-ZulexGO: B2C web app for online vehicle de-registration (Außerbetriebsetzung) on the B2B Zulex API. **M0–M2 are done; M3 and M4's code are merged. M4's exit criterion, a real run on staging, waits for the Zulex API, which is down.** The repo has the marketing layer (landing, legal placeholder pages, design tokens, Shadcn in `src/ui`, Jest + msw) with colocated tests, plus the foundation:
+ZulexGO: B2C web app for online vehicle de-registration (Außerbetriebsetzung) on the B2B Zulex API. **M0–M2 are done; M3 and M4's code are merged. M4's exit criterion, a real run on staging, waits for the Zulex API, which is down. M5 is built except its Verimi step, which waits for Q1–Q4. M6 is built: what remains of it is the founder's answers (Q10, Q20, Q23, Q26, Q35–Q40) and the Zulex error-code catalogue.** The repo has the marketing layer (landing, legal placeholder pages, design tokens, Shadcn in `src/ui`, Jest + msw) with colocated tests, plus the foundation:
 - **Config layer:** zod-validated env in `src/config/env.ts`, selected by `APP_ENV`; five driver variables and stage guardrails as tests; composition root `src/config/container.ts`; `.env.example` committed.
 - **Ports:** `Clock`, `TokenGenerator`, `ApplicationRepository`, `RegistrationGateway`, `PaymentProvider`, `Mailer`, `DocumentStore`, `IdentityVerification`, each with a contract suite passed by every adapter; the domain core, status machine, error algorithm, refund policy and the flow's use cases run end to end on the fakes (M2).
 - **Database:** in-repo migration runner, migrations `0001`–`0004`, a Postgres repository passing the same contract as the in-memory one, and the seed for dev and staging (M3).
 - **CI:** `.github/workflows/ci.yml` runs lint, typecheck, tests, build on every PR, plus the `main accepts staging only` check. ESLint boundary rule in place; a canary test proves the Zulex key never reaches the client bundle.
 - **Deployment:** GitHub remote with protected `staging` and `main`, baseline security headers in `next.config.ts`. Vercel project `zulexgo-staging` deploys `staging` (created 2026-09-27, later than M1 recorded); the production project `zulexgo` is created in M8.
 - **Walking skeleton (M4 code):** Zulex, Stripe and Resend adapters, each passing its port's contract; the Zulex adapter is written from `docs/api-1.yaml` and tested against an msw double of that spec, never yet against the live API. Signed Stripe webhook at `app/api/webhooks/stripe/`, poll route at `app/api/internal/poll/` behind `CRON_SECRET`, funnel at `/deregister`, status page at `/status/[token]`, and the M4 integration tests.
-- **Staging drivers today:** payment on the Stripe sandbox `G&M Gastro Event GmbH Sandbox`, mail on Resend within `MAIL_ALLOWLIST`, repository on the staging Supabase project (`docs/provisioning.md` §8). Registration stays fake until the Zulex API is back, and storage until M5; each Vercel instance holds its own fake registration gateway, which answers the same on every instance (D11, fixed).
+- **Staging drivers today:** payment on the Stripe sandbox `G&M Gastro Event GmbH Sandbox`, mail on Resend within `MAIL_ALLOWLIST`, repository on the staging Supabase project (`docs/provisioning.md` §8). Registration stays fake until the Zulex API is back; each Vercel instance holds its own fake registration gateway, which answers the same on every instance (D11, fixed). Storage flips to Supabase Storage once its service key is set (`docs/provisioning.md` §9).
+- **M5 (built):** the six customer emails in German on React Email with reviewed HTML snapshots, plus the resend-link email; the Supabase Storage `DocumentStore` adapter; the status page with outcome blocks, document downloads behind the token, refund info, live refresh, and a rate-limited lookup; "Resend my link" at `/status/link-anfordern`; the `RateLimiter` port (in-memory fake, Postgres adapter, migration `0005`); `status-notifications.test.ts`. D2 and D5 are fixed on the way.
+- **M6 (built):** the customer can correct their data or cancel from 5b on the status page; a failure is stored and its reason shown from our own catalogue (`src/core/domain/rejection-catalogue.ts`, empty until the founder's codes exist), migration `0006`; a submission Zulex cannot confirm is resubmitted silently for 24 hours before a full refund (D4, D6); card money is captured in full at Zulex's acceptance for an online authority and before a hold can lapse otherwise, a 5b being polled daily for it (D3); a duplicate order for one vehicle is warned about (J8, migration `0007`) and a special plate warned about (J11); dev's seeded orders have payments the fake provider knows.
 
-Not built yet: the Supabase Storage and Verimi adapters (M5); the Zulex spike (no captured fixtures, and `docs/deregistration-user-journeys.md` has no findings from the live API); a schedule for the poll route (`docs/provisioning.md` §5); the staging run that closes M4.
+Not built yet: the Verimi adapter and its two emails (after Q1–Q4); the Zulex spike (no captured fixtures, and `docs/deregistration-user-journeys.md` has no findings from the live API); a schedule for the poll route (`docs/provisioning.md` §5), which since M6 also drives the hold checks, the daily look at each 5b and the silent resubmission; the staging run that closes M4.
 
 Project rules (`CLAUDE.md` + `.claude/skills/`) govern *how* each arrives: test-first for domain rules, interactive behaviour, security invariants, integration boundaries and bug fixes (no tests for static presentation, tokens, or configuration); ports-and-adapters with contract tests and an in-memory fake per port; `APP_ENV`-driven stages; raw-SQL migration folders; "nothing reaches production that has not run on staging."
 
@@ -63,12 +65,12 @@ Funnel UI (M4 Track B) starts once M2's fakes exist, parallel to M3.
 | Migration runner | **Small in-repo runner** (TDD'd) reading `db/migrations/NNNN_slug/{up,down}.sql`, recording version + checksum in `schema_migrations`, one transaction per migration | Supabase CLI migrations are flat, timestamped, up-only — incompatible with the skill's folder-with-`down.sql` rule. Owning ~100 lines beats amending the skill. Override: adopt Supabase CLI and amend `database-migrations`. |
 | Document cache | **Supabase Storage**, private bucket, server-side only, signed URLs never exposed — app streams the PDF after token validation | Keeps official confirmations out of Postgres rows and behind the dashboard's token check. |
 | Status updates from Zulex | **Per-application polling with backoff, driven by a Vercel Cron heartbeat.** Cron hits `app/api/internal/poll/route.ts` every minute with bearer `CRON_SECRET`; only rows with due `next_poll_at` are fetched — the API is *not* swept every minute. Default schedule: authority `online` → 1, 2, 5, 10, 30 min, then hourly; `unavailable`/`offline` (manual processing) → every 6 h, then daily; any `Retry-After` overrides; terminal states stop polling. ~10–30 GETs per application over its life. | Zulex API has no application-status webhook — spec only says in prose that a `noticeId` arrives "via webhook", with no registration or payload contract. Polling is the only way to catch a transition when nobody views the status page, and every change requires an email. **Better alternative, pursued in parallel:** ask the Zulex API team for a signed status-change webhook (`applicationId`, new `status`, `documents`). If it lands, `app/api/webhooks/zulex/route.ts` (signature-verified) triggers `advance-status` immediately and the poller drops to a slow hourly reconciler for missed deliveries — never removed, since a lost webhook otherwise means a customer never emailed. A queue service (Inngest/QStash) would replace the cron with per-application delayed jobs; fair choice but adds a vendor for no gain at MVP volume. |
-| Transactional mail | **Resend** (EU data-processing terms confirmed at sign-up) | Simplest API and domain auth; `Mailer` port + contract suite make Postmark/Brevo a one-folder swap if EU posture requires. Business-logic document: Resend free up to 3,000 emails/month. At up to eight emails per order ≈ 375 orders/month, so M8 watches volume against the tier. |
+| Transactional mail | **Resend** (EU data-processing terms confirmed at sign-up); templates in **React Email**, wording in `src/adapters/mail/resend/copy.ts` | Simplest API and domain auth; `Mailer` port + contract suite make Postmark/Brevo a one-folder swap if EU posture requires. Business-logic document: Resend free up to 3,000 emails/month. At up to eight emails per order ≈ 375 orders/month, so M8 watches volume against the tier. |
 | Payment | **Stripe Payment Element**: card (Visa, Mastercard), SEPA Direct Debit, Apple Pay, Google Pay; PaymentIntent created at checkout; **manual capture**, the document's preferred option "if technically feasible" — otherwise the document's default, automatic capture. Stripe has no manual capture for SEPA Direct Debit (verified in Stripe's docs), so capture is set per payment method: `payment_method_options[card][capture_method]=manual` holds cards, SEPA Direct Debit captured automatically. A single PaymentIntent with top-level `capture_method=manual` cannot offer card and SEPA together (Q12). No custom card processing — Payment Element keeps ZulexGO PCI-DSS compliant without separate certification. Refunds only via Refunds API, never by hand in the Stripe dashboard. Webhooks `payment_intent.succeeded`, `payment_intent.payment_failed`, `charge.refunded`, each signature-verified. Metadata `order_id`, `service_type`, `customer_email`, `application_id`. ZulexGO stores only Stripe Customer ID and PaymentIntent ID, never payment data | All fixed by business-logic document §4. Manual capture conflicts with two other requirements in that section — Q6, Q7. Stripe facts here and in Q6–Q8, Q12 checked against Stripe's documentation. |
 | Encryption of codes at rest | Application-level AES-GCM in the Postgres adapter, key from env (rotatable), from migration `0001` onward | Key stays off the DB host; in-memory fake stays plaintext; no later data migration. |
 | Icon library | **lucide** (installed, Shadcn default), `ChevronRight` as bullet. **Settled in M0:** `docs/design-standard.md` §5.5 amended from Font Awesome to lucide, deviation from the print style guide recorded in that section. | One library, not two. Shadcn writes lucide imports into every generated component, so a second set is hand-maintained. Font Awesome trialled in M0 and reverted for that reason; it is also not a Shadcn `iconLibrary` value (`lucide`, `tabler`, `hugeicons`, `phosphor`, `remixicon`), so the CLI couldn't target it. Icons are decorative, no brand mark, so no brand sign-off outstanding. |
-| Refund policy | **Fixed by business-logic document §3:** success → full capture, no refund · correct & resubmit → charge the difference only, if any · cancel at 5b → refund minus 19.99 € · non-correctable (5c) → refund minus 19.99 € · technical error on our side → 100 % refund · resubmit after cancel → new order, new PaymentIntent, full price. 19.99 € lives in `src/config/pricing.ts` as one constant. | Not a plan decision. Executing "refund minus 19.99 €" on an only-authorised payment is Q8. |
-| Price display (PAngV) | **[plan assumption]** One all-inclusive price per plate count incl. authority fee, from `src/config/pricing.ts`; reconciled monthly against `FEE` documents | Document names no service price. API reports fees only after the fact; customer needs the total before paying. |
+| Refund policy | **Fixed by business-logic document §3:** success → full capture, no refund · correct & resubmit → charge the difference only, if any · cancel at 5b → refund minus 19.99 € · non-correctable (5c) → refund minus 19.99 € · technical error on our side → 100 % refund · resubmit after cancel → new order, new PaymentIntent, full price. 19.99 € lives in `src/core/domain/pricing.ts` as one constant. | Not a plan decision. Executing "refund minus 19.99 €" on an only-authorised payment is Q8. |
+| Price display (PAngV) | One all-inclusive price per service incl. authority fee and the 19.99 € processing fee, from the founder's price list in `src/core/domain/pricing.ts` (read by the landing page and the checkout); reconciled monthly against `FEE` documents | The founder's price list (September 2026) fixes the prices. API reports fees only after the fact; customer needs the total before paying. |
 
 ---
 
@@ -200,6 +202,8 @@ Funnel UI (M4 Track B) starts once M2's fakes exist, parallel to M3.
 
 **Goal:** A paying customer follows every step by email and dashboard, verifies identity, and downloads the official confirmation when finished.
 
+**Status:** built except the Verimi step. What remains is Verimi (adapter, emails 2 and 3, the 2 → 3 transition, `IDENTITY_DRIVER`), waiting for Q1–Q4, and a run on staging with the storage key set.
+
 **How:**
 - The emails of business-logic document §5 (six now, eight once Verimi is added), as reviewed HTML snapshots (the one snapshot case `CLAUDE.md` permits), with no security codes and no token beyond the status link:
 
@@ -215,7 +219,7 @@ Funnel UI (M4 Track B) starts once M2's fakes exist, parallel to M3.
   | 6 | Refund | Your refund is on its way | Amount, timeframe (3–5 business days) |
 
   German wording is a translation task, not in the document. 5a's "plate shipping info" applies to registrations only; omitted for de-registration.
-- **[plan assumption]** A "resend my link" email beyond these (see resend flow below); not in the document.
+- **[plan assumption]** A "resend my link" email beyond these; not in the document. Built: `statusLinkResent`, mailed to the address on file only, carrying the new link.
 - **Verimi step (status 2 → 3), added later:** real `IdentityVerification` adapter, email 2, the 2 → 3 transition. Shape depends entirely on Q1–Q4; can't be broken down further until answered.
 - `src/adapters/storage/supabase/` — Supabase Storage cache of Zulex documents — passing the `DocumentStore` contract; `UNKNOWN` → "Dokument". Staging and production flip `STORAGE_DRIVER=supabase`, making `SUPABASE_STORAGE_*` required at boot.
 - Dashboard: stepper (three rows now: 1, 4 and the outcome 5a | 5b | 5c; five with Verimi) with timestamps from `status_history`, each step showing the document's status line (e.g. "Waiting for customer" at step 2, "KBA processing" at step 4), outcome block (5a success + downloads / 5b reason + correct or cancel / 5c reason + refund info + start a new application), help block, **"Resend my link"** (email + reference → send to the *stored* address only; constant-time response; rate-limited; token rotated on resend), revalidation on focus/interval, stepper pulse while polling.
@@ -223,11 +227,33 @@ Funnel UI (M4 Track B) starts once M2's fakes exist, parallel to M3.
 
 **Exit criteria:** `status-notifications.test.ts` drives the fakes through every transition, asserting exactly one email per transition — none during the silent retry — with no code in any body; staging drops non-allowlisted recipients (test); a fixture document downloads through the token-guarded route.
 
+**Met in CI:** the first (`tests/integration/status-notifications.test.ts`, which also proves an email that fails to send is not lost), the second (`resend-mailer.test.ts`), and the third (`tests/integration/document-download.test.ts`). **Only staging can confirm:** that the Supabase key and bucket work (the deploy's `db:seed` stores a test confirmation in the bucket, and `/status/seed-status-link-completed` offers it), and how the emails look in a real client.
+
 ---
 
 ### M6 — Error algorithm, correction and cancel options, refunds, hold policy
 
 **Goal:** Every failure follows the document's algorithm — one silent automatic retry, then 5b or 5c — and every outcome produces exactly the Stripe action and customer amount in its §3 table.
+
+**Status:** built. The error algorithm and refund policy were M2's and are unchanged for a KBA technical error; M6 added the rejection catalogue and the stored failure, cancel and correct from 5b, the hold policy, and J8 and J11. Waiting on the founder: Q10 (the codes), Q20, Q23, Q26 and Q35–Q40 (each has a provisional answer in code and a note on what to change). Waiting on staging: see below.
+
+**As built:**
+- **Failure and reason:** `Application.failure` (`src/core/domain/failure.ts`) holds the kind and, for a KBA error, its code (migration `0006`); the vendor's description is never stored. The status page and emails 5b and 5c show `reasonFor(failure)`, our wording from `REJECTION_CATALOGUE`, general for every code until the catalogue has entries. An order stored before failures were kept reads with the general wording.
+- **A submission Zulex cannot confirm** (timeout, 429, 5xx, 409, an answer we cannot read, a 401, 403 or 404 on create) is resubmitted under the same idempotency key on the online backoff, silently, for 24 hours (`SUBMISSION_PATIENCE_MS`), then 5c with a full refund and a log line asking support to check the Zulex portal for a stray application (D4, D6). Only a 400 on the first attempt is known to have filed nothing and goes straight to 5b; a 400 answering a retry says nothing about the attempt before it, so it is one more unconfirmed try. Once the application is filed, a failure to take the money or send email 4 backs off (a minute, then the online poll table) instead of retrying every tick. A KBA technical error still gets exactly one silent retry.
+- **5b, correct and resubmit** (`src/core/use-cases/correct-application.ts`, `app/status/[token]/_components/correct-order.tsx`): the VIN and the three security codes, the form starting empty (Q26). An application Zulex holds is patched (only the changed fields, and not again if Zulex is already working on it) and is saved at status 4 before email 4 goes out again; that repeat email is best effort (a failure is logged, not thrown), because an order left at 5b while Zulex works would never be polled. One Zulex refused outright is filed afresh under a new idempotency key (Q37). A refusal or an outage leaves the order at 5b. A correction costs nothing extra (Q11). It is refused (`PaymentNoLongerWhole`) once any of the order's money has gone back, and the page then offers only the cancel to finish.
+- **5b, cancel** (`src/core/use-cases/cancel-application.ts`): a confirmation dialog names the fee and the refund; money moves first, then email 6, then the status, so a failure leaves the order at 5b to ask again. From a held card only the fee is captured, which releases the rest; from a captured payment all but the fee is refunded. Cancel and correct first claim the order with a version-checked write, before any money moves or anything is sent to Zulex, so whichever loses a race fails first and can be asked again.
+- **5c** was M5's: the refund minus 19.99 €, emails 5c and 6, a new application offered.
+- **Hold policy** (Q7, Q20; `src/core/domain/hold-policy.ts`, `src/core/use-cases/secure-hold.ts`): an online authority's card is captured in full once Zulex accepts the application; a hand-processed order stays held, checked on every poll; a 5b is polled daily for its money (`failed_correctable` is now in `POLLED_STATUSES`); a hold within 48 hours of lapsing is captured in full. A hold that lapsed anyway ends the order as the KBA decided, with nothing kept, and the log names it.
+- **J8:** `submitCheckout` refuses with `OpenApplicationExists` unless the customer confirmed; **J11:** a checkbox in eligibility.
+- **Actions:** every attempt to cancel or correct, invalid ones too, counts against the caller's address (`RATE_LIMITS.orderChange`, 10 an hour) before anything is read; an unknown link and an order that cannot be changed get one answer; a failure is logged by kind only.
+- **Dev:** the seed gives each seeded order a payment the fake provider knows (`db/seed/data/payments.ts`), so dev shows refund amounts and cancelling the seeded 5b works. Staging's provider is Stripe, which does not know them: cancelling the seeded 5b on staging answers "failed" (the customer is told to try again and nothing moves); correcting it works, against staging's fake Zulex gateway.
+
+**Where the built M6 differs from the text above:**
+- The hold policy captures ahead of expiry instead of emailing a re-authorisation request (Q20 has the plan's alternative and where to change).
+- Email 6 goes out when the refund is accepted, not after `charge.refunded` (Q35).
+- `payments.captured_cents`, `refunded_cents` and `retained_fee_cents` stay empty; Stripe is the record (Q36).
+- The correction form starts empty and offers the VIN and codes, not "fields as §2.3, prefilled except codes" (`docs/site-contract.md` §2.6 says which).
+- "Exactly one retry" holds for a KBA technical error. A create that cannot be confirmed has no application to retry, so it is resubmitted for 24 hours.
 
 **How:**
 - **Error algorithm** (`src/core/domain/error-algorithm.ts`, pure): technical error (API timeout, KBA temporarily unavailable, Zulex `ERROR`) → exactly **one** automatic retry via `/applications/{id}/retry`, no customer notification, no refund → success → 5a → failure classified. Retry for non-technical rejection: Q18. Correctable (5b): wrong data the customer can fix, technical API error. Non-correctable (5c): wrong owner data, identity verification failed. Document's examples come from registration services (eVB number, plate availability, owner address); de-registration mapping is Q10.
@@ -245,6 +271,8 @@ Funnel UI (M4 Track B) starts once M2's fakes exist, parallel to M3.
 
 **Fallback if the error catalogue is still missing at launch:** **[plan assumption]** unrecognised error → correctable (5b), since the customer can still cancel there for the same 19.99 € lost at 5c; support alerted on every unrecognised code for reclassification. Catalogue update = data PR with a test.
 
+**Met in CI:** the error algorithm proves one retry for a KBA technical error, none of the customer emails or refunds before classification (`error-algorithm.test.ts`, `tests/integration/deregistration-flow.test.ts`); one test per §3 refund row (`refund-policy.test.ts`), and through the real Stripe adapter at the network for cancel (`tests/integration/correction-and-cancellation.test.ts`); refund idempotency (`cancel-application.test.ts`, `status-notifications.test.ts`); a cancel and a 5c each send email 6, once (differs from the text above: Q35); the hold policy (`hold-policy.test.ts`, `tests/integration/hold-policy.test.ts`); correction through the real Zulex adapter at the network. **Only staging can confirm:** that migrations `0006` and `0007` apply on the deploy (CI's rehearsal runs them); the real Stripe partial capture and refund on a real PaymentIntent (Stripe's docs give the refundable balance as `amount_received` minus `amount_refunded`, which implies the released remainder of a partial capture is not counted as refunded, as `src/adapters/payment/stripe/map.ts` assumes; check it on a real object); the real Zulex `PATCH`, and whether a replayed key returns the same application (Q23); and everything that needs the poller, which has no schedule (D1): the hold checks, the daily look at a 5b and the silent resubmission do not run on staging until the cron is on.
+
 ---
 
 ### M7 — Legal content, security and privacy hardening
@@ -255,11 +283,11 @@ Funnel UI (M4 Track B) starts once M2's fakes exist, parallel to M3.
 
 **How:**
 - Lawyer-reviewed AGB/Impressum/Datenschutz replace placeholders. AGB carry the 19.99 € processing-fee clause for cancellation and non-correctable failure, stating what it covers (Zulex API fee and administration); Datenschutz covers Verimi's processing of ID and selfie data once Verimi is added. AGB version + right-of-withdrawal consent stored per application (tests: checkout impossible without them). Right of withdrawal vs 19.99 € fee: Q13.
-- PAngV price from `src/config/pricing.ts`; VAT and authority fee itemised.
+- PAngV price from `src/core/domain/pricing.ts`; VAT and authority fee itemised.
 - `next.config.ts` CSP (Stripe domains), `frame-ancestors`, permissions policy — asserted in route tests.
-- Rate limiting on status lookup, resend, eligibility, checkout (per IP + per token), with tests.
+- Rate limiting on eligibility and checkout, with tests, through the `RateLimiter` port. Status lookup, document downloads and "resend my link" are limited since M5 (per address, and per order for resend).
 - Log-redaction layer + required test that codes/tokens never appear in logs; `audit_log` migration for status changes and refunds.
-- Retention cron: purge security codes N days after a terminal state; anonymise after the statutory period; uses the `Clock` port.
+- Retention cron: purge security codes N days after a terminal state; anonymise after the statutory period; uses the `Clock` port. (The rate limiter forgets counts older than a day by itself.)
 - `/security-review` of the branch, `npm audit`, dependency pinning; short threat-model note (token brute force, IDOR on documents, webhook replay).
 - Brand items: apply approved semantic colours; Euro Plate self-hosted WOFF2 if licensed, else the existing fallback ships (checked in the browser, not tested — presentation).
 
@@ -307,7 +335,7 @@ Funnel UI (M4 Track B) starts once M2's fakes exist, parallel to M3.
 | Euro Plate web licence | M7 | existing `plate-text` Kanit fallback, checked in browser — not tested, presentation |
 | Semantic colour sign-off | M7 | ship the derived palette already in `app/globals.css` |
 | Icon library decision | resolved in M0 | lucide; §5.5 amended, no sign-off outstanding |
-| Fee table / price | M7 | flat all-inclusive price per plate count, monthly reconciliation |
+| Fee table / price | M7 | flat all-inclusive price per service, monthly reconciliation |
 | Stripe live / Zulex production key | M8 | beta runs founder-owned vehicles first; public gate stays closed |
 | Special plates (E/H/seasonal) | M6 | eligibility warns "may be rejected" |
 | Zulex status-change webhook | M4 (route) | per-application polling with backoff is complete on its own; webhook only shortens latency |
@@ -325,6 +353,9 @@ Funnel UI (M4 Track B) starts once M2's fakes exist, parallel to M3.
 
 9. **Payment and registration are real in dev** (from M4), against the `external-services` default of a fake in dev: the test mode of the `G&M Gastro Event GmbH` Stripe account and the Zulex integration API, so vendor-specific code fails on a laptop rather than first on staging. Repository, document store and identity verification stay fake in dev, mail stays console. Per-stage wiring: decisions table, Adapters per stage. **Decided before M2.**
 
+10. **The Postgres rate limiter lives in `src/adapters/repository/postgres/`**, not in a `rate-limit/` folder of its own: lint bars adapters from importing each other, and it shares the pool setup, the migrator and the test database with the repository. Its in-memory fake is in `src/adapters/rate-limit/fake/`. **Decided in M5.**
+11. **`npm test` sets `NODE_OPTIONS=--experimental-vm-modules`.** React Email's renderer imports `react-dom/server` dynamically, which Jest's CommonJS VM allows only with that flag; a static import would fail in Next's server-component bundle. Run one file with `npm test -- path`, not `npx jest`. **Decided in M5.**
+
 ## Critical files (to create or change)
 
 - `.gitignore`, `package.json`, `components.json` — M0
@@ -332,37 +363,38 @@ Funnel UI (M4 Track B) starts once M2's fakes exist, parallel to M3.
 - `src/core/domain/application-status.ts` (the machine everything derives from), `src/core/ports/*.ts` + `*.contract.ts`, `src/adapters/*/fake/` — M2
 - `db/migrations/0001_…0004_*`, `db/seed/seed.ts`, `src/adapters/repository/postgres/` — M3
 - `src/adapters/{registration/zulex,payment/stripe,mail/resend}/`, `src/core/use-cases/*.ts`, `src/core/domain/poll-schedule.ts`, `app/(funnel)/deregister/`, `app/status/[token]/`, `app/api/internal/poll/route.ts`, `app/api/webhooks/stripe/route.ts`, `app/api/webhooks/zulex/route.ts` (if the webhook exists), `vercel.json`, `tests/integration/*.test.ts` — M4
-- `src/adapters/identity/verimi/` (shape pending Q1–Q3) — M5
-- `src/core/domain/error-algorithm.ts`, `src/core/domain/refund-policy.ts`, `src/core/domain/rejection-catalogue.ts` — M2/M6
+- `src/adapters/storage/supabase/`, `src/adapters/mail/resend/{copy.ts,email-layout.tsx,render.tsx}`, `src/adapters/repository/postgres/postgres-rate-limiter.ts`, `src/core/ports/rate-limiter.ts`, `src/core/use-cases/{get-document-by-token,resend-status-link}.ts`, `app/status/[token]/`, `app/status/link-anfordern/`, `db/migrations/0005_create_rate_limits/`, `db/seed/data/documents.ts` — M5
+- `src/adapters/identity/verimi/` (shape pending Q1–Q3) — M5, with Verimi
+- `src/core/domain/error-algorithm.ts`, `src/core/domain/refund-policy.ts` — M2; `src/core/domain/{failure,rejection-catalogue,hold-policy,correction}.ts`, `src/core/use-cases/{cancel-application,correct-application,secure-hold}.ts`, `app/status/[token]/{actions,order-change}.ts` and `_components/{cancel-order,correct-order}.tsx`, `db/migrations/0006_add_application_failure/`, `0007_index_applications_by_vehicle/`, `db/seed/data/payments.ts` — M6
 - `docs/launch-plan.md` (this document), `docs/runbooks/` — M8
 
 ## Known defects (docs vs code audit, 2026-09-29)
 
-Found on `main` @ `1ed5034`. Numbered D1–D11; only D11 is fixed.
+Found on `main` @ `1ed5034`. Numbered D1–D11; D2, D3, D4, D5, D6, D7 and D11 are fixed.
 
 | # | Defect | Status |
 |---|---|---|
 | D1 | Nothing runs the poller: `vercel.json` has no `crons` | Deferred: off while the Zulex API is down |
-| D2 | Email 6 (refund) is never sent | Planned |
-| D3 | A lapsed card hold loops forever | Planned; needs Q20 |
-| D4 | Zulex 401/403/404 on create loops forever | Planned |
-| D5 | Emails 4, 5a, 5b and 5c are lost if sending fails | Planned |
-| D6 | A create timeout ends in 5c with a full refund | Planned; needs Q23 |
-| D7 | Landing price ("ab 29,00 €") differs from checkout (69,99 €) | Parked (Q19) |
+| D2 | Email 6 (refund) is never sent | Fixed |
+| D3 | A lapsed card hold loops forever | Fixed (provisional answer to Q20) |
+| D4 | Zulex 401/403/404 on create loops forever | Fixed |
+| D5 | Emails 4, 5a, 5b and 5c are lost if sending fails | Fixed |
+| D6 | A create timeout ends in 5c with a full refund | Fixed (provisional answer to Q23) |
+| D7 | Landing price ("ab 29,00 €") differs from checkout (69,99 €) | Fixed: both read the founder's price list (Q19) |
 | D8 | Legal pages are wrong or missing | Parked (M7) |
 | D9 | Consent (`agb_version`, `consent_at`) is never stored | Planned |
 | D10 | Checked radio contrast is 2.31:1 | Planned |
 | D11 | On staging, two Vercel instances can give two orders the same fake Zulex id | Fixed |
 
-**Planned fixes** (test-first, one PR each into `staging`):
+**Planned fixes** (test-first, one PR each into `staging`; D3, D4 and D6 moved to the fixed list below with M6):
 
-- **D2.** The webhook acts only on "payment ready" (`app/api/webhooks/stripe/handle.ts`), and `confirmRefund` is called only from tests. Held cards never fire `charge.refunded`: a release fires `payment_intent.canceled`, a fee-only capture `charge.captured`. Fix: send email 6 wherever money is returned (`settle-payment.ts`, `handle-failure.ts`, `mail-customer.ts`). Open: send right after Stripe's API call succeeds, or from the webhook events.
-- **D3.** `settlePayment` throws `HoldExpired` before the status is written, so the application is re-polled every tick; nothing reads `holdExpiresAt`. Fix in `settle-payment.ts`, `advance-status.ts`, `handle-failure.ts`, per Q20.
-- **D4.** `ZulexRequestFailed` is rethrown in `submit-to-kba.ts` without rescheduling. Fix: reschedule before rethrowing, as `advance-status.ts` does for status checks.
-- **D5.** `mailCustomer` runs after `repository.update` in `submit-to-kba.ts`, `handle-failure.ts` and `advance-status.ts`. Fix: send before persisting, keyed by the transition, as `confirm-payment.ts` does for email 1.
-- **D6.** A timeout, network error, 409, 429 or 5xx on create counts as "never reached Zulex" (`error-algorithm.ts`); after one retry it goes to 5c with a full release, though the create may have succeeded. Fix in `error-algorithm.ts` and `submit-to-kba.ts`, per Q23: e.g. keep resubmitting with the same idempotency key for up to 24 h before falling back to 5c.
 - **D9.** Write both columns at checkout (`app/(funnel)/deregister/actions.ts`, `submit-checkout.ts`, `Application`, `postgres-application-repository.ts`); test that they persist and that checkout is refused without them.
 - **D10.** `src/ui/radio-group.tsx` draws an orange dot and border on white; `docs/design-standard.md` requires an orange fill with a grau-dark mark. Presentation: checked in the browser, not tested.
+- **D2 (fixed).** A held card fires no `charge.refunded` (a release fires `payment_intent.canceled`, a fee-only capture `charge.captured`), and the webhook acts only on "payment ready", so email 6 was never sent. `handleFailure` now sends it right after the money is returned, under the key `confirmRefund` uses, so the provider's confirmation adds nothing and no new Stripe webhook event is needed.
+- **D5 (fixed).** Emails 4, 5a, 5b and 5c went out after the status was saved. Each now goes out first, keyed by its transition, so a failed send leaves the application due and the next tick sends it. To make that rerun safe, settlement recognises what it already did (`settledDecision`) and `submitToKba` finishes a failure instead of filing an application whose payment was released. A mailer that fails for good now holds an application at its old status instead of dropping the email (Q33); the poll log names the order and the kind of error each time it does. Zulex's application id is stored before email 4 is sent, so a failed email never makes the next tick file the application again (Q23: a replay's answer is unspecified).
+- **D3 (fixed).** `settlePayment` threw `HoldExpired` before the status was written, so a lapsed hold was re-polled every tick and nothing read `holdExpiresAt`. A hand-processed order's hold is now checked on every poll and a 5b is polled daily for its money; a hold inside 48 hours of lapsing is captured in full (`src/core/domain/hold-policy.ts`, `secure-hold.ts`). A hold that lapsed anyway settles as "nothing to take or return" (`settledDecision`): the order ends as the KBA decided and the loss is ours. Provisional answer to Q20.
+- **D4 (fixed).** `ZulexRequestFailed` on create was rethrown without rescheduling, so it was retried every minute for ever. Any submission failure is now rescheduled first, with the online backoff; an unexpected error is then rethrown so the poll log names it, and after 24 hours the order fails for good with a full refund (`submit-to-kba.ts`).
+- **D6 (fixed).** A timeout on create counted as "never reached Zulex" and ended in 5c with a full refund after one retry, though the create may have succeeded. It is now resubmitted under the same idempotency key for 24 hours (`SUBMISSION_PATIENCE_MS` in `error-algorithm.ts`); only a 400 is known to have filed nothing. Provisional answer to Q23; Q40 asks who checks Zulex for a stray application after the 24 hours.
 - **D11 (fixed).** The fake registration gateway numbered its ids `fake-zulex-application-1`, `-2`, … per instance, and `applications.zulex_application_id` is `UNIQUE`, so the second order to draw a taken id failed to record it and stayed at status 1; a status check on an instance that had not filed the application threw. The fake now derives the id from the submission's idempotency key (hashed), so different orders get different ids and a retry on another instance gets the same one, and it reports an application it never filed as in progress. Production is unaffected: it refuses every fake driver.
 
 ## Open questions (business logic v1.0)
@@ -375,7 +407,7 @@ Nothing below is decided here. Numbers are stable — milestones refer to them. 
 |---|---|---|
 | 1 — blocks the M4 walking skeleton | Q5, Q6 | M4 is critical-path; can't run end to end without knowing when Zulex is called and what starts the application. |
 | 2 — blocks the status model in M2/M3 | Q1–Q4, Q7, Q8, Q9, Q18 | Status list, error algorithm and refund function are built in M2 and encoded in the M3 schema. |
-| 3 — blocks launch, not the skeleton | Q10–Q16, Q19–Q27 | Needed for M5–M7; earlier work proceeds on fakes and placeholders. |
+| 3 — blocks launch, not the skeleton | Q10–Q16, Q19–Q42 | Needed for M5–M7; earlier work proceeds on fakes and placeholders. |
 | 4 — non-blocking | Q17 | A placeholder processing time can ship and be replaced. |
 
 **Identity verification (Verimi)**
@@ -409,10 +441,12 @@ Nothing below is decided here. Numbers are stable — milestones refer to them. 
    **Answer in code (Stripe's behaviour, needs no founder input):** `payment_intent.amount_capturable_updated` (held card) or `payment_intent.succeeded` starts the application (`src/adapters/payment/stripe/map.ts`); on `payment_failed` the customer stays on the payment step with Stripe's message.
 7. **When exactly is a manual-capture payment captured?** Section 4 prefers manual capture, "captured when the application is confirmed" — could mean status 1, 3, 4 or 5a. But section 1 describes status 1 as "Payment has been successfully captured via Stripe", labelled "Payment captured". Under manual capture a card payment at status 1 is only authorised, so either that label and email 1 say "authorised", or capture happens at status 1. Verified in Stripe's docs: online, customer-initiated card authorisation valid 7 days on Visa and Mastercard, then funds released and PaymentIntent cancelled. Extended authorisation up to 30 days exists only on IC+ pricing; Visa charges extra 0.08 % per transaction outside travel and rental categories. A Verimi wait plus a manual-processing authority can exceed 7 days.
    **Blocks:** M4 (capture call in Stripe adapter), M5 (status 1 label and email 1 wording), M6 (hold policy), M8 ("hold expiring" runbook).
-   **Provisional answer in code (not approved by the founder):** card held at checkout, full amount captured only when Zulex reports `FINISHED` (5a), for every authority (`src/core/use-cases/advance-status.ts`). Status 1 and email 1 still say "paid". A lapsed hold is not handled (Q20).
+   **Provisional answer in code (not approved by the founder):** the card is held at checkout. An online authority's order is captured in full once Zulex accepts the application; a hand-processed order stays held until the KBA answers and is captured in full two days before the hold would lapse if it has not (Q20); anything still held when the KBA finishes is captured then (`captureHold` in `src/core/use-cases/submit-to-kba.ts`, `guardHold` in `src/core/use-cases/advance-status.ts`, both in `src/core/use-cases/secure-hold.ts`). Status 1 and email 1 say the payment was received and when the card is charged (once the application is submitted, at the latest shortly before the card reservation ends), and that a failed application is refunded, possibly minus the fee.
+   **If the founder answers differently:** capture right after payment for every authority: call `captureHold` in `src/core/use-cases/confirm-payment.ts` before `submitToKba`, and drop the `ikfzStatus === "online"` condition in `submit-to-kba.ts`. Capture only at 5a for every authority: remove the `captureHold` call in `submit-to-kba.ts`, and let `advance-status.ts` run `guardHold` for online orders too (today it skips them). Either way update `tests/integration/hold-policy.test.ts`, and the status 1 label and email 1 wording if "paid" becomes "authorised".
 8. **How is "refund minus 19.99 €" executed when the payment was only authorised?** Verified in Stripe's docs, both possible: partial capture of 19.99 € automatically releases the rest, or full capture then partial refund. Most payments allow only one capture, so partial capture is final. Customer sees a different bank statement in each case — a business choice.
    **Blocks:** M2 (Stripe action returned by `refund-policy.ts`), M3 (payment columns), M6 (refund execution).
-   **Provisional answer in code (not approved by the founder):** capture only the 19.99 € fee, which releases the rest (`src/core/domain/refund-policy.ts`).
+   **Provisional answer in code (not approved by the founder):** on a held card capture only the 19.99 € fee, which releases the rest; on a captured payment refund the rest (`src/core/domain/refund-policy.ts`). Most orders are captured by then (Q7), so the refund is the usual path.
+   **If the founder answers differently:** to always capture in full and refund, change the `held` branch of `retainFee` in `refund-policy.ts` to a full capture followed by a refund of total minus the fee, and its rows in `refund-policy.test.ts` and `tests/integration/correction-and-cancellation.test.ts`.
 12. **SEPA Direct Debit timing:** verified in Stripe's docs, SEPA Direct Debit has no manual capture and is a delayed-notification method: charged at checkout, `processing` for several business days before `succeeded` or `payment_failed`. Does a SEPA order start its application at `processing` and risk a later failed debit, or wait days for `succeeded`? Refund-relevant: SEPA refunds possible for 180 days; a customer can dispute a SEPA debit with their bank for up to 13 months with no appeal, so a refunded SEPA payment can still be disputed.
    **Blocks:** M4 (payment methods offered and webhook handling), M6 (refunds and disputes on SEPA orders).
    **Provisional answer in code (not approved by the founder):** no SEPA; cards only, Apple Pay and Google Pay as card wallets (`src/adapters/payment/stripe/stripe-payment-provider.ts`).
@@ -427,13 +461,15 @@ Nothing below is decided here. Numbers are stable — milestones refer to them. 
 
 9. **What counts as a "technical error on our side" (100 % refund) vs a "technical API error" (5b, correctable)?** The two rows overlap.
    **Blocks:** M2 (error algorithm), M6 (refund amount for technical failures).
-   **Provisional answer in code (not approved by the founder):** a submission that still cannot reach the service after its silent retry counts as our side: 5c with a full refund. A KBA error the catalogue does not know gets one silent retry, then 5b (`src/core/domain/error-algorithm.ts`).
+   **Provisional answer in code (not approved by the founder):** a submission that still cannot be confirmed after 24 hours of silent resubmission counts as our side: 5c with a full refund (`SUBMISSION_PATIENCE_MS` in `src/core/domain/error-algorithm.ts`). A KBA error the catalogue does not know gets one silent retry, then 5b.
 10. **Which de-registration failures are correctable and which not?** E.g. wrong security code, VIN mismatch, already-used plate seals. Document's examples don't cover de-registration.
    **Blocks:** M5 (content of emails 5b and 5c), M6 (rejection catalogue).
-   **Provisional answer in code (not approved by the founder):** the catalogue is empty (`src/core/domain/error-algorithm.ts`): every 400 at submission and every `REJECTION` document → 5b; an unknown KBA code → one silent retry, then 5b. Nothing reaches 5c from a KBA error until the catalogue lists it as final.
+   **Provisional answer in code (not approved by the founder):** the catalogue is empty (`REJECTION_CATALOGUE` in `src/core/domain/rejection-catalogue.ts`): every 400 at submission and every `REJECTION` document → 5b; an unknown KBA code → one silent retry, then 5b. Nothing reaches 5c from a KBA error until the catalogue lists it as final. Every unknown code reads with one general wording for the customer, and the log warns once per occurrence.
+   **If the founder gives the codes:** add one entry per code, `{ class: "technical" | "correctable" | "final", reason: "<German wording for the customer>" }`, to `REJECTION_CATALOGUE`, with a test in `src/core/domain/rejection-catalogue.test.ts` or `error-algorithm.test.ts`. Nothing else changes: the algorithm, the status page and emails 5b and 5c read the table.
 11. **Can a correction ever cost more for de-registration?** If not, the "pay the difference" PaymentIntent isn't needed for the MVP.
    **Blocks:** M6 (5b option A).
-   **Provisional answer in code (not approved by the founder):** no; `src/core/use-cases/settle-payment.ts` throws if a correction would cost more.
+   **Provisional answer in code (not approved by the founder):** no; `src/core/use-cases/settle-payment.ts` throws if a correction would cost more, and the status page and email 5b say the correction costs nothing extra.
+   **If the founder answers differently:** a correction that can cost more needs a second PaymentIntent (`PaymentProvider.createPayment` again), a payment step in `CorrectOrder` (`app/status/[token]/_components/correct-order.tsx`) before `correctApplication` patches, the `chargeAdditional` branch in `settle-payment.ts`, and the copy in `status-view.tsx` and `src/adapters/mail/resend/copy.ts` (then a new reviewed snapshot).
 18. **Scope of the automatic retry:** core principle says a second attempt is "ALWAYS" made before notifying or refunding, but step 1 limits the retry to technical errors. Does a KBA data rejection (e.g. wrong security code) also get retried once, though the same data would fail again?
    **Blocks:** M2 (error algorithm), M6 (retry behaviour).
    **Provisional answer in code (not approved by the founder):** no; a data rejection (a 400 or a rejection document) goes straight to 5b. The one silent retry is per submission, so an application resubmitted after a technical error still gets one for a later KBA error.
@@ -448,37 +484,105 @@ Nothing below is decided here. Numbers are stable — milestones refer to them. 
 
 17. **Email 4's "expected processing time":** fixed figure per authority status, or returned by the Zulex API?
    **Blocks:** nothing — M5 ships a placeholder per authority status until answered.
-   **Provisional answer in code (not approved by the founder):** email 4 is a generic "status changed" email with no processing time. The expectation is shown before payment instead (`app/(funnel)/deregister/_components/availability-notice.tsx`): online "wenigen Minuten bis Stunden", otherwise "einige Tage".
+   **Provisional answer in code (not approved by the founder):** email 4 says "meist in wenigen Minuten bis Stunden erledigt" for an online authority and "kann einige Tage dauern" otherwise, the same two expectations shown before payment (`src/adapters/mail/resend/copy.ts`, `app/(funnel)/deregister/_components/availability-notice.tsx`).
 
 **Added 2026-09-29 (docs vs code audit)**
 
-19. **Price and VAT:** real service price; different for one plate vs two? Is 19.99 € a separate line on top of the price? Authority fee passed through or subject to VAT? Does the customer get a Rechnung?
-   **Blocks:** M7 (PAngV price display).
-   **Provisional answer in code (not approved by the founder):** placeholder 50.00 € + 19.99 € = 69.99 € for one or two plates (`src/core/domain/pricing.ts`); the landing page says "ab 29,00 €".
+19. **Price and VAT:** the founder's price list (September 2026) fixes the prices: Neuzulassung 129 €, Wiederzulassung 99 €, Ummeldung 99 €, Abmeldung 49 €, Adressänderung 99 €, the same for one plate or two, with the 19.99 € processing fee inside the price and not on top of it. Still open: are these prices gross of VAT, is the authority fee passed through or subject to VAT, and does the customer get a Rechnung?
+   **Blocks:** M7 (PAngV price display, invoice).
+   **Provisional answer in code (not approved by the founder):** the prices are shown as final prices "inkl. Behördengebühr und MwSt." (`src/core/domain/pricing.ts`, read by the landing page and the checkout); no invoice is issued.
+   **If the founder answers differently:** change the VAT wording in `app/(funnel)/deregister/_components/review-step.tsx`, `app/_components/service-selection.tsx` and `app/_components/faq.tsx`; an invoice is a new email template and document, not a pricing change.
 20. **Hold lapse:** a card hold lasts 7 days; with capture at `FINISHED`, manual-processing authorities and a 5b waiting on the customer, it can lapse first. Capture earlier, email a re-authorisation request, or absorb the loss?
-   **Blocks:** M6 (hold policy), Known defects D3.
-   **Provisional answer in code:** none; today the application is re-polled forever.
+   **Blocks:** M6 (hold policy), Known defects D3 (fixed with this provisional answer).
+   **Provisional answer in code (not approved by the founder; the safest of the options, chosen because the founder has not answered):** capture in full ahead of expiry. A hand-processed order's hold is checked on every poll, and a 5b is polled daily for its money; a hold inside 48 hours of lapsing is captured in full (`HOLD_CAPTURE_MARGIN_MS` in `src/core/domain/hold-policy.ts`), so nothing lapses and the customer does nothing. A captured payment refunds like a held one is settled (total minus the fee on a failure). A hold that lapsed anyway (the poller down for days) ends the order as the KBA decided, with nothing kept: a finished order is completed unpaid, a failed one returns everything, the log names the order, the loss is ours. Any `canceled` PaymentIntent reads this way whatever the cause (a lapse, a cancel in the Stripe dashboard, an issuer void), and only a log line says so. A 5b that existed before M6 (only staging's seed) has no daily look at its money.
+   **If the founder answers differently:** (a) *email a re-authorisation request, as the plan assumed:* add an email template beside `EmailTemplate` in `src/core/ports/mailer.ts` and its German copy in `src/adapters/mail/resend/copy.ts` (a reviewed snapshot), a page and server action under `app/status/[token]/` that create a second PaymentIntent (`PaymentProvider.createPayment`) and swap `application.payment.id` with `repository.update` (Postgres already writes it), release the old hold, and decide what happens when the customer does not answer (Q21). In `secure-hold.ts` replace the capture in `guardHold` with sending that email once. (b) *absorb the loss:* remove `guardHold` from `advance-status.ts` and `watchHold`; `POLLED_STATUSES` then no longer needs `failed_correctable`, nor `handleFailure` the daily `nextPollAt` it gives a 5b. (c) *a different margin:* change `HOLD_CAPTURE_MARGIN_MS` (keep it at least twice `HOLD_CHECK_INTERVAL_MS`; a test enforces that).
 21. **5b deadline:** if the customer neither corrects nor cancels, when does the order auto-cancel, and with what refund?
    **Blocks:** M6 (5b options).
-   **Provisional answer in code:** none; 5b waits forever while the hold runs out.
+   **Provisional answer in code:** none; a 5b waits for ever. Its money is safe (captured ahead of expiry, Q20), but the order never closes and nothing tells the customer.
+   **If the founder answers:** `watchHold` in `src/core/use-cases/advance-status.ts` already visits every 5b daily. Add the deadline there: after N days call the cancel path (`cancelApplication` is by token today; extract its settle-and-email core, keyed by reference) and send email 6, with a test in `tests/integration/cancel-application.test.ts`. If the 5b's polling should also stop, the daily visit keeps until the payment is captured or released.
 22. **Retention:** how long are security codes, VIN, plate, email, confirmation PDFs, the status link after a terminal state, and abandoned unpaid checkouts kept?
    **Blocks:** M7 (retention cron, privacy policy).
    **Provisional answer in code:** nothing is ever deleted. Codes and tokens are encrypted; email, VIN and plate are plain text; the status link never expires; abandoned checkouts are kept.
 23. **Zulex provider questions:** does a replayed `X-Idempotency-Key` return the same `applicationId`, and for how long? Is a rejection `ERROR` or `FINISHED` + `REJECTION`? Are E, H and seasonal plates supported? What does Zulex charge per application? When is the API back?
    **Blocks:** M4 (staging run), M6 (Known defects D6, special plates).
-   **Provisional answer in code (not approved by the founder):** one random idempotency key per checkout, assumed honoured on replay; 409 treated as transient; 15 s timeout; both rejection shapes handled; special plates not flagged; `reserveLicencePlate` always `false`.
+   **Provisional answer in code (not approved by the founder):** one random idempotency key per checkout, assumed honoured on replay; a create that cannot be confirmed (timeout, 429, 5xx, 409, an answer we cannot read, a 401, 403 or 404) is resubmitted under the same key on the online backoff for 24 hours, then fails for good with a full refund (`SUBMISSION_PATIENCE_MS`, D4 and D6); a 400 on the first attempt goes straight to 5b, but a 400 answering a retry is treated as one more unconfirmed try, since it says nothing about the attempt before it; both rejection shapes handled; 15 s timeout; special plates not flagged in the request; `reserveLicencePlate` always `false`; a correction that files an order afresh takes a new key (Q37).
+   **If the founder answers differently:** if a replayed key is answered with a 400 when the first attempt was accepted, `toFailure` in `submit-to-kba.ts` is what keeps that from filing a second application; if a replayed key does *not* return the same application, the 24-hour resubmission can file twice; shorten `SUBMISSION_PATIENCE_MS` or stop resubmitting and refund at once (`decideOnFailure` in `error-algorithm.ts`, tests in `error-algorithm.test.ts` and `tests/integration/deregistration-flow.test.ts`). If a rejection is `ERROR` only, or `FINISHED` + `REJECTION` only, drop the other branch of `failureOf` in `advance-status.ts`. The 15 s timeout is `TIMEOUT_MS` in `src/adapters/registration/zulex/http.ts`.
 24. **Applicant:** may someone other than the vehicle keeper order (the PRD's "Jonas" helper)?
    **Blocks:** M7 (AGB), Q4.
    **Provisional answer in code:** no applicant data collected; whoever has the codes can order. Email 1 says the link is "nur für Sie bestimmt … nicht weitergeben", against the PRD persona's shareable link.
 25. **Mistyped email:** the status link goes only to the stored address. How does such a customer recover?
    **Blocks:** M5 (resend flow, support process).
-   **Provisional answer in code:** none; no resend-link flow yet, status pages show only `kontakt@gm-gastro.com`.
+   **Provisional answer in code:** "Resend my link" (`/status/link-anfordern`) takes a reference and an email and mails a new link to the stored address only, so a customer who mistyped the address at checkout gets nothing and has no way back; the status pages show `kontakt@gm-gastro.com`.
 26. **Correction scope at 5b:** only the security codes, or plate and VIN too? A different vehicle would be a new order.
    **Blocks:** M6 (5b option A).
-   **Provisional answer in code:** none; the correction flow is not built.
+   **Provisional answer in code (not approved by the founder):** the VIN and the three security codes can be corrected (the front code only on a two-plate order); the plate cannot, since a different plate is a different vehicle and so a new order (`parseCorrection` in `src/core/domain/correction.ts`). Blank fields stay as they were; the form starts empty, so no stored code is put back on the page.
+   **If the founder answers differently:** to correct the plate too, add `licencePlate` to `CorrectionInput`, `parseCorrection` and `applyCorrection` (the `Correction` port type and the Zulex adapter's `correct` already carry it), a plate field group to `app/status/[token]/_components/correct-order.tsx`, and tests in `correction.test.ts` and `tests/integration/correct-application.test.ts`. To prefill VIN and plate instead of starting empty (site-contract §2.6 asked for it), pass them from `StatusView`; the codes stay empty either way.
 27. **Support and alerts:** who receives operational alerts (unknown error codes, lapsed holds, failed refunds) and handles disputes and chargebacks?
    **Blocks:** M6 (unknown-code fallback alert), M8 (monitoring, runbooks).
-   **Provisional answer in code:** none; `kontakt@gm-gastro.com` is the only contact shown.
+   **Provisional answer in code:** none; an alert is a log line, named by order and kind and never carrying a code: `[error-algorithm]` (an unknown KBA code; a failure that ended in a full refund, with a note to check the Zulex portal for a stray application), `[payments]` (a hold that lapsed, a hold check that failed) and `[poll]`. `kontakt@gm-gastro.com` is the only contact shown.
+   **If the founder names a channel:** add an alerts port (`src/core/ports/`, one fake, one adapter) and call it where those lines are logged: `handle-failure.ts`, `secure-hold.ts`, `settle-payment.ts`, `advance-status.ts`.
+
+**Added 2026-09-29 (M5)**
+
+28. **Which documents does the customer see?** The status page lists every document stored for a finished order, and the site contract names confirmation, fee statement, rejection and unknown. Is the fee statement (`FEE`, the authority's charge, which shows what Zulex paid) meant for the customer? Should a rejection document be kept and shown at 5b and 5c?
+   **Blocks:** M5 (documents list), M6 (5b/5c pages).
+   **Provisional answer in code (not approved by the founder):** documents are stored only when an order completes, all of them, and all are listed, the confirmation first; nothing is stored for a failure. An order Zulex reports finished with no document at all is completed anyway and never polled again.
+29. **Email 5a and the PDF:** attach the confirmation to the email, or only link to the status page?
+   **Blocks:** M5 (email 5a).
+   **Provisional answer in code (not approved by the founder):** link only. An attachment would put the plate and other order data into the customer's mailbox, and the link keeps the document behind the token check.
+30. **"Kfz-Steuer und Versicherung enden automatisch":** the status page says so at 5a. Is that correct for every case, or does the customer still have to tell their insurer?
+   **Blocks:** M5 (status page copy), M7 (legal review).
+   **Provisional answer in code (not approved by the founder):** the sentence stays on the status page; the email does not repeat it.
+31. **Who signs off the German wording?** The seven customer emails (`src/adapters/mail/resend/copy.ts`) and the status page are translated by us from an English document. Do the emails also need the company name and address in a footer, as the site's footer has?
+   **Blocks:** M5 (emails), M7 (legal).
+   **Provisional answer in code:** the reviewed HTML snapshots in `src/adapters/mail/resend/__snapshots__/` are the artefact to review; no company name or address in the emails, only the support address. The M6 wording is ours too and unreviewed: the general reasons in `src/core/domain/rejection-catalogue.ts`, the correction form and cancel dialog on the status page, and the 5b email's new text.
+32. **A customer at 5b before M6 exists:** *closed by M6.* The page and email 5b now offer correcting and cancelling; a mail to support is no longer the way. The question stays so the number does not move.
+   **Blocks:** nothing.
+   **Provisional answer in code:** correct and cancel are built (M6); the status page still shows `kontakt@gm-gastro.com` for questions.
+33. **An address that cannot receive mail:** a status email is now sent before the status is saved, so an address the mailer keeps refusing holds its application at the old status, retried every minute with no backoff, and a held card may lapse meanwhile. How long do we wait for the email before going on without it?
+   **Blocks:** M6 (hold policy, Q20), M8 (stuck-application alert).
+   **Provisional answer in code:** we wait for ever. For email 4, which is sent as the application is filed, each failed try now backs off (a minute, then the online poll table); the later emails are still retried every tick. The repeat of email 4 after a correction is not waited for: a failure is logged and the order goes on.
+34. **Resending a link:** a resend revokes the old link, so a link in an earlier email stops working; one address may ask 5 times an hour and one order 3 times an hour. Right, or should the old link keep working?
+   **Blocks:** M5 (resend flow), M7 (threat model).
+   **Provisional answer in code (not approved by the founder):** the old link is revoked, with the limits above. Two consequences: anyone who knows an order's reference can use up its three requests an hour and keep the real customer's request from being served, and on staging anyone who reads the repo can rotate the seeded links (a redeploy restores them).
+
+**Added 2026-09-30 (M6)**
+
+35. **When does email 6 go out?** The plan says "on `charge.refunded`". A held card fires no `charge.refunded` (a release fires `payment_intent.canceled`, a fee-only capture `charge.captured`), so D2's fix sends email 6 right after we have asked Stripe to return the money, under the key `confirmRefund` would use. For a captured payment Stripe does fire `charge.refunded`, but the staging webhook endpoint is subscribed to two events only, and `confirmRefund` is not wired to a route. Should email 6 wait for Stripe's confirmation, at least for money that goes back by refund?
+   **Blocks:** M6 exit criterion ("email 6 only after `charge.refunded`"), M8 (webhook set-up).
+   **Provisional answer in code (not approved by the founder):** email 6 goes out once the provider has accepted the refund or the release, for every payment (`handleFailure`, `cancelApplication`); a provider event adds nothing.
+   **If the founder answers differently:** subscribe the Stripe webhook endpoint (`docs/provisioning.md` §8) to `charge.refunded`, map it in `src/adapters/payment/stripe/map.ts` to a new `PaymentNotification` kind, call `confirmRefund` (exists in `src/core/use-cases/confirm-refund.ts`) from `app/api/webhooks/stripe/handle.ts`, and stop calling `mailRefund` in `handle-failure.ts` and `cancel-application.ts` for a captured payment (keep it for a released hold, which fires no `charge.refunded`).
+36. **Our own record of the money:** should ZulexGO keep captured, refunded and retained amounts itself, or is Stripe the only record? Migration `0002` has the three columns ("written from M6"); nothing writes them.
+   **Blocks:** M7 (`audit_log`), M8 (daily reconciliation).
+   **Provisional answer in code (not approved by the founder):** Stripe is the only record. `payments.captured_cents`, `refunded_cents` and `retained_fee_cents` stay empty; the status page and email 6 read the amounts from the provider (`getPayment`), so there is no second copy that can drift.
+   **If the founder answers differently:** after each `settlePayment` and `captureHold` write the amounts through a new `ApplicationRepository` method (a contract case, both adapters, `Application.payment` gaining the fields); the M4 test that no other Stripe payment field reaches the repository still holds, since these are our amounts.
+37. **Correcting an order the service refused outright (a 400 at submission):** Zulex holds nothing to patch. Its 400 says "fix the data and resubmit a new request". Does it accept a new idempotency key for the same vehicle after a 400, and should the customer's attempts be limited?
+   **Blocks:** M6 (5b option A).
+   **Provisional answer in code (not approved by the founder):** the corrected order is filed afresh under a new idempotency key and returns to status 1, then 4; refused again, it is back at 5b with email 5b again. Attempts share the limit of 10 an hour per address with cancelling (`RATE_LIMITS.orderChange`).
+   **If the founder answers differently:** `refile` in `src/core/use-cases/correct-application.ts`, the `correctionRefiled` event in `src/core/domain/application-status.ts`, and the repository's `update`, which now writes `idempotency_key`. To make it a new order with its own payment instead, replace the form with a cancel and a link to `/deregister`.
+38. **A second order for a vehicle that already has one (J8):** warn or block? And is it right to tell whoever types a plate and VIN that an order is open?
+   **Blocks:** M7 (threat model), Q24.
+   **Provisional answer in code (not approved by the founder):** a warning the customer continues past with a checkbox. The answer says only that an order is open, never its reference or status. An unpaid checkout, a finished, failed or cancelled order does not count. Two checkouts racing can both pass, since it is not a lock. The checkout action is not rate limited until M7, so the answer can be probed with guessed VINs.
+   **If the founder answers differently:** to block, drop `acknowledgedDuplicate` from `src/core/use-cases/submit-checkout.ts` and the checkbox in `app/(funnel)/deregister/_components/review-step.tsx`; to count more statuses, change `OPEN_STATUSES` in `src/core/domain/application-status.ts`.
+39. **Special plates (J11):** how should a customer with an E, H or seasonal plate be treated? The plate field takes digits only, and a de-registration request has no field for the suffix.
+   **Blocks:** M6 (eligibility), Q23.
+   **Provisional answer in code (not approved by the founder):** a checkbox in the eligibility step shows a warning that the application may be rejected; the customer can go on; nothing about it is sent to Zulex.
+   **If the founder answers differently:** to turn such customers away, disable "Weiter" while the box is ticked in `app/(funnel)/deregister/_components/eligibility-step.tsx` and point to the authority in person (as the missing-documents notice does); to accept the suffix in the plate, extend `licencePlateSchema` in `src/core/domain/licence-plate.ts` and the plate fields once the provider says how it is sent.
+40. **After 24 hours without an answer from Zulex, who checks for a stray application?** The order is refunded in full, but Zulex may hold an application under its idempotency key, which the KBA would process for a vehicle nobody paid for.
+   **Blocks:** M8 (runbook "Zulex outage"), Q27.
+   **Provisional answer in code:** the log names the order and asks support to check the Zulex portal; nothing else is done.
+   **If the founder answers differently:** write the check into the runbook (`docs/runbooks/`), and give it an alert (Q27).
+
+**Added 2026-10-01 (the founder's price list)**
+
+41. **Plates, fine-dust sticker and shipping: who supplies them, and how are they paid for?** The price list prices them (plate 12,50 € each, carbon +4,00 € per plate, sticker 9,99 €, shipping 4,95 € with plates only) and requires that they are ordered and charged only after the KBA has completed the service, and not at all if it rejects it. A card hold is captured once, so they cannot ride on the service's payment: they need a second payment after completion (the customer pays again, or a saved card is charged without them present, which needs their consent). Also open: who makes and ships the plates, where the shipping address is collected and how long it is kept, and which services offer them (a de-registration has no use for plates or a sticker).
+   **Blocks:** the registration services, none of which is sold yet. Nothing in the MVP.
+   **Provisional answer in code (not approved by the founder):** nothing is sold. `quote()` in `src/core/domain/pricing.ts` already splits a basket into what is charged at checkout (the service, never an add-on) and what is due after completion, and its tests pin the founder's scenario totals. The landing page lists the add-on prices as "bald verfügbar" and states the rule. The only live service, de-registration, offers no add-ons.
+   **If the founder answers differently:** (a) *sell them with a service:* put a basket in the review step and `submit-checkout.ts` (the payment keeps opening for `quote(...).atCheckout`), store it on `Application` (a migration, both repositories, the seed), and from `complete()` in `advance-status.ts` open the second payment for `afterCompletion`; on 5b, 5c and cancellation drop the basket unpaid, so `refund-policy.ts` needs no new row. (b) *a supplier:* a port per `external-services`, called after that payment, never from the checkout.
+42. **THG-Quote through carbonify.de:** the price list offers electric-vehicle owners the THG-Quote, free for the customer. How is the customer handed over (a link with our partner identifier, an API), after which service, and what do we store about it?
+   **Blocks:** nothing in the MVP.
+   **Provisional answer in code (not approved by the founder):** not offered, and not mentioned on the site, since there is no hand-over to carbonify.de yet.
+   **If the founder answers differently:** a link on the confirmation page and in email 5a, or a port per `external-services` if carbonify.de has an API; the price stays unaffected, since the quota costs the customer nothing.
 
 ## Verification
 

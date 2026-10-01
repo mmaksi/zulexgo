@@ -1,6 +1,6 @@
 import type { Application } from "@/src/core/domain/application"
 import type { ApplicationReference } from "@/src/core/domain/application-reference"
-import { POLLED_STATUSES } from "@/src/core/domain/application-status"
+import { OPEN_STATUSES, POLLED_STATUSES } from "@/src/core/domain/application-status"
 import { DuplicateApplication } from "@/src/core/errors/duplicate-application"
 import { StaleApplication } from "@/src/core/errors/stale-application"
 import type { ApplicationRepository } from "@/src/core/ports/application-repository"
@@ -34,6 +34,9 @@ export class InMemoryApplicationRepository implements ApplicationRepository {
   async update(application: Application): Promise<Application> {
     const stored = this.applications.get(application.reference)
     if (!stored || stored.version !== application.version) throw new StaleApplication(application.reference)
+    if (this.all().some((other) => other.reference !== stored.reference && other.idempotencyKey === application.idempotencyKey)) {
+      throw new DuplicateApplication("idempotencyKey")
+    }
     return this.store({ ...application, version: stored.version + 1 })
   }
 
@@ -52,6 +55,17 @@ export class InMemoryApplicationRepository implements ApplicationRepository {
   async findByStatusToken(token: string): Promise<Application | undefined> {
     const reference = this.tokens.get(token)
     return reference && this.get(reference)
+  }
+
+  async hasOpenApplication({ licencePlate, vin }: Parameters<ApplicationRepository["hasOpenApplication"]>[0]): Promise<boolean> {
+    return this.all().some(
+      ({ status, request }) =>
+        OPEN_STATUSES.includes(status) &&
+        request.vin === vin &&
+        request.licencePlate.prefix === licencePlate.prefix &&
+        request.licencePlate.letters === licencePlate.letters &&
+        request.licencePlate.numbers === licencePlate.numbers,
+    )
   }
 
   async findDueForPolling(now: Date, limit: number): Promise<Application[]> {

@@ -45,7 +45,7 @@ describe("status polling", () => {
     await heartbeat(2)
 
     expect((await stored(reference)).status).toBe("completed")
-    expect(world.stripe.intents.get(paymentId)).toMatchObject({ status: "succeeded", amount_received: 6999 })
+    expect(world.stripe.intents.get(paymentId)).toMatchObject({ status: "succeeded", amount_received: 4900 })
     expect(await world.deps.documents.list(reference)).toEqual([{ id: "9007199254740993", kind: "confirmation" }])
     expect(emails()).toEqual(["orderConfirmation", "submittedToKba", "completed"])
   })
