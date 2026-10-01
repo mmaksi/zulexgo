@@ -102,7 +102,7 @@ export function ReviewStep({
         </dl>
         <Alert variant="warning" className="measure">
           Stornieren Sie nach einem korrigierbaren Fehler oder kann der Antrag nicht korrigiert werden, behalten wir{" "}
-          {formatEuros(PROCESSING_FEE)} Bearbeitungsgebühr ein und erstatten den Rest.{" "}
+          {formatEuros(PROCESSING_FEE)} Bearbeitungsgebühr ein und erstatten den Rest innerhalb von 3–5 Werktagen.{" "}
           <Link href="/agb" target="_blank" rel="noopener" className="underline underline-offset-4 hover:text-orange-dark">
             Mehr in den AGB
           </Link>
