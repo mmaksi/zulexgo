@@ -30,9 +30,15 @@ export const deregistrationRequestSchema = z
       }),
     }),
   ])
+  // A one-plate request gets an explicit `frontPlate: undefined`, so it reads on either shape.
   .transform((request) => ({ ...request, codes: { frontPlate: undefined, ...request.codes } }))
 
+/** Parsed: plate and VIN normalised, each code a `SecurityCode` that prints as a placeholder. */
 export type DeregistrationRequest = z.output<typeof deregistrationRequestSchema>
 
+/**
+ * Throws a `ValidationError` naming every invalid field at once, dotted for nested ones
+ * (`codes.certificate`, `licencePlate.prefix`), never their values.
+ */
 export const parseDeregistrationRequest = (input: unknown): DeregistrationRequest =>
   validate(deregistrationRequestSchema, input, "request")

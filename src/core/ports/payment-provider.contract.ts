@@ -10,12 +10,29 @@ const FEE = Money.ofCents(1999)
 /** What the customer does in the browser, and what the provider then sends, which the server cannot: the adapter's test supplies both. */
 export interface PaymentProviderSubject {
   provider: PaymentProvider
+  /** Plays the customer paying: a card ends up held, SEPA Direct Debit captured at once. */
   customerPays(paymentId: string, method: PaymentMethodKind): Promise<void>
-  /** The signed notification the provider sends once a payment can start its application. */
+  /**
+   * The signed notification the provider sends once a payment can start its
+   * application. Its payload must contain the order reference (`ZG-...`): the
+   * tamper test alters that text.
+   */
   notificationOfPayment(paymentId: string): Promise<{ payload: string; signature: string }>
 }
 
-/** Every PaymentProvider adapter must pass this, including the fake. */
+/**
+ * Every PaymentProvider adapter must pass this, including the fake.
+ *
+ * Pins down the port's guarantees: `createPayment` is repeatable per
+ * reference; a card is held with an expiry while SEPA Direct Debit is captured
+ * at checkout; `capture` takes part of a hold, happens once, and throws
+ * `HoldExpired` once the hold is released or `RangeError` above the held
+ * amount; `release` and `recordRegistration` are harmless twice; `refunded`
+ * never exceeds `captured`; `refund` is idempotent per key and throws
+ * `RangeError` without captured money or beyond what is left to give back;
+ * `readNotification` reads a signed payload and throws `NotificationRejected`
+ * for an altered or unsigned one.
+ */
 export function paymentProviderContract(name: string, makeSubject: () => PaymentProviderSubject) {
   describe(`PaymentProvider contract: ${name}`, () => {
     let subject: PaymentProviderSubject
@@ -108,6 +125,7 @@ export function paymentProviderContract(name: string, makeSubject: () => Payment
       expect(await provider.release(paymentId)).toMatchObject({ status: "released", captured: Money.ofCents(0) })
     })
 
+    // Stripe shows a cancelled authorisation as a refunded charge; the adapter must not echo that.
     it("never reports more refunded than captured: a released hold returned nothing that was taken", async () => {
       const paymentId = await paid("card")
       await provider.release(paymentId)

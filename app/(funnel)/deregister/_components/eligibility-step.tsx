@@ -35,6 +35,7 @@ export function EligibilityStep({
 
   async function submit(event: FormEvent) {
     event.preventDefault()
+    // A second submit while a check is pending is ignored.
     if (!plateCount || hasDocuments !== true || checking) return
     setChecking(true)
     try {
@@ -49,8 +50,11 @@ export function EligibilityStep({
       }
       onEligible({ plateCount, prefix: result.prefix, ikfzStatus: result.ikfzStatus })
     } catch {
+      // The request itself rejected (a lost connection, a server error): the customer hears the same as for an
+      // unreachable authority and can try again.
       setError("Die Zulassungsstelle ist gerade nicht zu erreichen. Bitte versuchen Sie es in ein paar Minuten noch einmal.")
     } finally {
+      // Always, so that no failure leaves the button busy for good.
       setChecking(false)
     }
   }

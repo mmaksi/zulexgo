@@ -6,25 +6,47 @@ import { z } from "zod"
  * only hands it over.
  */
 
+/**
+ * The deployment stages. `APP_ENV` is the only switch for adapters, base URLs
+ * and guardrails. `NODE_ENV` is not: `next build` sets it to "production" for
+ * the staging deploy too.
+ */
 export const STAGES = ["dev", "staging", "production"] as const
 export type Stage = (typeof STAGES)[number]
 
+/**
+ * Zulex has exactly two API hosts. Dev and staging share the integration host;
+ * production uses the live one. `ZULEX_BASE_URL` must equal the stage's host,
+ * so a staging deploy cannot file real applications.
+ */
 export const ZULEX_BASE_URLS = {
   integration: "https://integration-zulex.de/zulex-api/v1",
   production: "https://app.zulex.de/zulex-api/v1",
 } as const
 
+/** AES-256-GCM takes a 32-byte key; `CODES_ENCRYPTION_KEY` is that key in base64. */
 const CODES_KEY_BYTES = 32
 
+/** Never defaulted: an unset secret stays unset, and the guardrails require it where it is used. */
 const secret = z.string().min(1).optional()
 
+/**
+ * Every variable the application reads. Most are optional in the type and
+ * required by the guardrails only when the feature that uses them is switched
+ * on, so dev boots on fakes with no secrets at all. `.env.example` documents
+ * each one for operators.
+ */
 const schema = z
   .object({
     APP_ENV: z.enum(STAGES),
 
+    // Public origin the status links are built on; defaulted in dev, https-only elsewhere.
     APP_BASE_URL: z.url().optional(),
+    // Bearer token a scheduler presents to /api/internal/poll; unset, the route refuses everyone.
     CRON_SECRET: secret,
 
+    // One driver per port. The defaults are the fake (or console) adapters, so dev needs nothing;
+    // production rejects them all, and a real driver makes its credentials required.
     PAYMENT_DRIVER: z.enum(["fake", "stripe"]).default("fake"),
     REGISTRATION_DRIVER: z.enum(["fake", "zulex"]).default("fake"),
     MAIL_DRIVER: z.enum(["console", "resend"]).default("console"),
@@ -33,20 +55,26 @@ const schema = z
 
     STRIPE_SECRET_KEY: secret,
     STRIPE_WEBHOOK_SECRET: secret,
+    // The only value here that reaches the browser (the funnel hands it to Stripe's payment form).
     NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: z.string().min(1).optional(),
 
     ZULEX_BASE_URL: z.url().optional(),
+    // Merchant credential sent as X-Api-Key: server-side only, never exposed to the browser.
     ZULEX_API_KEY: secret,
 
     RESEND_API_KEY: secret,
     MAIL_FROM: z.string().min(1).optional(),
+    // A comma-separated list in the environment, an array of trimmed addresses here.
     MAIL_ALLOWLIST: z
       .string()
       .default("")
       .transform((list) => list.split(",").map((entry) => entry.trim()).filter(Boolean)),
 
+    // The app connects through the transaction pooler (DATABASE_URL); the db commands
+    // (migrate, seed) use the session connection (DIRECT_DATABASE_URL).
     DATABASE_URL: secret,
     DIRECT_DATABASE_URL: secret,
+    // Encrypts security codes and status tokens at rest; also keys the rate limiter's hashes.
     CODES_ENCRYPTION_KEY: secret,
 
     SUPABASE_STORAGE_URL: z.url().optional(),
@@ -55,20 +83,33 @@ const schema = z
   })
   .superRefine(applyGuardrails)
 
+/**
+ * The validated environment, with defaults applied and `MAIL_ALLOWLIST` split
+ * into an array. A variable that a driver requires is still typed optional;
+ * `applyGuardrails` guarantees it is present, which is why the container
+ * asserts those with `!`.
+ */
 export type Env = z.infer<typeof schema>
 
 type Ctx = z.core.$RefinementCtx
 type Parsed = z.core.output<typeof schema>
 
+/** Reports a problem against one variable, so the error names it. */
 const reject = (ctx: Ctx, variable: keyof Parsed, message: string) =>
   ctx.addIssue({ code: "custom", path: [variable], message })
 
+/** Flags every missing variable, not just the first, so one failed boot lists everything to set. */
 const requireAll = (ctx: Ctx, env: Parsed, variables: (keyof Parsed)[], because: string) => {
   for (const variable of variables) {
     if (!env[variable]) reject(ctx, variable, `required ${because}.`)
   }
 }
 
+/**
+ * The cross-field rules zod cannot express per variable: what each stage and
+ * each driver requires, and which combinations are unsafe. They are code, not
+ * policy, so a bad deploy fails at startup instead of mid-checkout.
+ */
 function applyGuardrails(env: Parsed, ctx: Ctx) {
   const isProduction = env.APP_ENV === "production"
 
@@ -107,6 +148,7 @@ function rejectFakesInProduction(env: Parsed, ctx: Ctx, isProduction: boolean) {
   }
 }
 
+/** The Stripe driver needs all three keys, and a key's mode has to match the stage. */
 function checkPayment(env: Parsed, ctx: Ctx, isProduction: boolean) {
   if (env.PAYMENT_DRIVER === "stripe") {
     requireAll(
@@ -132,6 +174,11 @@ function checkStripeMode(ctx: Ctx, variable: keyof Parsed, key: string | undefin
   }
 }
 
+/**
+ * The Zulex driver needs its host and key. The host is checked whenever it is
+ * set, even under the fake driver, so a wrong one is caught before the driver
+ * is ever switched on.
+ */
 function checkRegistration(env: Parsed, ctx: Ctx, isProduction: boolean) {
   if (env.REGISTRATION_DRIVER === "zulex") {
     requireAll(ctx, env, ["ZULEX_BASE_URL", "ZULEX_API_KEY"], "when REGISTRATION_DRIVER is zulex")
@@ -165,6 +212,11 @@ function checkMail(env: Parsed, ctx: Ctx, isProduction: boolean) {
   }
 }
 
+/**
+ * Postgres needs both connection strings and the key. The key's size is
+ * checked whenever one is set, so a truncated copy fails at boot and not on the
+ * first encrypted write.
+ */
 function checkRepository(env: Parsed, ctx: Ctx) {
   if (env.REPOSITORY_DRIVER === "postgres") {
     requireAll(

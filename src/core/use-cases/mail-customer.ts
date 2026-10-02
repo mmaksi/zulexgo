@@ -3,9 +3,26 @@ import type { Money } from "@/src/core/domain/money"
 import { reasonFor } from "@/src/core/domain/rejection-catalogue"
 import type { Dependencies } from "./dependencies"
 
+/**
+ * The customer emails that carry the status link, by the business-logic numbering: 1 order
+ * confirmation, 4 submitted to the KBA, 5a completed, 5b correction required, 5c rejected.
+ * Email 6 (refund) carries no link, and the resent link is mailed with a token not stored
+ * yet (`resendStatusLink`), so neither goes through `mailCustomer`.
+ */
 type LinkedEmail = "orderConfirmation" | "submittedToKba" | "completed" | "correctionRequired" | "rejected"
 
-/** Sends one of the emails that carry the status link, built from the application's current token. */
+/**
+ * Sends one of the emails that carry the status link, built from the application's current token.
+ *
+ * Pass the application as it is about to be saved, not as it was read: the key below counts
+ * the history, and emails 5b and 5c read the stored failure for the reason shown. Callers
+ * send before they save the new status (the mailer never fails silently), so a send that
+ * throws leaves the application at its old status, which the poller backs off (`advanceStatus`)
+ * before a later poll sends it; only the repeat of email 4 after a correction does it the other
+ * way round. `refund` and `retained` are required for
+ * `rejected` and ignored by the others. Throws if the order has no status token, which is
+ * issued when payment is confirmed.
+ */
 export async function mailCustomer(
   deps: Pick<Dependencies, "repository" | "mailer" | "statusLink" | "errorCatalogue">,
   application: Application,
@@ -30,7 +47,10 @@ export async function mailCustomer(
   await deps.mailer.send({ to: application.email, template, idempotencyKey })
 }
 
-/** Email 6. One per order however it is reached: the answer to a refund and the provider's confirmation of it share a key. */
+/**
+ * Email 6. One per order however it is reached: the answer to a refund and the provider's
+ * confirmation of it share a key. It carries no status link, so it needs no token.
+ */
 export async function mailRefund(deps: Pick<Dependencies, "mailer">, application: Application, amount: Money): Promise<void> {
   const { reference, email } = application
   await deps.mailer.send({ to: email, template: { name: "refundIssued", reference, amount }, idempotencyKey: `${reference}/refundIssued` })

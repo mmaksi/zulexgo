@@ -8,17 +8,34 @@ import type { RateLimiter } from "@/src/core/ports/rate-limiter"
 import type { RegistrationGateway } from "@/src/core/ports/registration-gateway"
 import type { TokenGenerator } from "@/src/core/ports/token-generator"
 
-/** Everything a use case may touch, handed in by the composition root or a test. */
+/**
+ * Everything a use case may touch, handed in by the composition root or a test.
+ * Use cases name the ports they use, never a vendor: the adapter behind each one is
+ * chosen per stage (`APP_ENV`), so the same code runs on fakes in tests and dev.
+ * A use case that needs only part of this takes a `Pick` of it.
+ */
 export interface Dependencies {
   readonly repository: ApplicationRepository
   readonly registration: RegistrationGateway
   readonly payments: PaymentProvider
   readonly mailer: Mailer
   readonly documents: DocumentStore
+  /**
+   * Bounds the entry points that take a status link or an address (status page, downloads,
+   * cancel, correct, resend a link; `limitResend` is the one use case that counts). The
+   * payment, filing and polling flow is not rate limited.
+   */
   readonly rateLimiter: RateLimiter
+  /** The only source of "now": hold expiry, poll schedules and history timestamps all read it. */
   readonly clock: Clock
+  /** Status links, idempotency keys and the random part of order references. */
   readonly tokens: TokenGenerator
   /** Turns a status token into the absolute link the customer receives. */
   readonly statusLink: (token: string) => string
+  /**
+   * Replaces the KBA error-code table (`REJECTION_CATALOGUE`) for the error algorithm and the
+   * customer wording. The composition root leaves it unset, so the table in the domain
+   * applies; tests set it to exercise codes the real table does not list yet.
+   */
   readonly errorCatalogue?: RejectionCatalogue
 }

@@ -6,6 +6,8 @@ import { SupabaseDocumentStore } from "@/src/adapters/storage/supabase/supabase-
 import { loadDocuments, loadSeed, seedDocumentsFor, seedFor } from "@/db/seed/seed"
 import { parseEnv, type Env, type EnvSource } from "./env"
 
+// Relative to the working directory, so the commands run from the repository root (the npm
+// scripts do).
 const MIGRATIONS_DIRECTORY = join(process.cwd(), "db", "migrations")
 
 const USAGE = "Usage: db up | db down [count | all] | db status | db seed"
@@ -13,6 +15,23 @@ const USAGE = "Usage: db up | db down [count | all] | db status | db seed"
 /**
  * `npm run db:migrate`, `db:migrate:down`, `db:status` and `db:seed`. They use
  * the direct session pooler connection, never the transaction pooler the app uses.
+ *
+ * Takes `[command, count]`: `up`, `status`, `seed`, or `down` with an optional
+ * number of migrations (one by default) or `all`. Resolves to the text for
+ * `scripts/db.ts` to print. A stage's own deploy runs `up`, and staging also
+ * `seed`, before building (`scripts/vercel-build`).
+ *
+ * Guardrails: there must be a database to act on (`REPOSITORY_DRIVER=postgres`);
+ * `down` drops data, so it runs only in dev; and the seed never loads in
+ * production (`seedFor` throws). `seed` adds only what is missing, so running it
+ * on every staging deploy is safe, and it fills the document bucket too when
+ * `STORAGE_DRIVER` is supabase.
+ *
+ * The npm scripts run it under `--conditions=react-server`, so the `server-only`
+ * import does not throw outside Next.js.
+ *
+ * @throws if the environment is invalid, there is no database, the command is
+ * unknown (the error is the usage line), or `down` is attempted outside dev.
  */
 export async function runDatabaseCommand([command, count]: string[], source: EnvSource = process.env): Promise<string> {
   const env = parseEnv(source)
@@ -57,6 +76,7 @@ function loadSeededDocuments(env: Env): Promise<number> {
   return loadDocuments(store, seedDocumentsFor(env.APP_ENV))
 }
 
+/** How many migrations `down` reverts: a whole number of at least one, or "all". */
 function parseSteps(count = "1"): number {
   if (count === "all") return Infinity
   const steps = Number(count)

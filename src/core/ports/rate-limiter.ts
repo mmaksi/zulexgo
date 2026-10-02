@@ -4,9 +4,11 @@ export const MAX_WINDOW_MS = 24 * 60 * 60_000
 export interface RateLimit {
   /** Attempts allowed per window. */
   readonly max: number
+  /** How long the window lasts, in ms, counted from the first attempt. At most `MAX_WINDOW_MS`. */
   readonly windowMs: number
 }
 
+/** Whether the attempt just made may go ahead. */
 export type RateLimitDecision =
   | { readonly allowed: true }
   /** How long until the window ends and the key may try again. */
@@ -30,5 +32,10 @@ export type RateLimitDecision =
  *   persists it stores a keyed hash, never the key.
  */
 export interface RateLimiter {
+  /**
+   * Counts one attempt and decides it. Every call counts, refused ones too, so
+   * there is no looking without using up an attempt. A window above
+   * `MAX_WINDOW_MS` rejects with `RangeError` before anything is counted.
+   */
   consume(key: string, limit: RateLimit): Promise<RateLimitDecision>
 }

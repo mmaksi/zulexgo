@@ -28,12 +28,53 @@ import type { DeregistrationRequest } from "@/src/core/domain/deregistration-req
  *   failure, or a look at the money of a 5b that waits for the customer.
  */
 export interface ApplicationRepository {
+  /**
+   * Stores a new order and returns it at version 1, whatever version the
+   * argument carries. `DuplicateApplication` names the field that is taken:
+   * `reference` lets checkout draw a fresh one, `idempotencyKey` is a double
+   * submit. Nothing is stored in either case.
+   */
   create(application: Application): Promise<Application>
+  /** `undefined`, not an error, for a reference nobody holds. */
   get(reference: ApplicationReference): Promise<Application | undefined>
+  /**
+   * Saves the whole application, given the version it was read at, and returns
+   * the stored copy at version + 1. `StaleApplication` means someone else saved
+   * first: reload and decide again. An application that was never created is
+   * stale too. The status history only grows: callers pass the full history
+   * that `applyEvent` builds, and the Postgres adapter stores just the entries
+   * beyond those already saved.
+   */
   update(application: Application): Promise<Application>
+  /**
+   * Makes `token` the one link that opens this order, revoking the previous
+   * one. Rejects (with an adapter's own error, not a domain error) when the
+   * order does not exist or another order already holds the token, so one link
+   * never opens two orders. The token is the order's only credential:
+   * adapters never log it.
+   */
   setStatusToken(reference: ApplicationReference, token: string): Promise<void>
+  /**
+   * The current token, so a later email repeats the link already issued.
+   * `undefined` until one is set (an order awaiting payment has none) and for
+   * an unknown order.
+   */
   getStatusToken(reference: ApplicationReference): Promise<string | undefined>
+  /**
+   * Only the current token matches: a revoked or invented one finds nothing,
+   * which callers turn into `TokenInvalid`.
+   */
   findByStatusToken(token: string): Promise<Application | undefined>
+  /**
+   * Plate (prefix, letters, numbers) and VIN must both match. Advisory, not a
+   * lock: two checkouts racing can both see `false`.
+   */
   hasOpenApplication(vehicle: Pick<DeregistrationRequest, "licencePlate" | "vin">): Promise<boolean>
+  /**
+   * Due means `polling.nextPollAt <= now`, a moment exactly equal to `now`
+   * included, among the statuses that are polled at all. An application
+   * without a `nextPollAt` is never due: clearing it is how the poller stops
+   * watching one. Applications with equal times come back in no set order.
+   */
   findDueForPolling(now: Date, limit: number): Promise<Application[]>
 }

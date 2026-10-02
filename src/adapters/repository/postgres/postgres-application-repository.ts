@@ -12,6 +12,11 @@ import { StaleApplication } from "@/src/core/errors/stale-application"
 import type { ApplicationRepository } from "@/src/core/ports/application-repository"
 import { FieldCipher } from "./field-cipher"
 
+/**
+ * One row of `SELECT_APPLICATION`, named as in db/migrations. `next_poll_at` is a timestamptz, which pg
+ * returns as a Date; `history[].at` went through json_agg, so it is an ISO string until
+ * `toApplication` parses it.
+ */
 interface ApplicationRow {
   reference: string
   version: number
@@ -36,6 +41,11 @@ interface ApplicationRow {
   history: { status: ApplicationStatus; at: string }[]
 }
 
+/**
+ * Every read goes through this one query, so a loaded application is always whole: the order, its
+ * payment (an inner join, since `create` writes both in one transaction) and its status history as a
+ * JSON array in insertion order (`status_history.id` is an identity column). Callers append the WHERE.
+ */
 const SELECT_APPLICATION = `
   SELECT a.*, p.stripe_payment_intent_id, p.total_cents,
     (SELECT json_agg(json_build_object('status', h.status, 'at', h.changed_at) ORDER BY h.id)
@@ -43,6 +53,12 @@ const SELECT_APPLICATION = `
   FROM applications a
   JOIN payments p ON p.application_reference = a.reference`
 
+/**
+ * The unique constraints that mean a domain `DuplicateApplication`, by the name Postgres reports.
+ * Migration 0001 names the idempotency one explicitly; the other is the primary key's default name.
+ * Any other unique violation (a payment intent id or Zulex application id already held elsewhere)
+ * is not a case the domain handles, so it surfaces as the raw driver error.
+ */
 const DUPLICATES: Record<string, DuplicateApplication["field"]> = {
   applications_pkey: "reference",
   applications_idempotency_key_key: "idempotencyKey",
@@ -52,11 +68,22 @@ const DUPLICATES: Record<string, DuplicateApplication["field"]> = {
  * Server-side only, through the Supavisor transaction pooler: every query is
  * unnamed, so no prepared statement outlives its transaction. Security codes
  * and status tokens are encrypted here, before they reach the database.
+ *
+ * Wired when `REPOSITORY_DRIVER=postgres` (the staging and production Supabase projects; production
+ * rejects the in-memory fake). Concurrency is optimistic: `update` is a compare-and-set on `version`
+ * and reports a lost race as `StaleApplication`, so no row is locked between a read and a write.
+ * The tables have row-level security on and no policy (migration 0001), so only this connection, as
+ * the table owner, can read them. The database holds codes and tokens only as ciphertext (plus a
+ * SHA-256 of each token for lookup); see `FieldCipher`.
  */
 export class PostgresApplicationRepository implements ApplicationRepository {
   private readonly pool: Pool
   private readonly cipher: FieldCipher
 
+  /**
+   * `encryptionKey` is `CODES_ENCRYPTION_KEY`: 32 bytes in base64, checked at boot in `env.ts`.
+   * The app passes the pooled `DATABASE_URL`; `db:seed` passes the direct one.
+   */
   constructor(options: { connectionString: string; encryptionKey: string }) {
     this.pool = new Pool({ connectionString: options.connectionString, allowExitOnIdle: true })
     // An idle connection dropped by the pooler must not crash the process; the next query reconnects.
@@ -65,7 +92,11 @@ export class PostgresApplicationRepository implements ApplicationRepository {
   }
 
   async create(application: Application): Promise<Application> {
+    // One transaction for all three tables: an order without its payment row would never load
+    // (`SELECT_APPLICATION` joins it). Placeholders are built from the fixed column names in `columns`;
+    // the values always travel as parameters.
     await this.transaction(async (client) => {
+      // The stored version is 1 whatever the argument carries, as the port requires.
       const columns = { reference: application.reference, version: 1, ...this.columns(application) }
       const names = Object.keys(columns)
       await client.query(
@@ -79,6 +110,7 @@ export class PostgresApplicationRepository implements ApplicationRepository {
       await appendHistory(client, application.reference, application.history)
     }).catch(rethrowDuplicate)
 
+    // Read back rather than echo the input, so the caller gets what the database actually stored.
     return (await this.get(application.reference))!
   }
 
@@ -89,18 +121,25 @@ export class PostgresApplicationRepository implements ApplicationRepository {
   async update(application: Application): Promise<Application> {
     await this.transaction(async (client) => {
       const columns = this.columns(application)
+      // $1 and $2 are the reference and the version read; the assignments start at $3.
       const assignments = Object.keys(columns).map((name, index) => `${name} = $${index + 3}`)
+      // The compare-and-set: matches only while the stored version is still the one the caller read.
+      // The UPDATE also holds the row's lock until commit, so a concurrent writer waits here, then
+      // re-checks `version` and matches nothing.
       const { rowCount } = await client.query(
         `UPDATE applications SET ${assignments.join(", ")}, version = version + 1, updated_at = now()
          WHERE reference = $1 AND version = $2`,
         [application.reference, application.version, ...Object.values(columns)],
       )
+      // No row matched: someone saved first, or the reference was never created (both stale).
       if (rowCount === 0) throw new StaleApplication(application.reference)
 
       await client.query(
         "UPDATE payments SET stripe_payment_intent_id = $2, total_cents = $3, updated_at = now() WHERE application_reference = $1",
         [application.reference, application.payment.id, application.payment.total.cents],
       )
+      // History is append-only: store only the entries beyond those already saved. Counting is safe
+      // because the UPDATE above holds the order's row lock, so no other writer can append meanwhile.
       const { rows } = await client.query<{ stored: number }>(
         "SELECT count(*)::int AS stored FROM status_history WHERE application_reference = $1",
         [application.reference],
@@ -111,6 +150,13 @@ export class PostgresApplicationRepository implements ApplicationRepository {
     return (await this.get(application.reference))!
   }
 
+  /**
+   * One row per application (it is the primary key), so the upsert replaces the previous token,
+   * which revokes the old link. The database gets a SHA-256 of the token for lookup and an AES-GCM
+   * copy bound to the reference, so a later email can repeat the link; never the token itself.
+   * A token another application already holds breaks `token_hash`'s unique constraint, and an unknown
+   * reference breaks the foreign key: both surface as the raw driver error, which the port allows.
+   */
   async setStatusToken(reference: ApplicationReference, token: string): Promise<void> {
     await this.pool.query(
       `INSERT INTO status_tokens (application_reference, token_hash, encrypted_token) VALUES ($1, $2, $3)
@@ -128,6 +174,7 @@ export class PostgresApplicationRepository implements ApplicationRepository {
     return rows[0] && this.cipher.decrypt(rows[0].encrypted_token, reference)
   }
 
+  /** Looks up by the token's hash, so the token itself never reaches the database. */
   async findByStatusToken(token: string): Promise<Application | undefined> {
     return this.findOne(
       `${SELECT_APPLICATION} JOIN status_tokens t ON t.application_reference = a.reference WHERE t.token_hash = $1`,
@@ -135,6 +182,7 @@ export class PostgresApplicationRepository implements ApplicationRepository {
     )
   }
 
+  /** Served by the `applications_by_vehicle` index (migration 0007); statuses are `OPEN_STATUSES`. */
   async hasOpenApplication({ licencePlate, vin }: Parameters<ApplicationRepository["hasOpenApplication"]>[0]): Promise<boolean> {
     const { rows } = await this.pool.query<{ open: boolean }>(
       `SELECT EXISTS (
@@ -146,6 +194,11 @@ export class PostgresApplicationRepository implements ApplicationRepository {
     return rows[0].open
   }
 
+  /**
+   * Served by the partial index `applications_due_for_polling`; a NULL `next_poll_at` never compares
+   * as due. Rows are not locked or claimed: two overlapping runs can be handed the same application,
+   * and the one that saves second loses its version-checked `update` with `StaleApplication`.
+   */
   async findDueForPolling(now: Date, limit: number): Promise<Application[]> {
     const { rows } = await this.pool.query<ApplicationRow>(
       `${SELECT_APPLICATION} WHERE a.status = ANY($1) AND a.next_poll_at <= $2 ORDER BY a.next_poll_at LIMIT $3`,
@@ -154,7 +207,15 @@ export class PostgresApplicationRepository implements ApplicationRepository {
     return rows.map((row) => this.toApplication(row))
   }
 
-  /** Every column an update may change; only the reference is fixed at creation. */
+  /**
+   * Every column an update may change; only the reference is fixed at creation.
+   *
+   * The only place security codes are revealed in this adapter: the three go into one JSON blob and
+   * are encrypted straight away, bound to the reference. A missing front code is dropped by
+   * `JSON.stringify`. The ciphertext differs on every call (random IV), so it is rewritten on each
+   * update even when the codes are unchanged. Of a failure only its kind and the KBA's code are
+   * stored, never the vendor's description; the pair is held together by a CHECK in migration 0006.
+   */
   private columns(application: Application) {
     const { request } = application
     const { rearPlate, frontPlate, certificate } = request.codes
@@ -179,7 +240,11 @@ export class PostgresApplicationRepository implements ApplicationRepository {
     }
   }
 
-  /** Read back through the domain parsers, so a row that no longer validates fails loudly. */
+  /**
+   * Read back through the domain parsers, so a row that no longer validates fails loudly.
+   * Decrypting throws if the key is wrong or the ciphertext was altered or copied from another row;
+   * the parser then rebuilds the `SecurityCode` objects from the decrypted blob.
+   */
   private toApplication(row: ApplicationRow): Application {
     const reference = parseApplicationReference(row.reference)
     return {
@@ -204,11 +269,17 @@ export class PostgresApplicationRepository implements ApplicationRepository {
     }
   }
 
+  /** For the `SELECT_APPLICATION` queries that match at most one row. */
   private async findOne(sql: string, values: unknown[]): Promise<Application | undefined> {
     const { rows } = await this.pool.query<ApplicationRow>(sql, values)
     return rows[0] && this.toApplication(rows[0])
   }
 
+  /**
+   * Runs `run` on one dedicated connection between BEGIN and COMMIT; any error rolls back and is
+   * rethrown unchanged. A transaction needs the same connection throughout, so it cannot go through
+   * `pool.query`, which may hand each statement to a different one.
+   */
   private async transaction(run: (client: PoolClient) => Promise<void>): Promise<void> {
     const client = await this.pool.connect()
     try {
@@ -224,11 +295,13 @@ export class PostgresApplicationRepository implements ApplicationRepository {
   }
 }
 
+/** A code is stored exactly for `kbaError` (a CHECK in migration 0006), so `failure_code!` holds. */
 function toFailure({ failure_kind, failure_code }: ApplicationRow): Failure | undefined {
   if (!failure_kind) return undefined
   return failure_kind === "kbaError" ? { kind: failure_kind, code: failure_code! } : { kind: failure_kind }
 }
 
+/** Inserts in order; the identity `id` then reproduces that order when the history is read back. */
 async function appendHistory(client: PoolClient, reference: ApplicationReference, changes: readonly StatusChange[]) {
   for (const change of changes) {
     await client.query("INSERT INTO status_history (application_reference, status, changed_at) VALUES ($1, $2, $3)", [
@@ -239,6 +312,7 @@ async function appendHistory(client: PoolClient, reference: ApplicationReference
   }
 }
 
+/** Postgres code 23505 is a unique violation; only the `DUPLICATES` constraints become domain errors. */
 function rethrowDuplicate(error: unknown): never {
   const field = error instanceof DatabaseError && error.code === "23505" && error.constraint ? DUPLICATES[error.constraint] : undefined
   throw field ? new DuplicateApplication(field) : error
