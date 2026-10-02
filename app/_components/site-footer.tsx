@@ -3,6 +3,7 @@ import { SUPPORT_EMAIL } from "@/src/core/domain/contact"
 import { Wedge } from "@/src/ui/wedge"
 import { Wordmark } from "@/src/ui/wordmark"
 import { CurrentYear } from "./current-year"
+import { KbaSeal } from "./kba-seal"
 
 // site-contract.md §2.1 — the footer carries the statutory links and support contact.
 const LEGAL = [
@@ -50,6 +51,11 @@ export function SiteFooter() {
               ))}
             </ul>
           </nav>
+
+          <KbaSeal
+            sizes="(min-width: 768px) 128px, 112px"
+            className="size-28 bg-white md:size-32"
+          />
         </div>
 
         <div className="page-frame border-t border-white/10 py-6">
