@@ -2,10 +2,18 @@ import { anApplication } from "@/tests/fixtures/applications"
 import type { DocumentRef } from "@/src/core/domain/document"
 import type { DocumentStore } from "./document-store"
 
+// 2^53 + 1: a JS number cannot hold it, so an adapter that coerces ids to numbers is caught.
 const confirmation: DocumentRef = { id: "9007199254740993", kind: "confirmation" }
 const pdf = () => new TextEncoder().encode("%PDF-fake-confirmation")
 
-/** Every DocumentStore adapter must pass this, including the fake. */
+/**
+ * Every DocumentStore adapter must pass this, including the fake.
+ *
+ * Pins down the port's guarantees: bytes and kind round-trip; documents are
+ * scoped to their application, so another reference finds nothing through
+ * `get` or `list`; storing a document id again replaces it, even under another
+ * kind, rather than listing it twice; bytes are copied on the way in and out.
+ */
 export function documentStoreContract(name: string, makeSubject: () => DocumentStore) {
   describe(`DocumentStore contract: ${name}`, () => {
     let store: DocumentStore
@@ -43,6 +51,8 @@ export function documentStoreContract(name: string, makeSubject: () => DocumentS
       expect(new TextDecoder().decode((await store.get(reference, confirmation.id))?.bytes)).toBe("%PDF-replaced")
     })
 
+    // The vendor's id names one document: a copy filed under another kind is its old version, not a
+    // second document.
     it("lists a document once even when it is stored again under another kind", async () => {
       const { reference } = anApplication()
 

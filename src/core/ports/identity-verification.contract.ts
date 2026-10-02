@@ -4,10 +4,21 @@ import type { IdentityVerification } from "./identity-verification"
 /** What the customer does at the provider, which the server cannot: the adapter's test supplies it. */
 export interface IdentityVerificationSubject {
   verification: IdentityVerification
+  /**
+   * The suite calls it a second time with the opposite outcome to prove the
+   * first one stands, so it must not throw for a verification already finished.
+   */
   customerFinishes(verificationId: string, outcome: "verified" | "failed"): Promise<void>
 }
 
-/** Every IdentityVerification adapter must pass this, including the fake. */
+/**
+ * Every IdentityVerification adapter must pass this, including the fake.
+ *
+ * Pins down the port's guarantees: `start` opens one verification per
+ * reference (a repeat returns the same id and link, another reference gets its
+ * own) and its link is https; a result is `pending` until the customer
+ * finishes, then `verified` or `failed`, and never changes again.
+ */
 export function identityVerificationContract(name: string, makeSubject: () => IdentityVerificationSubject) {
   describe(`IdentityVerification contract: ${name}`, () => {
     let subject: IdentityVerificationSubject

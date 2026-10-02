@@ -48,8 +48,11 @@ export function ReviewStep({
       const failed = await takePayment(driverRef.current)
       if (failed) setError(failed)
     } catch {
+      // A request that rejected (a lost connection, a server error). The order created so far is kept (`order`), so
+      // trying again pays the same one instead of opening a second.
       setError("Das hat gerade nicht geklappt. Bitte versuchen Sie es in ein paar Minuten noch einmal.")
     } finally {
+      // Always, so that no failure leaves the button busy for good.
       setPaying(false)
     }
   }

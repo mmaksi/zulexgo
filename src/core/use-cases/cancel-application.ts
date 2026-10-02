@@ -16,13 +16,21 @@ import { settlePayment } from "./settle-payment"
  * again: settlement recognises what it already did, and email 6 is keyed by the
  * order, so nothing is done or sent twice. A correction refuses an order whose
  * money is no longer whole, so a cancel left half done can only be finished.
+ *
+ * Triggered by the customer confirming the cancel on the status page. Throws
+ * `TokenInvalid` for a link no order answers to, `InvalidTransition` for an order that
+ * is not at 5b (before any money moves), and `StaleApplication` for a lost race.
  */
 export async function cancelApplication(deps: Dependencies, token: string): Promise<void> {
   const application = token ? await deps.repository.findByStatusToken(token) : undefined
   if (!application) throw new TokenInvalid()
   if (application.status === "cancelled") return
 
+  // Saving the order as read is the claim: it bumps the version, so a write that got in
+  // since fails here with StaleApplication, before anything below moves money.
   const claimed = await deps.repository.update(application)
+  // Refuses (InvalidTransition) an order that is not at 5b. Without a nextPollAt it is
+  // no longer due, which ends the daily look at its hold.
   const cancelled = { ...applyEvent(claimed, "cancelledByCustomer", deps.clock.now()), polling: { attempts: claimed.polling.attempts } }
   const settled = await settlePayment(deps, claimed, { type: "cancelled" })
   if (settled.returned.cents > 0) await mailRefund(deps, cancelled, settled.returned)

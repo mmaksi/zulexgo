@@ -1,6 +1,12 @@
 import type { Failure } from "./failure"
 import { REJECTION_CATALOGUE, type ErrorClass, type RejectionCatalogue } from "./rejection-catalogue"
 
+/**
+ * What to do about a failure. `retrySilently`: try again with the customer told nothing.
+ * `failCorrectable`: 5b, the customer can correct or cancel. `failFinal`: 5c, with the
+ * refund policy's outcome named by `refund`: `fee` keeps the processing fee (`failedFinal`),
+ * `full` returns everything because the fault is ours (`ourTechnicalError`).
+ */
 export type FailureDecision =
   | { readonly action: "retrySilently" }
   | { readonly action: "failCorrectable" }
@@ -21,7 +27,10 @@ export const SUBMISSION_PATIENCE_MS = 24 * 60 * 60 * 1000
 export interface Attempt {
   /** Silent retries already used since the last submission succeeded. */
   readonly retryAttempts: number
-  /** How long the application has waited to be filed, since payment was confirmed. */
+  /**
+   * How long the application has waited to be filed, since payment was confirmed (or, after
+   * a correction that files the order afresh, since it was refiled).
+   */
   readonly waitedMs: number
 }
 
@@ -51,12 +60,20 @@ export function decideOnFailure(
   }
 }
 
-/** A KBA error whose code the catalogue lacks: support reclassifies it (launch plan M6 fallback). */
+/**
+ * A KBA error whose code the catalogue lacks: support reclassifies it (launch plan M6
+ * fallback). `decideOnFailure` treats such a code as technical and says nothing, so this
+ * is how a caller notices one to report.
+ */
 export const isUnrecognised = (
   failure: Failure,
   catalogue: RejectionCatalogue = REJECTION_CATALOGUE,
 ): failure is Extract<Failure, { kind: "kbaError" }> => failure.kind === "kbaError" && !(failure.code in catalogue)
 
+/**
+ * A final error ends the order at once (5c, fee kept); a technical one gets the silent retry
+ * while one is left. Everything else, a technical error whose retry is used up included, is 5b.
+ */
 function decideOnKbaError(errorClass: ErrorClass, canRetry: boolean): FailureDecision {
   if (errorClass === "final") return { action: "failFinal", refund: "fee" }
   if (errorClass === "technical" && canRetry) return { action: "retrySilently" }

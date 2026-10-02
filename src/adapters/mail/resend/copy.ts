@@ -10,17 +10,33 @@ import type { EmailTemplate } from "@/src/core/ports/mailer"
  * rejection catalogue (launch plan Q10); vendor text never reaches a customer.
  */
 export interface EmailCopy {
+  /** Carries the order reference, so the email can be found by it; short enough for an inbox. */
   readonly subject: string
+  /** The inbox preview line. */
   readonly preview: string
   readonly heading: string
+  /** Body text after the layout's fixed greeting; each entry is one paragraph. */
   readonly paragraphs: readonly string[]
   /** A callout under the paragraphs, for what must not be missed. */
   readonly note?: string
+  /** The one button. Its `href` is always the status link, so no email links anywhere else. */
   readonly action?: { readonly label: string; readonly href: string }
 }
 
 const REFUND_TIMEFRAME = "Je nach Bank ist der Betrag in 3 bis 5 Werktagen auf Ihrem Konto."
 
+/**
+ * The German subject and body for one template. The switch has no default, so a template
+ * added to `EmailTemplate` does not compile until it has wording here. What depends on the data:
+ * - `orderConfirmation` says the card is charged once the application is filed and, at the
+ *   latest, shortly before the hold lapses (the margin is `HOLD_CAPTURE_MARGIN_MS`).
+ * - `submittedToKba` promises minutes to hours, or days when `manualProcessing`.
+ * - `correctionRequired` and `rejected` open with `reason`; `correctionRequired` also warns that
+ *   cancelling keeps the processing fee, while `rejected` names the refund and, when
+ *   `retained` is above zero, the fee kept, and promises a further email (`refundIssued`).
+ * - `statusLinkResent` tells the customer the previous link no longer works.
+ * - `refundIssued` is the only email without a status link, hence without a button.
+ */
 export function copyFor(template: EmailTemplate): EmailCopy {
   const { reference } = template
 

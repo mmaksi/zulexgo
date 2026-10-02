@@ -11,6 +11,7 @@ import type { ApplicationRepository } from "@/src/core/ports/application-reposit
 import type { DocumentStore } from "@/src/core/ports/document-store"
 import type { PaymentProvider } from "@/src/core/ports/payment-provider"
 
+/** How many characters of the VIN, counted from the end, the page shows. */
 const VIN_VISIBLE = 4
 
 /**
@@ -37,6 +38,17 @@ export interface StatusView {
   readonly refund?: { readonly returned: Money; readonly retained: Money }
 }
 
+/**
+ * What the status page shows for a link, rebuilt from our own record on every page view
+ * and refresh. Reads only. An unknown or empty link throws `TokenInvalid`, the same
+ * answer whatever the reason; the caller counts the lookup against the requester's
+ * address before calling.
+ *
+ * The payment provider and the document store are asked only for the states that show
+ * something from them: the money at 5b, 5c and a cancel, the documents once the order
+ * has completed. Whatever they fail to answer costs that part of the page, never the
+ * page itself.
+ */
 export async function getStatusByToken(
   deps: {
     repository: Pick<ApplicationRepository, "findByStatusToken">
@@ -59,6 +71,7 @@ export async function getStatusByToken(
     steps: customerSteps(application),
     failureReason: failureReasonOf(application, deps.errorCatalogue),
     correctable: status === "failed_correctable" ? await correctableOf(deps.payments, application) : undefined,
+    // A preview from the price, beside the cancel button: all but the fee would go back.
     cancellation: status === "failed_correctable" ? { returned: application.payment.total.subtract(PROCESSING_FEE), retained: PROCESSING_FEE } : undefined,
     documents: await documentsOf(deps.documents, application),
     refund: await refundOf(deps.payments, application),

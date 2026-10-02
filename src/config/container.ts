@@ -33,9 +33,18 @@ import { parseEnv, type Env, type EnvSource } from "./env"
  *
  * Identity verification has no driver yet: Verimi is added later (launch plan
  * Q1–Q4), so its fake is wired everywhere until `IDENTITY_DRIVER` exists.
+ *
+ * The container holds the Zulex `X-Api-Key` and the Stripe, Resend, Supabase
+ * and database credentials, so it is server-only: importing it from a client
+ * component is a build error (`server-only`).
  */
 export interface Container extends Dependencies {
+  /**
+   * The validated environment, for the few callers that read configuration
+   * directly (the poll route's `CRON_SECRET`, the funnel's Stripe publishable key).
+   */
   readonly env: Env
+  /** Not in `Dependencies`: no use case takes identity verification yet. */
   readonly identity: IdentityVerification
   /**
    * Only on the fake payment provider, which has no browser to pay in: plays
@@ -44,9 +53,24 @@ export interface Container extends Dependencies {
   readonly simulateCustomerPayment?: (paymentId: string) => Promise<void>
 }
 
+/**
+ * Wires one adapter per port from `source`, which is `process.env` in the
+ * running app and a literal in tests.
+ *
+ * The `*_DRIVER` variables choose each adapter and default to the fake or
+ * console one, so dev needs no secrets. `parseEnv` refuses a production
+ * environment that selects any of those and requires the credentials of every
+ * real adapter, which is why the non-null assertions below are safe. `APP_ENV`
+ * decides the rest: only dev prints status links when it "sends" mail, and the
+ * fakes load a seed that `seedFor` refuses to hand out in production.
+ *
+ * @throws {EnvironmentError} before any adapter is built, if the environment is invalid.
+ */
 export function createContainer(source: EnvSource = process.env): Container {
   const env = parseEnv(source)
   const clock = new SystemClock()
+  // Built ahead of the object because the container also exposes its `customerPays`
+  // as `simulateCustomerPayment`.
   const fakePayments = env.PAYMENT_DRIVER === "fake" ? new FakePaymentProvider(clock, seedPaymentsFor(env.APP_ENV)) : undefined
   return {
     env,
@@ -62,6 +86,8 @@ export function createContainer(source: EnvSource = process.env): Container {
       fakePayments ??
       new StripePaymentProvider({ secretKey: env.STRIPE_SECRET_KEY!, webhookSecret: env.STRIPE_WEBHOOK_SECRET! }),
     simulateCustomerPayment: fakePayments && ((paymentId) => fakePayments.customerPays(paymentId, "card")),
+    // Only staging restricts Resend to an allowlist. Production mails everyone (`parseEnv`
+    // rejects a non-empty list there) and dev never gets here (`parseEnv` requires console).
     mailer:
       env.MAIL_DRIVER === "console"
         ? new ConsoleMailer({ revealStatusLinks: env.APP_ENV === "dev" })
@@ -83,7 +109,11 @@ export function createContainer(source: EnvSource = process.env): Container {
   }
 }
 
-/** On the in-memory repository every boot starts from the seed; a database is seeded by its deploy instead. */
+/**
+ * On the in-memory repository every boot starts from the seed; a database is seeded by
+ * its deploy instead. The app connects through `DATABASE_URL`, the transaction pooler;
+ * `DIRECT_DATABASE_URL` is for the db commands.
+ */
 function createRepository(env: Env): ApplicationRepository {
   if (env.REPOSITORY_DRIVER === "fake") return new InMemoryApplicationRepository(seedFor(env.APP_ENV))
   return new PostgresApplicationRepository({
@@ -100,5 +130,13 @@ function createRateLimiter(env: Env, clock: Clock): RateLimiter {
 
 let container: Container | undefined
 
-/** Validated once per process, so a misconfigured deploy fails on its first request. */
+/**
+ * The process-wide container. Validated once per process, so a misconfigured deploy
+ * fails on its first request.
+ *
+ * It is built on first use, not at import, so loading a module that depends on it
+ * reads no environment and opens no connection. It is shared because the in-memory
+ * fakes keep their state in the instance and each Postgres adapter owns a connection
+ * pool. A build that throws is not remembered; the next call tries again.
+ */
 export const getContainer = (): Container => (container ??= createContainer())

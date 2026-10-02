@@ -8,6 +8,7 @@ import { StaleApplication } from "@/src/core/errors/stale-application"
 import type { ApplicationRepository } from "./application-repository"
 
 const NOW = new Date("2026-03-01T09:00:00.000Z")
+// One of each Failure kind: only a kbaError carries a code, which Postgres keeps in its own column.
 const FAILURES: Failure[] = [
   { kind: "unavailable" },
   { kind: "rejected" },
@@ -16,7 +17,20 @@ const FAILURES: Failure[] = [
 ]
 const minutes = (count: number) => new Date(NOW.getTime() + count * 60_000)
 
-/** Every ApplicationRepository adapter must pass this, including the fake. */
+/**
+ * Every ApplicationRepository adapter must pass this, including the fake.
+ *
+ * Pins down the port's guarantees: `create` stores version 1 and refuses a
+ * reused reference or idempotency key; `update` is version-checked, so a stale
+ * or never-created application is refused and nothing changes; security codes,
+ * money and dates round-trip and what is returned is a copy; a status token is
+ * found, read back, revoked by a newer one and never shared by two orders;
+ * `hasOpenApplication` counts only paid, unfinished orders for the same plate
+ * and VIN; `findDueForPolling` returns what is due, soonest first.
+ *
+ * `makeSubject` runs before every test and must hand back an empty store: a
+ * fresh fake, or a database truncated beforehand.
+ */
 export function applicationRepositoryContract(name: string, makeSubject: () => ApplicationRepository) {
   describe(`ApplicationRepository contract: ${name}`, () => {
     let repository: ApplicationRepository
@@ -37,12 +51,15 @@ export function applicationRepositoryContract(name: string, makeSubject: () => A
         expect(stored?.payment.total.equals(application.payment.total)).toBe(true)
       })
 
+      // Postgres checks status against a domain mirroring this list, so a status added only in code
+      // fails here.
       it.each(APPLICATION_STATUSES)("stores an application in status %s", async (status) => {
         const created = await repository.create(anApplication({ status, history: [{ status, at: NOW }] }))
 
         expect((await repository.get(created.reference))?.status).toBe(status)
       })
 
+      // Optional fields are nullable columns in Postgres: absent must come back absent, not null.
       it("round-trips a one-plate vehicle and every optional field", async () => {
         const application = anApplication({
           status: "submitted_to_kba",
@@ -90,6 +107,7 @@ export function applicationRepositoryContract(name: string, makeSubject: () => A
         )
       })
 
+      // Matters for adapters that keep objects in memory; a database returns fresh ones per read.
       it("hands out copies, so mutating one never changes the store", async () => {
         const created = await repository.create(anApplication())
         const copy = (await repository.get(created.reference)) as unknown as { history: { at: Date }[]; status: string }
@@ -267,6 +285,8 @@ export function applicationRepositoryContract(name: string, makeSubject: () => A
       })
     })
 
+    // Due includes a moment exactly at `now`; an application with no nextPollAt (no longer
+    // watched) is never due.
     describe("findDueForPolling", () => {
       it("returns only applications whose KBA check, silent resubmission or hold check (a 5b waiting on the customer) is due, soonest first, up to the limit", async () => {
         const atKba = (nextPollAt: Date) => anApplication({ status: "submitted_to_kba", polling: { nextPollAt, attempts: 1 } })

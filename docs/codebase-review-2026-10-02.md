@@ -70,10 +70,11 @@ These are not fixed or certified by this review:
    refund settlement in the deployed account. Failed/pending refunds and refund
    history beyond the adapter's first 100 records need reconciliation coverage.
    The existing request idempotency does not provide atomicity between a vendor
-   action and a database checkpoint. The refund key is fixed per order while the
-   amount is now computed from the payment, so a refund made by hand in Stripe
-   between two attempts would make Stripe reject the second; refunds are meant to
-   go through code only.
+   action and a database checkpoint. The refund key is fixed per order and the adapter
+   finds an earlier refund by it, among the latest 100, before refunding, so a
+   repeat never refunds twice even when the amount it now computes has changed. A
+   refund made by hand in Stripe is counted in what is still owed; refunds are
+   meant to go through code only.
 6. **Address-based throttling assumes trusted proxy headers.**
    `src/lib/client-address.ts` trusts forwarded headers, as its comment states.
    Verify that the deployed edge overwrites client-supplied headers; a different

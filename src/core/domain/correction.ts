@@ -12,6 +12,7 @@ export interface CorrectionInput {
   certificate?: string
 }
 
+/** The security codes that can be corrected, in the order wrong ones are reported. */
 const CODES: SecurityCodeKind[] = ["rearPlate", "frontPlate", "certificate"]
 
 /**
@@ -19,6 +20,11 @@ const CODES: SecurityCodeKind[] = ["rearPlate", "frontPlate", "certificate"]
  * three security codes can be corrected, the plate cannot (a different plate is
  * a different vehicle, so a new order). Fields left blank stay as they were.
  * Throws a `ValidationError` naming the wrong fields, never their values.
+ *
+ * `plateCount` is the order's own: a front code for a one-plate vehicle is refused as
+ * `frontPlate`, since there is no front seal to correct. A form with nothing filled in is
+ * refused as `correction`. The result is the registration gateway's `Correction`: only the
+ * changed fields, the codes as `SecurityCode`s.
  */
 export function parseCorrection(input: CorrectionInput, plateCount: 1 | 2): Correction {
   const given = (value: string | undefined) => (value?.trim() ? value : undefined)
@@ -32,6 +38,7 @@ export function parseCorrection(input: CorrectionInput, plateCount: 1 | 2): Corr
   for (const kind of CODES) {
     const value = given(input[kind])
     if (value === undefined) continue
+    // undefined fails the check below, so a front code on a one-plate order is reported as wrong.
     const parsed = kind === "frontPlate" && plateCount === 1 ? undefined : SecurityCode.schema(kind).safeParse(value)
     if (parsed?.success) codes[kind] = parsed.data
     else wrong.push(kind)
@@ -43,7 +50,11 @@ export function parseCorrection(input: CorrectionInput, plateCount: 1 | 2): Corr
   return { ...(parsedVin?.success ? { vin: parsedVin.data } : {}), ...(Object.keys(codes).length > 0 ? { codes } : {}) }
 }
 
-/** The request with the corrected fields replaced, re-validated as any request is. */
+/**
+ * The request with the corrected fields replaced, re-validated as any request is, so it
+ * throws a `ValidationError` if the result is not a valid request. The codes are revealed
+ * only to be parsed again into new `SecurityCode`s; the given request is not changed.
+ */
 export function applyCorrection(request: DeregistrationRequest, { vin, codes }: Correction): DeregistrationRequest {
   const current = request.codes
   return parseDeregistrationRequest({
