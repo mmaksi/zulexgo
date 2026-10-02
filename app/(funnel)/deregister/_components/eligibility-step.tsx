@@ -35,19 +35,24 @@ export function EligibilityStep({
 
   async function submit(event: FormEvent) {
     event.preventDefault()
-    if (!plateCount || hasDocuments !== true) return
+    if (!plateCount || hasDocuments !== true || checking) return
     setChecking(true)
-    const result = await checkEligibility(prefix)
-    setChecking(false)
-    if (!result.ok) {
-      setError(
-        result.reason === "invalidPrefix"
-          ? "Für dieses Ortskürzel finden wir keine Zulassungsstelle. Prüfen Sie die 1 bis 3 Buchstaben vor dem ersten Leerzeichen."
-          : "Die Zulassungsstelle ist gerade nicht zu erreichen. Bitte versuchen Sie es in ein paar Minuten noch einmal.",
-      )
-      return
+    try {
+      const result = await checkEligibility(prefix)
+      if (!result.ok) {
+        setError(
+          result.reason === "invalidPrefix"
+            ? "Für dieses Ortskürzel finden wir keine Zulassungsstelle. Prüfen Sie die 1 bis 3 Buchstaben vor dem ersten Leerzeichen."
+            : "Die Zulassungsstelle ist gerade nicht zu erreichen. Bitte versuchen Sie es in ein paar Minuten noch einmal.",
+        )
+        return
+      }
+      onEligible({ plateCount, prefix: result.prefix, ikfzStatus: result.ikfzStatus })
+    } catch {
+      setError("Die Zulassungsstelle ist gerade nicht zu erreichen. Bitte versuchen Sie es in ein paar Minuten noch einmal.")
+    } finally {
+      setChecking(false)
     }
-    onEligible({ plateCount, prefix: result.prefix, ikfzStatus: result.ikfzStatus })
   }
 
   return (

@@ -1,5 +1,5 @@
 import type Stripe from "stripe"
-import { parseApplicationReference } from "@/src/core/domain/application-reference"
+import { applicationReferenceSchema } from "@/src/core/domain/application-reference"
 import { Money } from "@/src/core/domain/money"
 import type { Payment, PaymentNotification, PaymentStatus } from "@/src/core/ports/payment-provider"
 
@@ -37,6 +37,7 @@ export function toNotification(event: Stripe.Event): PaymentNotification {
 
   // A PaymentIntent created elsewhere on the account is not an order of ours.
   const orderId = (event.data.object as Stripe.PaymentIntent).metadata?.order_id
-  if (!orderId) return { kind: "ignored", eventId: event.id }
-  return { kind: "paymentReady", eventId: event.id, reference: parseApplicationReference(orderId) }
+  const reference = applicationReferenceSchema.safeParse(orderId)
+  if (!reference.success) return { kind: "ignored", eventId: event.id }
+  return { kind: "paymentReady", eventId: event.id, reference: reference.data }
 }

@@ -69,12 +69,15 @@ async function completeFiling(deps: Dependencies, filed: Application): Promise<v
   await recordRegistration(deps, await deps.repository.update(submitted), filed.zulexApplicationId!)
 }
 
-/** `polling.attempts` counts failed tries at these steps, so it indexes the delay: a minute at first, then the online poll table. */
-const afterFailure = (deps: Dependencies, filed: Application): Application => ({
-  ...filed,
+/**
+ * `polling.attempts` counts failed tries at these steps, so it indexes the delay: a minute at first, then the online
+ * poll table, whatever the authority's own pace: a mailer outage must not make a hand-processed order wait six hours.
+ */
+export const afterFailure = (deps: Dependencies, application: Application, retryAfterMs?: number): Application => ({
+  ...application,
   polling: {
-    attempts: filed.polling.attempts + 1,
-    nextPollAt: nextPollAt({ ikfzStatus: "online", attempts: filed.polling.attempts, now: deps.clock.now() }),
+    attempts: application.polling.attempts + 1,
+    nextPollAt: nextPollAt({ ikfzStatus: "online", attempts: application.polling.attempts, now: deps.clock.now(), retryAfterMs }),
   },
 })
 

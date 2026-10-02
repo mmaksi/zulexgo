@@ -1,5 +1,5 @@
 import type { Application } from "@/src/core/domain/application"
-import { refundPolicy, settledDecision, type PaymentDecision, type PaymentOutcome } from "@/src/core/domain/refund-policy"
+import { refundPolicy, retainedOf, settledDecision, type PaymentDecision, type PaymentOutcome } from "@/src/core/domain/refund-policy"
 import { HoldExpired } from "@/src/core/errors/hold-expired"
 import type { Dependencies } from "./dependencies"
 
@@ -26,9 +26,20 @@ export async function settlePayment(
 
   const decision = refundPolicy(outcome, { state: payment.status, total })
   const { action } = decision
-  if (action.kind === "capture") await deps.payments.capture(id, action.amount)
+  if (action.kind === "capture") {
+    const captured = await deps.payments.capture(id, action.amount)
+    // Hold protection may have captured the full amount since our read. Settle
+    // that actual capture before announcing a return to the customer.
+    if (retainedOf(captured).isGreaterThan(decision.retained)) return settlePayment(deps, application, outcome)
+  }
   if (action.kind === "release") await deps.payments.release(id)
-  if (action.kind === "refund") await deps.payments.refund(id, action.amount, `${application.reference}-refund`)
+  if (action.kind === "refund") {
+    // Refund only what is still owed: an earlier manual refund or partial
+    // capture must not make us return the original total a second time.
+    const amount = retainedOf(payment).subtract(decision.retained)
+    await deps.payments.refund(id, amount, `${application.reference}-refund`)
+    return { ...decision, action: { kind: "refund", amount } }
+  }
   if (action.kind === "chargeAdditional") throw new Error("A de-registration correction never costs more")
   return decision
 }

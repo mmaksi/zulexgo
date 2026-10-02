@@ -61,7 +61,7 @@ export function settledDecision(outcome: PaymentOutcome, payment: PaymentRecord)
   switch (outcome.type) {
     case "cancelled":
     case "failedFinal":
-      return payment.status === "captured" && kept.equals(PROCESSING_FEE) ? decide(none, payment.total, PROCESSING_FEE) : undefined
+      return payment.status === "captured" && !kept.isGreaterThan(PROCESSING_FEE) ? decide(none, payment.total, kept) : undefined
     case "ourTechnicalError":
       return payment.status === "released" || (payment.status === "captured" && kept.equals(NOTHING))
         ? decide(none, payment.total, NOTHING)

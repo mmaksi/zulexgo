@@ -129,7 +129,7 @@ describe("status notifications: an email that could not be sent is not lost", ()
     expect(submit).toHaveBeenCalledTimes(1)
   })
 
-  it("email 5a: the confirmation is still stored and the card still captured once, and the email goes out on the next tick", async () => {
+  it("email 5a: the confirmation is still stored and the card still captured once, and the email goes out after backoff", async () => {
     const flow = setupFlow()
     const { reference, id } = await reachKba(flow)
     failMailerOnce(flow, "completed")
@@ -139,7 +139,8 @@ describe("status notifications: an email that could not be sent is not lost", ()
     expect(await flow.poll(1)).toMatchObject({ failed: 1 })
     expect((await flow.stored(reference)).status).toBe("submitted_to_kba")
 
-    await flow.poll(0)
+    expect(await flow.poll(0)).toEqual({ checked: 0, failed: 0 })
+    await flow.poll(2)
 
     expect((await flow.stored(reference)).status).toBe("completed")
     expect(flow.emails()).toEqual(["orderConfirmation", "submittedToKba", "completed"])
@@ -156,7 +157,8 @@ describe("status notifications: an email that could not be sent is not lost", ()
     expect(await flow.poll(1)).toMatchObject({ failed: 1 })
     expect((await flow.stored(reference)).status).toBe("submitted_to_kba")
 
-    await flow.poll(0)
+    expect(await flow.poll(0)).toEqual({ checked: 0, failed: 0 })
+    await flow.poll(2)
 
     expect((await flow.stored(reference)).status).toBe("failed_correctable")
     expect(flow.emails()).toEqual(["orderConfirmation", "submittedToKba", "correctionRequired"])
@@ -173,7 +175,8 @@ describe("status notifications: an email that could not be sent is not lost", ()
       expect(await flow.poll(1)).toMatchObject({ failed: 1 })
       expect((await flow.stored(reference)).status).toBe("submitted_to_kba")
 
-      await flow.poll(0)
+      expect(await flow.poll(0)).toEqual({ checked: 0, failed: 0 })
+      await flow.poll(2)
 
       expect((await flow.stored(reference)).status).toBe("failed_final")
       expect(flow.emails()).toEqual(["orderConfirmation", "submittedToKba", "rejected", "refundIssued"])
@@ -185,7 +188,7 @@ describe("status notifications: an email that could not be sent is not lost", ()
     },
   )
 
-  it("email 6: a refund email that fails after our own technical error is sent on the next tick, for the whole price", async () => {
+  it("email 6: a refund email that fails after our own technical error is sent after a backoff of at most an hour, for the whole price", async () => {
     const flow = setupFlow()
     flow.deps.registration.failNext("submit", new GatewayUnavailable())
     const reference = await flow.checkoutAndPay()
@@ -194,7 +197,8 @@ describe("status notifications: an email that could not be sent is not lost", ()
 
     flow.deps.registration.failNext("submit", new GatewayUnavailable())
     expect(await flow.poll(60)).toMatchObject({ failed: 1 })
-    await flow.poll(0)
+    expect(await flow.poll(0)).toEqual({ checked: 0, failed: 0 })
+    await flow.poll(60)
 
     expect((await flow.stored(reference)).status).toBe("failed_final")
     expect(flow.emails()).toEqual(["orderConfirmation", "rejected", "refundIssued"])

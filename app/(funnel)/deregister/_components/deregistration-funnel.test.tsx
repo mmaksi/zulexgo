@@ -50,6 +50,18 @@ const payButton = () => screen.getByRole("button", { name: "Jetzt bezahlen" })
 
 describe("de-registration funnel", () => {
   describe("eligibility", () => {
+    it("lets the customer retry when the eligibility request rejects", async () => {
+      const checkEligibility = jest.fn().mockRejectedValueOnce(new Error("Network lost"))
+        .mockResolvedValueOnce({ ok: true, prefix: "AAA", ikfzStatus: "online" })
+      const { user } = setup({ checkEligibility })
+
+      await passEligibility(user)
+
+      expect(await screen.findByText(/gerade nicht zu erreichen/)).toBeInTheDocument()
+      await user.click(screen.getByRole("button", { name: "Weiter" }))
+      expect(await screen.findByRole("heading", { name: "Ihr Fahrzeug" })).toBeInTheDocument()
+    })
+
     it("stops a customer without the documents before any effort", async () => {
       const { user } = setup()
       await user.click(screen.getByRole("radio", { name: /^Zwei Kennzeichen/ }))
@@ -180,6 +192,26 @@ describe("de-registration funnel", () => {
   })
 
   describe("review and payment", () => {
+    it.each(["startCheckout", "completeSimulatedPayment"] as const)("lets the customer retry when %s rejects", async (operation) => {
+      const rejectOnce = jest.fn().mockRejectedValueOnce(new Error("Network lost"))
+        .mockResolvedValueOnce(operation === "startCheckout"
+          ? { ok: true, reference: "ZG-ABC123", clientSecret: "fake-secret" }
+          : { ok: true })
+      const { user, actions } = setup({ [operation]: rejectOnce })
+      await passEligibility(user)
+      await fillVehicle(user)
+      await user.click(consentBoxes()[0])
+      await user.click(consentBoxes()[1])
+
+      await user.click(payButton())
+
+      expect(await screen.findByRole("alert")).toHaveTextContent(/versuchen Sie es/)
+      expect(payButton()).toBeEnabled()
+      await user.click(payButton())
+      expect(await screen.findByText("ZG-ABC123")).toBeInTheDocument()
+      if (operation === "completeSimulatedPayment") expect(actions.startCheckout).toHaveBeenCalledTimes(1)
+    })
+
     it("shows the processing fee and keeps payment impossible until both consents are given", async () => {
       const { user } = setup()
       await passEligibility(user)

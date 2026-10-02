@@ -86,6 +86,11 @@ describe("settledDecision: what a rerun finds already done", () => {
     refunded: Money.ofCents(refundedCents),
   })
 
+  it.each(["cancelled", "failedFinal"] as const)("reports an earlier refund beyond the fee for %s without trying to take money back", (type) => {
+    const decision = settledDecision({ type }, paid("captured", 6999, 6000))
+    expect(decision).toEqual({ action: { kind: "none" }, retained: Money.ofCents(999), returned: Money.ofCents(6000) })
+  })
+
   it.each([
     ["a hold captured down to the fee", paid("captured", 1999)],
     ["a captured payment refunded down to the fee", paid("captured", 6999, 5000)],

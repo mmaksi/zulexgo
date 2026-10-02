@@ -44,9 +44,14 @@ export function ReviewStep({
     if (!consented || paying || !driverRef.current) return
     setPaying(true)
     setError(undefined)
-    const failed = await takePayment(driverRef.current)
-    setPaying(false)
-    if (failed) setError(failed)
+    try {
+      const failed = await takePayment(driverRef.current)
+      if (failed) setError(failed)
+    } catch {
+      setError("Das hat gerade nicht geklappt. Bitte versuchen Sie es in ein paar Minuten noch einmal.")
+    } finally {
+      setPaying(false)
+    }
   }
 
   async function takePayment(payment: PaymentDriver): Promise<string | undefined> {
