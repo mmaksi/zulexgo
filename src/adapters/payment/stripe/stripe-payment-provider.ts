@@ -8,6 +8,9 @@ import { toNotification, toPayment } from "./map"
 /** Stripe's API version this adapter's mapping was written against; pinned so an account upgrade changes nothing here. */
 const API_VERSION = "2026-08-26.dahlia"
 
+/** Stripe's answers to capturing an authorisation that has lapsed, which the intent may not show yet. */
+const EXPIRED_AUTHORISATION = new Set(["charge_expired_for_capture", "capture_charge_authorization_expired"])
+
 /**
  * `PaymentProvider` on Stripe PaymentIntents. Cards only (Apple Pay and Google
  * Pay are cards), held by manual capture. Nothing personal goes to Stripe from
@@ -51,8 +54,14 @@ export class StripePaymentProvider implements PaymentProvider {
     try {
       await this.stripe.paymentIntents.capture(paymentId, { amount_to_capture: amount.cents }, { idempotencyKey: `capture/${paymentId}` })
     } catch (error) {
-      // The hold lapsed between reading and capturing.
-      if (error instanceof Stripe.errors.StripeInvalidRequestError) throw new HoldExpired(paymentId)
+      if (error instanceof Stripe.errors.StripeInvalidRequestError && error.code && EXPIRED_AUTHORISATION.has(error.code)) throw new HoldExpired(paymentId)
+      if (error instanceof Stripe.errors.StripeInvalidRequestError || error instanceof Stripe.errors.StripeIdempotencyError) {
+        // Another capture may have won since our read. Only an actually
+        // released authorisation is expired; validation errors stay visible.
+        const current = await this.getPayment(paymentId)
+        if (current.status === "captured") return current
+        if (current.status === "released") throw new HoldExpired(paymentId)
+      }
       throw error
     }
     return this.getPayment(paymentId)

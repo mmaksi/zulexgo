@@ -34,6 +34,16 @@ async function refusedAtSubmission() {
 
 const newVin = { vin: "FAKEVIN0000000009", certificate: "AAAAAA9" }
 
+it("refuses a correction when the provider amount differs from the stored order total", async () => {
+  const flow = await refusedByKba()
+  const application = await flow.stored(flow.reference)
+  await flow.deps.repository.update({ ...application, payment: { ...application.payment, total: application.payment.total.add(application.payment.total) } })
+
+  await expect(correctApplication(flow.deps, flow.token, newVin)).rejects.toBeInstanceOf(PaymentNoLongerWhole)
+  expect(flow.deps.registration.corrections).toHaveLength(0)
+  expect((await flow.stored(flow.reference)).status).toBe("failed_correctable")
+})
+
 describe("correctApplication, an order the service holds", () => {
   it("patches only the corrected fields, then puts the order back at the KBA with email 4 again", async () => {
     const flow = await refusedByKba()

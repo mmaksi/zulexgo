@@ -12,9 +12,10 @@ import { settlePayment } from "./settle-payment"
  * nothing until the algorithm gives up.
  *
  * Every email goes out before the status is saved, and money is settled before
- * either. A failure anywhere leaves the application where it was, still due, so
- * the next tick reruns the steps: settlement recognises what it already did and
- * each email carries a key of its transition, so nothing is done or sent twice.
+ * either. A failure anywhere leaves the application where it was, backed off by
+ * the poller, so a later tick reruns the steps: settlement recognises what it
+ * already did and each email carries a key of its transition, so nothing is
+ * done or sent twice.
  */
 export async function handleFailure(
   deps: Dependencies,

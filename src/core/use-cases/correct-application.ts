@@ -36,7 +36,7 @@ export async function correctApplication(deps: Dependencies, token: string, inpu
   // Refuses an order that is not at 5b before anything is read or sent.
   applyEvent(application, filed ? "correctionResubmitted" : "correctionRefiled", deps.clock.now())
   const payment = await deps.payments.getPayment(application.payment.id)
-  if (!isWhole({ ...payment, total: payment.amount })) throw new PaymentNoLongerWhole()
+  if (!payment.amount.equals(application.payment.total) || !isWhole({ ...payment, total: application.payment.total })) throw new PaymentNoLongerWhole()
 
   const correction = parseCorrection(input, application.request.plateCount)
   const withCorrection = (order: Application): Application => ({

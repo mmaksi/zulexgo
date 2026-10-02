@@ -10,11 +10,11 @@ import { handleFailure } from "./handle-failure"
 import { mailCustomer } from "./mail-customer"
 import { guardHold } from "./secure-hold"
 import { settlePayment } from "./settle-payment"
-import { submitToKba } from "./submit-to-kba"
+import { afterFailure, submitToKba } from "./submit-to-kba"
 
 /** One poller step for one due application: resubmit it, watch its money, or ask the service how it is doing. */
 export async function advanceStatus(deps: Dependencies, application: Application): Promise<void> {
-  if (application.status === "submitted_and_paid") return submitToKba(deps, application)
+  if (application.status === "submitted_and_paid") return backOffOnFailure(deps, application, () => submitToKba(deps, application))
   if (application.status === "failed_correctable") return watchHold(deps, application)
   if (application.status !== "submitted_to_kba") return
 
@@ -39,16 +39,32 @@ export async function advanceStatus(deps: Dependencies, application: Application
     return
   }
 
-  const failure = failureOf(status)
-  if (failure) {
-    await handleFailure(deps, application, failure, async (retrying) => {
-      await deps.registration.retry(retrying.zulexApplicationId!)
-      return scheduleNextPoll(deps, retrying)
-    })
-    return
-  }
+  await backOffOnFailure(deps, application, async () => {
+    const failure = failureOf(status)
+    if (failure) {
+      await handleFailure(deps, application, failure, async (retrying) => {
+        await deps.registration.retry(retrying.zulexApplicationId!)
+        return scheduleNextPoll(deps, retrying)
+      })
+      return
+    }
 
-  await complete(deps, application, status.documents)
+    await complete(deps, application, status.documents)
+  })
+}
+
+/**
+ * Storage, settlement, retry and mail failures leave the order at its old status; without a backoff it would stay
+ * first in the queue. The write is version-checked: it is dropped when another tick already moved the order, and
+ * when it lands first the other tick's last write fails instead, so that tick is simply redone on the next poll.
+ */
+async function backOffOnFailure(deps: Dependencies, application: Application, step: () => Promise<void>): Promise<void> {
+  try {
+    await step()
+  } catch (error) {
+    await deps.repository.update(afterFailure(deps, application, error instanceof GatewayUnavailable ? error.retryAfterMs : undefined)).catch(() => undefined)
+    throw error
+  }
 }
 
 /** A 5b waits for the customer, who may take longer than the hold lasts: take the money in time, then stop looking. */
@@ -88,7 +104,7 @@ async function complete(deps: Dependencies, application: Application, documents:
     ...applyEvent(application, "kbaCompleted", deps.clock.now()),
     polling: { attempts: application.polling.attempts },
   }
-  // Email before the status, so a failed send leaves the application due and the next tick redoes these idempotent steps.
+  // Email before the status, so a failed send leaves the application at its old status and a later poll redoes these idempotent steps.
   await mailCustomer(deps, completed, "completed")
   await deps.repository.update(completed)
 }

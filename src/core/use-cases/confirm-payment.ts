@@ -1,5 +1,6 @@
 import type { ApplicationReference } from "@/src/core/domain/application-reference"
 import { applyEvent } from "@/src/core/domain/application"
+import { isWhole } from "@/src/core/domain/refund-policy"
 import type { Dependencies } from "./dependencies"
 import { mailCustomer } from "./mail-customer"
 import { submitToKba } from "./submit-to-kba"
@@ -20,6 +21,10 @@ export async function confirmPayment(deps: Dependencies, reference: ApplicationR
 
   const payment = await deps.payments.getPayment(application.payment.id)
   if (payment.status !== "held" && payment.status !== "captured") return
+  if (!payment.amount.equals(application.payment.total) || !isWhole({ ...payment, total: application.payment.total })) {
+    console.warn(`[payments] ${reference}: the payment is not the order's whole total, so the order is not filed`)
+    return
+  }
 
   if (!(await deps.repository.getStatusToken(reference))) await deps.repository.setStatusToken(reference, deps.tokens.generate())
   const now = deps.clock.now()
