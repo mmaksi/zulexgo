@@ -58,6 +58,13 @@ describeWithPostgres("PostgresApplicationRepository", () => {
 
       await expect(database.query(`UPDATE applications SET service = 'not-a-service' WHERE reference = '${created.reference}'`)).rejects.toThrow(/applications_service_known/)
     })
+
+    it("refuses to read an order of a service it cannot map, rather than reading it as a de-registration", async () => {
+      const created = await repository.create(anApplication())
+      await database.query(`UPDATE applications SET service = 'newRegistration' WHERE reference = '${created.reference}'`)
+
+      await expect(repository.get(created.reference)).rejects.toThrow(/is for a service this release cannot read/)
+    })
   })
 
   it("keeps security codes and status tokens out of every stored row", async () => {
