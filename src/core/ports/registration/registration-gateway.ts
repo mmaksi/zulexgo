@@ -1,4 +1,4 @@
-import type { DeregistrationRequest } from "@/src/core/domain/application/deregistration-request"
+import type { OrderableService, ServiceRequest } from "@/src/core/domain/application/service"
 import type { DocumentRef } from "@/src/core/domain/registration/document"
 import type { LicencePlate } from "@/src/core/domain/vehicle/licence-plate"
 import type { RegistrationAuthority } from "@/src/core/domain/registration/registration-authority"
@@ -33,17 +33,19 @@ export interface Correction {
 }
 
 /**
- * Files de-registrations with the KBA through a registration service (Zulex).
+ * Files applications with the KBA through a registration service (Zulex), one kind of
+ * application per service: the service decides where an application lives at the vendor, so
+ * the calls that ask after one by id name its service.
  *
  * Guarantees every adapter must honour:
- * - `submitDeregistration` with an idempotency key already used returns the
- *   same application id and files nothing new, so a network retry never files
- *   twice. Different keys file different applications.
+ * - `submit` with an idempotency key already used returns the same application id
+ *   and files nothing new, so a network retry never files twice. Different keys
+ *   file different applications.
  * - A fresh submission reports `inProgress`.
  * - Refused data throws `GatewayRejected`; a transient failure throws
  *   `GatewayUnavailable`, carrying the vendor's Retry-After when given.
  *   Vendor errors never cross this boundary.
- * - A prefix may belong to several authorities; all are returned.
+ * - A plate prefix or a postcode may belong to several authorities; all are returned.
  * - `GatewayRejected` and `GatewayUnavailable` can come from any method. Anything
  *   else that goes wrong (a wrong API key, an unknown id, an answer that cannot
  *   be read) is an ordinary `Error`, neither retried nor classified here.
@@ -52,30 +54,33 @@ export interface Correction {
  */
 export interface RegistrationGateway {
   /**
+   * Where an authority is found: by the plate prefix (a de-registration, which keeps its
+   * plate's authority) or by the postcode (a registration, where the keeper lives).
    * The list is passed up as the service gives it; callers combine it to the
    * slowest status (`combinedIkfzStatus`), which rejects an empty one as an
-   * invalid prefix. The fake answers a prefix it was not told about with one
+   * invalid prefix. The fake answers one it was not told about with one
    * online authority.
    */
-  findAuthorities(licencePlatePrefix: string): Promise<RegistrationAuthority[]>
+  findAuthorities(where: { readonly prefix: string } | { readonly postcode: string }): Promise<RegistrationAuthority[]>
   /**
-   * `idempotencyKey` is the application's own and goes out as
-   * `X-Idempotency-Key`. `applicationId` is the service's id, not our
+   * Files the application for the service the request names. `idempotencyKey` is the application's
+   * own and goes out as `X-Idempotency-Key`. `applicationId` is the service's id, not our
    * reference. The fake honours a replayed key; whether the real service does
    * is open (launch plan Q23), so the use case stores the id before doing
    * anything else that can fail.
    */
-  submitDeregistration(request: DeregistrationRequest, idempotencyKey: string): Promise<{ applicationId: string }>
+  submit(request: ServiceRequest, idempotencyKey: string): Promise<{ applicationId: string }>
   /**
    * An id the service does not know is an ordinary `Error` from the Zulex
    * adapter, but `inProgress` from the fake: on staging each Vercel instance
    * has its own, and may be asked about an application another one filed.
    */
-  getStatus(applicationId: string): Promise<GatewayStatus>
+  getStatus(service: OrderableService, applicationId: string): Promise<GatewayStatus>
   /**
    * Resumes a technically failed application without changing data. Used for
    * the one silent retry of a KBA technical error; the caller counts the
-   * attempts, not the gateway.
+   * attempts, not the gateway. It takes no service: the vendor's retry is one
+   * call for every kind of application.
    */
   retry(applicationId: string): Promise<void>
   /**
@@ -84,7 +89,7 @@ export interface RegistrationGateway {
    * blindly: a second patch reaches the KBA again, so callers check `getStatus`
    * first and patch only an application that is not already `inProgress`.
    */
-  correct(applicationId: string, correction: Correction): Promise<void>
+  correct(service: OrderableService, applicationId: string, correction: Correction): Promise<void>
   /** The raw bytes of one document, by an id a `GatewayStatus` listed. */
   fetchDocument(documentId: string): Promise<Uint8Array>
 }

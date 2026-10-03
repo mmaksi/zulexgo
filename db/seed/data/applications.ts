@@ -4,7 +4,7 @@ import { parseApplicationReference } from "@/src/core/domain/application/applica
 import type { ApplicationEvent, ApplicationStatus } from "@/src/core/domain/application/application-status"
 import { parseDeregistrationRequest } from "@/src/core/domain/application/deregistration-request"
 import { emailSchema } from "@/src/core/domain/customer/email"
-import { DEREGISTRATION_TOTAL } from "@/src/core/domain/payment/pricing"
+import { SERVICE_PRICES } from "@/src/core/domain/payment/pricing"
 
 const CREATED_AT = new Date("2026-01-05T09:00:00.000Z")
 const HOUR = 60 * 60 * 1000
@@ -49,7 +49,7 @@ function seeded(status: ApplicationStatus, { number, events, failure }: (typeof 
     email: emailSchema.parse(`seed-${slug}@example.test`),
     ikfzStatus: status === "failed_final" ? "unavailable" : "online",
     idempotencyKey: `seed-idempotency-${slug}`,
-    payment: { id: `seed-payment-${slug}`, total: DEREGISTRATION_TOTAL },
+    payment: { id: `seed-payment-${slug}`, total: SERVICE_PRICES.deregistration },
     retryAttempts: 0,
     polling: { attempts: 0 },
   }

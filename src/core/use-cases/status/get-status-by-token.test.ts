@@ -35,6 +35,10 @@ describe("getStatusByToken", () => {
     expect(view.steps.map((step) => step.id)).toEqual(["paid", "kba", "outcome"])
   })
 
+  it("says which service the order is for, so the page shows that service's summary", async () => {
+    expect((await getStatusByToken(deps, TOKEN)).service).toBe("deregistration")
+  })
+
   it("says how many plates the vehicle has, so a correction asks for the right codes", async () => {
     expect((await getStatusByToken(deps, TOKEN)).plateCount).toBe(2)
   })

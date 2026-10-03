@@ -34,8 +34,9 @@ export class ZulexDouble {
   private readonly failures = new Map<Operation, Response>()
   private sequence = 0
 
-  setAuthorities(prefix: string, authorities: { kreiscode: string; ikfzStatus: string }[]) {
-    this.authorities.set(prefix, authorities)
+  /** `where` is a plate prefix or a postcode: whichever the adapter asks by, the double answers by it. */
+  setAuthorities(where: string, authorities: { kreiscode: string; ikfzStatus: string }[]) {
+    this.authorities.set(where, authorities)
   }
 
   setStatus(applicationId: string, status: ZulexStatus | string, extra: { documents?: ZulexDocument[]; errorInfo?: ZulexErrorInfo } = {}) {
@@ -54,8 +55,9 @@ export class ZulexDouble {
   readonly handlers = [
     http.get(`${ZULEX_BASE_URL}/registration-authorities`, ({ request }) =>
       this.guard("authorities", request, async () => {
-        const prefix = new URL(request.url).searchParams.get("licencePlatePrefix") ?? ""
-        const registrationAuthorities = this.authorities.get(prefix) ?? [{ kreiscode: "00000", ikfzStatus: "online" }]
+        const query = new URL(request.url).searchParams
+        const where = query.get("licencePlatePrefix") ?? query.get("postcode") ?? ""
+        const registrationAuthorities = this.authorities.get(where) ?? [{ kreiscode: "00000", ikfzStatus: "online" }]
         return HttpResponse.json({ registrationAuthorities })
       }),
     ),

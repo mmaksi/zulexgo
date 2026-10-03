@@ -1,6 +1,6 @@
 import { FAKE_REQUEST } from "@/tests/fixtures/applications"
 import { Money } from "@/src/core/domain/payment/money"
-import { DEREGISTRATION_TOTAL } from "@/src/core/domain/payment/pricing"
+import { SERVICE_PRICES } from "@/src/core/domain/payment/pricing"
 import { GatewayRejected } from "@/src/core/errors/registration/gateway-rejected"
 import { CODES, MINUTE, setupFlow } from "./flow-harness"
 
@@ -28,7 +28,7 @@ describe("hold policy", () => {
       const reference = await checkoutAndPay("card")
 
       expect((await stored(reference)).status).toBe("submitted_to_kba")
-      expect(await payment(reference)).toMatchObject({ status: "captured", captured: DEREGISTRATION_TOTAL })
+      expect(await payment(reference)).toMatchObject({ status: "captured", captured: SERVICE_PRICES.deregistration })
     })
   })
 
@@ -44,7 +44,7 @@ describe("hold policy", () => {
       expect(await payment(reference)).toMatchObject({ status: "held" })
 
       await pollDays(1)
-      expect(await payment(reference)).toMatchObject({ status: "captured", captured: DEREGISTRATION_TOTAL })
+      expect(await payment(reference)).toMatchObject({ status: "captured", captured: SERVICE_PRICES.deregistration })
     })
 
     it("completes an order after the early capture without taking anything twice", async () => {
@@ -56,7 +56,7 @@ describe("hold policy", () => {
       await pollDays(1)
 
       expect((await stored(reference)).status).toBe("completed")
-      expect(await payment(reference)).toMatchObject({ status: "captured", captured: DEREGISTRATION_TOTAL, refunded: Money.ofCents(0) })
+      expect(await payment(reference)).toMatchObject({ status: "captured", captured: SERVICE_PRICES.deregistration, refunded: Money.ofCents(0) })
     })
 
     it("returns all but the fee after the early capture, when the KBA then refuses for good", async () => {
@@ -130,7 +130,7 @@ describe("hold policy", () => {
       expect(result).toEqual({ checked: 1, failed: 0 })
       expect((await stored(reference)).status).toBe("failed_final")
       expect(emails()).toEqual(["orderConfirmation", "submittedToKba", "rejected", "refundIssued"])
-      expect(deps.mailer.sent.at(-1)?.template).toMatchObject({ amount: DEREGISTRATION_TOTAL })
+      expect(deps.mailer.sent.at(-1)?.template).toMatchObject({ amount: SERVICE_PRICES.deregistration })
       warn.mockRestore()
     })
   })

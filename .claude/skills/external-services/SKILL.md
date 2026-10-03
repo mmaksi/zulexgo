@@ -19,8 +19,8 @@ If swapping a vendor requires editing a file outside `src/adapters/` and one lin
 
 ## The four rules
 
-1. **A vendor SDK may be imported in exactly one folder.** `import Stripe from 'stripe'` is legal only inside `src/adapters/payment/stripe/`. Anywhere else it is a bug, enforced by lint (see below). One exception: Stripe's browser SDK (`@stripe/*`) renders the Payment Element in `app/(funnel)/deregister/_components/stripe/`, the only folder lint allows it in.
-2. **Ports speak domain language, not vendor language.** `PaymentProvider.authorize()`, not `createPaymentIntent()`. `RegistrationGateway.submitDeregistration()`, not `postDeregistrationApplication()`. If a port method name would change when you swap vendors, rename it.
+1. **A vendor SDK may be imported in exactly one folder.** `import Stripe from 'stripe'` is legal only inside `src/adapters/payment/stripe/`. Anywhere else it is a bug, enforced by lint (see below). One exception: Stripe's browser SDK (`@stripe/*`) renders the Payment Element in `app/(funnel)/_components/stripe/`, shared by every funnel and the only folder lint allows it in.
+2. **Ports speak domain language, not vendor language.** `PaymentProvider.authorize()`, not `createPaymentIntent()`. `RegistrationGateway.submit()`, not `postApplication()`. If a port method name would change when you swap vendors, rename it.
 3. **Vendor types never cross the boundary.** No `Stripe.PaymentIntent` in a function signature outside the adapter. The adapter maps vendor shapes to domain types at its edge and throws domain errors, not SDK errors.
 4. **Every port ships with at least two adapters:** the real one and an in-memory fake used by tests, and by dev where the `environments` skill wires it. A port with one implementation has not been proven swappable.
 

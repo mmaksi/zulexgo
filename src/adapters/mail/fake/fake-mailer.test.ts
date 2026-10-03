@@ -10,8 +10,8 @@ describe("FakeMailer", () => {
     const { reference, email } = anApplication()
     const statusLink = "https://zulexgo.example.test/status/faketoken"
 
-    await mailer.send({ to: email, template: { name: "orderConfirmation", reference, statusLink }, idempotencyKey: "k1" })
-    await mailer.send({ to: email, template: { name: "completed", reference, statusLink }, idempotencyKey: "k2" })
+    await mailer.send({ to: email, template: { name: "orderConfirmation", service: "deregistration", reference, statusLink }, idempotencyKey: "k1" })
+    await mailer.send({ to: email, template: { name: "completed", service: "deregistration", reference, statusLink }, idempotencyKey: "k2" })
 
     expect(mailer.sent.map((message) => message.template.name)).toEqual(["orderConfirmation", "completed"])
   })
@@ -21,7 +21,7 @@ describe("FakeMailer", () => {
     const { reference, email } = anApplication()
     const message = {
       to: email,
-      template: { name: "completed", reference, statusLink: "https://zulexgo.example.test/status/faketoken" },
+      template: { name: "completed", service: "deregistration", reference, statusLink: "https://zulexgo.example.test/status/faketoken" },
       idempotencyKey: "same",
     } as const
 

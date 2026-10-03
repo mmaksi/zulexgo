@@ -41,7 +41,7 @@ export async function advanceStatus(deps: Dependencies, application: Application
 
   let status: GatewayStatus
   try {
-    status = await deps.registration.getStatus(application.zulexApplicationId!)
+    status = await deps.registration.getStatus(application.request.service, application.zulexApplicationId!)
   } catch (error) {
     // Back off on any failure, not just an outage: an id the service rejects would otherwise be asked about every tick.
     const unavailable = error instanceof GatewayUnavailable

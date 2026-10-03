@@ -2,7 +2,7 @@ import type { Metadata } from "next"
 import { connection } from "next/server"
 import { getContainer } from "@/src/config/container"
 import { completeSimulatedPaymentAction, checkEligibilityAction, startCheckoutAction } from "./actions"
-import type { PaymentMode } from "./_components/checkout-actions"
+import type { PaymentMode } from "@/app/(funnel)/_components/payment-driver"
 import { DeregistrationFunnel } from "./_components/deregistration-funnel"
 
 export const metadata: Metadata = { title: "Fahrzeug abmelden — ZulexGO" }

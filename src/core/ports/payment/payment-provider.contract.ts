@@ -44,7 +44,7 @@ export function paymentProviderContract(name: string, makeSubject: () => Payment
 
     const newPayment = async () => {
       const { reference, email } = anApplication()
-      return provider.createPayment({ reference, amount: TOTAL, email })
+      return provider.createPayment({ reference, service: "deregistration", amount: TOTAL, email })
     }
 
     const paid = async (method: PaymentMethodKind) => {
@@ -56,8 +56,8 @@ export function paymentProviderContract(name: string, makeSubject: () => Payment
     it("returns the same payment for the same reference, so a retried checkout never charges twice", async () => {
       const { reference, email } = anApplication()
 
-      const first = await provider.createPayment({ reference, amount: TOTAL, email })
-      const again = await provider.createPayment({ reference, amount: TOTAL, email })
+      const first = await provider.createPayment({ reference, service: "deregistration", amount: TOTAL, email })
+      const again = await provider.createPayment({ reference, service: "deregistration", amount: TOTAL, email })
 
       expect(again.paymentId).toBe(first.paymentId)
       expect(first.clientSecret).toEqual(expect.any(String))
@@ -138,7 +138,7 @@ export function paymentProviderContract(name: string, makeSubject: () => Payment
     describe("notifications", () => {
       it("reads a signed notification that a payment is ready, naming the order it belongs to", async () => {
         const { reference, email } = anApplication()
-        const { paymentId } = await provider.createPayment({ reference, amount: TOTAL, email })
+        const { paymentId } = await provider.createPayment({ reference, service: "deregistration", amount: TOTAL, email })
         await subject.customerPays(paymentId, "card")
         const { payload, signature } = await subject.notificationOfPayment(paymentId)
 

@@ -40,7 +40,7 @@ describe("renderEmail", () => {
   })
 
   describe("the KBA email", () => {
-    const submitted = (manualProcessing: boolean): EmailTemplate => ({ name: "submittedToKba", reference, statusLink, manualProcessing })
+    const submitted = (manualProcessing: boolean): EmailTemplate => ({ name: "submittedToKba", service: "deregistration", reference, statusLink, manualProcessing })
 
     it("promises minutes to hours when the authority is online", async () => {
       expect((await renderEmail(submitted(false))).text).toMatch(/wenigen Minuten bis Stunden/)
@@ -54,6 +54,7 @@ describe("renderEmail", () => {
   describe("the rejection email", () => {
     const rejected = (retained: number): EmailTemplate => ({
       name: "rejected",
+      service: "deregistration",
       reference,
       statusLink,
       reason: "Das Fahrzeug ist bereits abgemeldet.",
@@ -80,7 +81,7 @@ describe("renderEmail", () => {
     const reason = "Die Fahrzeug-Identifizierungsnummer stimmt nicht."
     const template: EmailTemplate =
       name === "rejected"
-        ? { name, reference, statusLink, reason, refund: Money.ofCents(5000), retained: Money.ofCents(1999) }
+        ? { name, service: "deregistration", reference, statusLink, reason, refund: Money.ofCents(5000), retained: Money.ofCents(1999) }
         : { name, reference, statusLink, reason }
 
     expect((await renderEmail(template)).text).toContain(reason)

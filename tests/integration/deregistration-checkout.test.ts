@@ -14,7 +14,7 @@ const { world, stored, emails } = withVendorsAtTheNetwork()
 const STRIPE_OBJECT_ID = /\b(?:pi|pm|ch|cus|re|py|src|card|seti|evt)_[A-Za-z0-9]+/g
 
 async function checkout() {
-  const { reference, clientSecret } = await submitCheckout(world.deps, { request: FAKE_REQUEST, email: "customer@example.test" })
+  const { reference, clientSecret } = await submitCheckout(world.deps, { service: "deregistration", request: FAKE_REQUEST, email: "customer@example.test" })
   const paymentId = (await stored(reference)).payment.id
   return { reference, clientSecret, paymentId }
 }

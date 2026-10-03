@@ -16,7 +16,8 @@ Every folder has one purpose and one allowed set of dependencies. If you cannot 
 ```
 app/                    Next.js App Router. Routing, layouts, pages, route handlers ONLY.
   (marketing)/          Route group: landing + legal pages. No URL segment.
-  (funnel)/             Route group: the de-registration funnel.
+  (funnel)/             Route group: the funnels, one folder each (`deregister/`). `_components/` holds what
+                        every funnel shares: the Stripe Payment Element and the payment driver.
   status/[token]/       Account-free status dashboard.
   api/                  Route handlers — webhooks and client-callable endpoints.
   _components/          App-level UI shared across route groups (header, footer, landing sections).
@@ -70,7 +71,7 @@ Config files (`package.json`, `next.config.ts`, `tsconfig.json`, `.env.*`) stay 
 
 | Layer | May import | Must never import |
 |---|---|---|
-| `app/` | `src/core/**`, `src/ui/**`, `src/config/**`, `src/lib/**`; Stripe's browser SDK (`@stripe/*`) in `app/(funnel)/deregister/_components/stripe/` only | any other vendor SDK, `src/adapters/**` directly |
+| `app/` | `src/core/**`, `src/ui/**`, `src/config/**`, `src/lib/**`; Stripe's browser SDK (`@stripe/*`) in `app/(funnel)/_components/stripe/` only | any other vendor SDK, `src/adapters/**` directly |
 | `src/core/` | `src/core/**` only | anything in `app/`, `adapters/`, `ui/`, `next/*`, `react`, any SDK |
 | `src/adapters/` | `src/core/ports/**`, `src/core/domain/**`, its own SDK, siblings via `./` | other adapters, `app/`, `src/ui/`, `src/config/` |
 | `src/config/` | everything (it is the composition root) | — |

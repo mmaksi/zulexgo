@@ -2,6 +2,7 @@ import { setupServer } from "msw/node"
 import { http, HttpResponse } from "msw"
 import { anApplication } from "@/tests/fixtures/applications"
 import { STRIPE_TEST_SECRET_KEY, STRIPE_TEST_WEBHOOK_SECRET, StripeDouble } from "@/tests/msw/stripe"
+import type { Service } from "@/src/core/domain/application/service"
 import { Money } from "@/src/core/domain/payment/money"
 import { HoldExpired } from "@/src/core/errors/payment/hold-expired"
 import { NotificationRejected } from "@/src/core/errors/mail/notification-rejected"
@@ -28,9 +29,9 @@ paymentProviderContract("StripePaymentProvider", () => ({
 
 const TOTAL = Money.ofCents(6999)
 
-async function newPayment() {
+async function newPayment(service: Service = "deregistration") {
   const { reference, email } = anApplication()
-  const created = await provider().createPayment({ reference, amount: TOTAL, email })
+  const created = await provider().createPayment({ reference, service, amount: TOTAL, email })
   return { reference, email, ...created, intent: () => stripe.intents.get(created.paymentId)! }
 }
 
@@ -80,6 +81,12 @@ describe("StripePaymentProvider", () => {
     })
     expect(stripe.sent.join("\n")).not.toContain(encodeURIComponent(email))
     expect(stripe.sent.join("\n")).not.toContain("customer")
+  })
+
+  it.each<Service>(["deregistration", "newRegistration"])("tags the PaymentIntent with the service it is for: %s", async (service) => {
+    const { intent } = await newPayment(service)
+
+    expect(intent().metadata.service_type).toBe(service)
   })
 
   it("reports when a held card must be captured by", async () => {

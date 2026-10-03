@@ -51,7 +51,7 @@ describe("container ports", () => {
   it("wires a fake for every port in dev, so the whole flow runs locally", async () => {
     const container = createContainer(dev)
 
-    const { reference, clientSecret } = await submitCheckout(container, { request: FAKE_REQUEST, email: "customer@example.test" })
+    const { reference, clientSecret } = await submitCheckout(container, { service: "deregistration", request: FAKE_REQUEST, email: "customer@example.test" })
 
     expect(clientSecret).toEqual(expect.any(String))
     expect((await container.repository.get(reference))?.status).toBe("awaiting_payment")
@@ -71,7 +71,7 @@ describe("container ports", () => {
     const { reference, email } = anApplication()
     const statusLink = "https://zulexgo.example.test/status/faketoken-container-log-test-000000000001"
 
-    await createContainer(stage).mailer.send({ to: email, template: { name: "orderConfirmation", reference, statusLink }, idempotencyKey: "k" })
+    await createContainer(stage).mailer.send({ to: email, template: { name: "orderConfirmation", service: "deregistration", reference, statusLink }, idempotencyKey: "k" })
 
     expect(log.mock.calls.flat().join("\n").includes("faketoken-container-log-test")).toBe(printed)
     log.mockRestore()

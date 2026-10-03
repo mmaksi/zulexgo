@@ -1,15 +1,13 @@
+import type { Service } from "@/src/core/domain/application/service"
 import { Money } from "./money"
 
 /** Retained on cancellation and on a non-correctable failure, whatever the service (business logic §3). It is part of the price, not added to it. */
 export const PROCESSING_FEE = Money.ofCents(1999)
 
 /**
- * The services on the price list. Only `deregistration` is sold today; the others are shown
- * as coming soon.
+ * The founder's selling prices (PAngV): one all-inclusive amount per service, authority fee and processing fee included.
+ * What an order costs: the amount its payment is opened for, and the total every refund is worked out from.
  */
-export type Service = "newRegistration" | "reRegistration" | "changeOfKeeper" | "deregistration" | "addressChange"
-
-/** The founder's selling prices (PAngV): one all-inclusive amount per service, authority fee and processing fee included. */
 export const SERVICE_PRICES: Record<Service, Money> = {
   newRegistration: Money.ofCents(12900),
   reRegistration: Money.ofCents(9900),
@@ -17,12 +15,6 @@ export const SERVICE_PRICES: Record<Service, Money> = {
   deregistration: Money.ofCents(4900),
   addressChange: Money.ofCents(9900),
 }
-
-/**
- * What a de-registration costs the customer: the amount its payment is opened for, and the
- * total every refund is worked out from.
- */
-export const DEREGISTRATION_TOTAL = SERVICE_PRICES.deregistration
 
 /**
  * The add-ons of the founder's price list. None is sold yet (Q41): `quote` already prices them so

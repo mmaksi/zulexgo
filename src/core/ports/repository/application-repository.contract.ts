@@ -25,8 +25,8 @@ const minutes = (count: number) => new Date(NOW.getTime() + count * 60_000)
  * or never-created application is refused and nothing changes; security codes,
  * money and dates round-trip and what is returned is a copy; a status token is
  * found, read back, revoked by a newer one and never shared by two orders;
- * `hasOpenApplication` counts only paid, unfinished orders for the same plate
- * and VIN; `findDueForPolling` returns what is due, soonest first.
+ * `hasOpenApplication` counts only paid, unfinished orders for the same service,
+ * plate and VIN; `findDueForPolling` returns what is due, soonest first.
  *
  * `makeSubject` runs before every test and must hand back an empty store: a
  * fresh fake, or a database truncated beforehand.
@@ -250,7 +250,7 @@ export function applicationRepositoryContract(name: string, makeSubject: () => A
     })
 
     describe("hasOpenApplication", () => {
-      const vehicle = { licencePlate: FAKE_REQUEST.licencePlate, vin: parseDeregistrationRequest(FAKE_REQUEST).vin }
+      const vehicle = { service: "deregistration" as const, licencePlate: FAKE_REQUEST.licencePlate, vin: parseDeregistrationRequest(FAKE_REQUEST).vin }
       const otherVehicle = (overrides: object) => parseDeregistrationRequest({ ...FAKE_REQUEST, ...overrides })
 
       it.each(["submitted_and_paid", "submitted_to_kba", "failed_correctable"] as const)(

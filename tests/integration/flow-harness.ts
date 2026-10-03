@@ -60,7 +60,7 @@ export function setupFlow() {
   /** Checks out and pays, but leaves the payment notification unhandled. */
   async function payForCheckout(method: PaymentMethodKind = "card") {
     // Tests that run several orders at once put them all on one fake vehicle, so each customer here has confirmed the duplicate warning.
-    const { reference } = await submitCheckout(deps, { request: FAKE_REQUEST, email: "customer@example.test", acknowledgedDuplicate: true })
+    const { reference } = await submitCheckout(deps, { service: "deregistration", request: FAKE_REQUEST, email: "customer@example.test", acknowledgedDuplicate: true })
     await deps.payments.customerPays((await stored(reference)).payment.id, method)
     return reference
   }

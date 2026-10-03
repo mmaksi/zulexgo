@@ -1,6 +1,7 @@
 import { join } from "node:path"
 import { Migrator, readMigrations } from "@/src/adapters/repository/postgres/migrator"
 import { APPLICATION_STATUSES } from "@/src/core/domain/application/application-status"
+import { SERVICES } from "@/src/core/domain/application/service"
 import { createTestDatabase, describeWithPostgres, type TestDatabase } from "@/src/adapters/repository/postgres/test-database"
 
 const SCHEMA_OBJECTS = `
@@ -17,6 +18,10 @@ const TABLES_WITHOUT_RLS = `
 const STATUS_DOMAIN_CHECK = `
   SELECT pg_get_constraintdef(oid) AS definition FROM pg_constraint
    WHERE contypid = 'application_status'::regtype`
+
+const SERVICE_CHECK = `
+  SELECT pg_get_constraintdef(oid) AS definition FROM pg_constraint
+   WHERE conrelid = 'applications'::regclass AND conname = 'applications_service_known'`
 
 /** The database-migrations skill's rehearsal: up, down, up must all succeed. */
 describeWithPostgres("migration rehearsal", () => {
@@ -58,6 +63,13 @@ describeWithPostgres("migration rehearsal", () => {
       const allowed = [...String(definition).matchAll(/'([a-z_]+)'/g)].map(([, status]) => status)
 
       expect(allowed.sort()).toEqual([...APPLICATION_STATUSES].sort())
+    })
+
+    it("allows exactly the services on the price list, no more and no fewer", async () => {
+      const [{ definition }] = await database.query(SERVICE_CHECK)
+      const allowed = [...String(definition).matchAll(/'([A-Za-z]+)'/g)].map(([, service]) => service)
+
+      expect(allowed.sort()).toEqual([...SERVICES].sort())
     })
   })
 })

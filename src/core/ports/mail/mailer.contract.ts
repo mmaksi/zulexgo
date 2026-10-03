@@ -10,11 +10,11 @@ const statusLink = "https://zulexgo.example.test/status/faketoken-contract"
  * render tests that review the HTML, so a new template must be added here.
  */
 export const EVERY_TEMPLATE: EmailTemplate[] = [
-  { name: "orderConfirmation", reference, statusLink },
-  { name: "submittedToKba", reference, statusLink, manualProcessing: false },
-  { name: "completed", reference, statusLink },
+  { name: "orderConfirmation", service: "deregistration", reference, statusLink },
+  { name: "submittedToKba", service: "deregistration", reference, statusLink, manualProcessing: false },
+  { name: "completed", service: "deregistration", reference, statusLink },
   { name: "correctionRequired", reference, statusLink, reason: "Die Zulassungsstelle konnte den Antrag nicht bearbeiten." },
-  { name: "rejected", reference, statusLink, reason: "Das Fahrzeug ist bereits abgemeldet.", refund: Money.ofCents(5000), retained: Money.ofCents(1999) },
+  { name: "rejected", service: "deregistration", reference, statusLink, reason: "Das Fahrzeug ist bereits abgemeldet.", refund: Money.ofCents(5000), retained: Money.ofCents(1999) },
   { name: "refundIssued", reference, amount: Money.ofCents(5000) },
   { name: "statusLinkResent", reference, statusLink },
 ]

@@ -31,7 +31,8 @@ export const deregistrationRequestSchema = z
     }),
   ])
   // A one-plate request gets an explicit `frontPlate: undefined`, so it reads on either shape.
-  .transform((request) => ({ ...request, codes: { frontPlate: undefined, ...request.codes } }))
+  // It names its service, which the browser never sends: the request is what tells an order's service.
+  .transform((request) => ({ service: "deregistration" as const, ...request, codes: { frontPlate: undefined, ...request.codes } }))
 
 /** Parsed: plate and VIN normalised, each code a `SecurityCode` that prints as a placeholder. */
 export type DeregistrationRequest = z.output<typeof deregistrationRequestSchema>

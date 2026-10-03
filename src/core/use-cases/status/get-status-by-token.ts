@@ -14,17 +14,10 @@ import type { PaymentProvider } from "@/src/core/ports/payment/payment-provider"
 /** How many characters of the VIN, counted from the end, the page shows. */
 const VIN_VISIBLE = 4
 
-/**
- * Everything the status page may show, and nothing more: the plate and the end
- * of the VIN identify the vehicle; the security codes never leave the server.
- */
-export interface StatusView {
+/** What every service's status page shows. */
+interface StatusViewBase {
   readonly reference: Application["reference"]
   readonly status: Application["status"]
-  readonly licencePlate: LicencePlate
-  /** One or two: a correction asks for the front plate's code only when there is a front plate. */
-  readonly plateCount: 1 | 2
-  readonly vinEnding: string
   readonly steps: CustomerStep[]
   /** What the customer may download: the ids to ask the download route for, confirmation first. */
   readonly documents: readonly DocumentRef[]
@@ -37,6 +30,24 @@ export interface StatusView {
   /** For an order that ended without a result: what went back and what we kept. Absent when the provider cannot say. */
   readonly refund?: { readonly returned: Money; readonly retained: Money }
 }
+
+/**
+ * Everything the status page may show, and nothing more: the plate and the end
+ * of the VIN identify the vehicle; the security codes never leave the server.
+ */
+export interface DeregistrationStatusView extends StatusViewBase {
+  readonly service: "deregistration"
+  readonly licencePlate: LicencePlate
+  /** One or two: a correction asks for the front plate's code only when there is a front plate. */
+  readonly plateCount: 1 | 2
+  readonly vinEnding: string
+}
+
+/**
+ * One member per service, each with the summary of what that service's order is about, so the
+ * page picks its summary and its correction form by `service`.
+ */
+export type StatusView = DeregistrationStatusView
 
 /**
  * What the status page shows for a link, rebuilt from our own record on every page view
@@ -63,6 +74,7 @@ export async function getStatusByToken(
 
   const { reference, status, request } = application
   return {
+    service: request.service,
     reference,
     status,
     licencePlate: request.licencePlate,

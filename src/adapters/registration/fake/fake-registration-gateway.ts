@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto"
-import type { DeregistrationRequest } from "@/src/core/domain/application/deregistration-request"
+import type { OrderableService, ServiceRequest } from "@/src/core/domain/application/service"
 import type { RegistrationAuthority } from "@/src/core/domain/registration/registration-authority"
 import type { Correction, GatewayStatus, RegistrationGateway } from "@/src/core/ports/registration/registration-gateway"
 
@@ -24,7 +24,7 @@ const IN_PROGRESS: GatewayStatus = { state: "inProgress" }
  */
 export class FakeRegistrationGateway implements RegistrationGateway {
   /** One entry per distinct idempotency key, in filing order. A replayed key adds nothing. */
-  readonly submissions: { request: DeregistrationRequest; idempotencyKey: string; applicationId: string }[] = []
+  readonly submissions: { request: ServiceRequest; idempotencyKey: string; applicationId: string }[] = []
   /** Application ids `retry` was called for. */
   readonly retries: string[] = []
   /** What `correct` was asked to change; the fake records it and applies nothing. */
@@ -40,9 +40,9 @@ export class FakeRegistrationGateway implements RegistrationGateway {
     this.statuses.set(applicationId, status)
   }
 
-  /** Replaces the default online authority for one plate prefix, e.g. to script an offline one. */
-  setAuthorities(prefix: string, authorities: RegistrationAuthority[]): void {
-    this.authorities.set(prefix, authorities)
+  /** Replaces the default online authority for one plate prefix or postcode, e.g. to script an offline one. */
+  setAuthorities(where: string, authorities: RegistrationAuthority[]): void {
+    this.authorities.set(where, authorities)
   }
 
   /** Makes a document id fetchable; the id is the string `DocumentRef.id` carries, not a number. */
@@ -59,11 +59,11 @@ export class FakeRegistrationGateway implements RegistrationGateway {
     this.failures.set(operation, error)
   }
 
-  async findAuthorities(licencePlatePrefix: string): Promise<RegistrationAuthority[]> {
-    return this.authorities.get(licencePlatePrefix) ?? ONLINE
+  async findAuthorities(where: { prefix: string } | { postcode: string }): Promise<RegistrationAuthority[]> {
+    return this.authorities.get("prefix" in where ? where.prefix : where.postcode) ?? ONLINE
   }
 
-  async submitDeregistration(request: DeregistrationRequest, idempotencyKey: string) {
+  async submit(request: ServiceRequest, idempotencyKey: string) {
     // Before the replay check: a replayed key must still fail when scripted to, as a dropped call would.
     this.throwIfScripted("submit")
     const earlier = this.submissions.find((submission) => submission.idempotencyKey === idempotencyKey)
@@ -76,7 +76,8 @@ export class FakeRegistrationGateway implements RegistrationGateway {
     return { applicationId }
   }
 
-  async getStatus(applicationId: string): Promise<GatewayStatus> {
+  /** The service changes nothing here: the fake keeps one table of statuses for every service. */
+  async getStatus(_service: OrderableService, applicationId: string): Promise<GatewayStatus> {
     this.throwIfScripted("getStatus")
     // Unlike Zulex, an id nobody filed here is no error: on staging another instance may have filed it.
     return this.statuses.get(applicationId) ?? IN_PROGRESS
@@ -90,7 +91,7 @@ export class FakeRegistrationGateway implements RegistrationGateway {
   }
 
   /** Records the correction and restarts the application; the fields are not validated or stored. */
-  async correct(applicationId: string, correction: Correction): Promise<void> {
+  async correct(_service: OrderableService, applicationId: string, correction: Correction): Promise<void> {
     this.throwIfScripted("correct")
     this.corrections.push({ applicationId, correction })
     this.statuses.set(applicationId, IN_PROGRESS)

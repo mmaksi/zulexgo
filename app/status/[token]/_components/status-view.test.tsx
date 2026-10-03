@@ -9,6 +9,7 @@ jest.mock("next/navigation", () => ({ useRouter: () => ({ refresh: jest.fn() }) 
 
 const order = anApplication({ status: "failed_correctable" })
 const at5b = (correctable: boolean): View => ({
+  service: "deregistration",
   reference: order.reference,
   status: order.status,
   licencePlate: order.request.licencePlate,

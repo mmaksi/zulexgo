@@ -33,12 +33,12 @@ const onePlate = parseDeregistrationRequest({
   codes: { rearPlate: "AA1", certificate: "AAAAAA1" },
 })
 
-const submitted = async () => (await gateway().submitDeregistration(twoPlates, "key-1")).applicationId
+const submitted = async () => (await gateway().submit(twoPlates, "key-1")).applicationId
 
 describe("ZulexRegistrationGateway", () => {
-  describe("submitDeregistration", () => {
+  describe("submit", () => {
     it("sends the spec's body with the API key and the idempotency key", async () => {
-      await gateway().submitDeregistration(twoPlates, "key-1")
+      await gateway().submit(twoPlates, "key-1")
 
       const [sent] = zulex.requests
       expect(sent.headers.get("X-Api-Key")).toBe(ZULEX_TEST_API_KEY)
@@ -54,7 +54,7 @@ describe("ZulexRegistrationGateway", () => {
     })
 
     it("leaves the front code out for a one-plate vehicle", async () => {
-      await gateway().submitDeregistration(onePlate, "key-1")
+      await gateway().submit(onePlate, "key-1")
 
       expect(zulex.requests[0].body).not.toHaveProperty("frontLicencePlateSecurityCode")
     })
@@ -62,19 +62,19 @@ describe("ZulexRegistrationGateway", () => {
     it("turns a 400 into GatewayRejected: the same data would fail again", async () => {
       zulex.failNext("create", new HttpResponse(null, { status: 400 }))
 
-      await expect(gateway().submitDeregistration(twoPlates, "key-1")).rejects.toBeInstanceOf(GatewayRejected)
+      await expect(gateway().submit(twoPlates, "key-1")).rejects.toBeInstanceOf(GatewayRejected)
     })
 
     it.each([409, 429, 500, 503, 504])("turns a %i into GatewayUnavailable", async (status) => {
       zulex.failNext("create", new HttpResponse(null, { status }))
 
-      await expect(gateway().submitDeregistration(twoPlates, "key-1")).rejects.toEqual(new GatewayUnavailable())
+      await expect(gateway().submit(twoPlates, "key-1")).rejects.toEqual(new GatewayUnavailable())
     })
 
     it("carries Retry-After, in seconds, as milliseconds", async () => {
       zulex.failNext("create", new HttpResponse(null, { status: 429, headers: { "Retry-After": "120" } }))
 
-      const error = await gateway().submitDeregistration(twoPlates, "key-1").catch((caught) => caught)
+      const error = await gateway().submit(twoPlates, "key-1").catch((caught) => caught)
 
       expect(error).toBeInstanceOf(GatewayUnavailable)
       expect(error.retryAfterMs).toBe(120_000)
@@ -83,11 +83,11 @@ describe("ZulexRegistrationGateway", () => {
     it("turns a network failure into GatewayUnavailable", async () => {
       server.use(http.post(`${ZULEX_BASE_URL}/deregistration-applications`, () => HttpResponse.error()))
 
-      await expect(gateway().submitDeregistration(twoPlates, "key-1")).rejects.toBeInstanceOf(GatewayUnavailable)
+      await expect(gateway().submit(twoPlates, "key-1")).rejects.toBeInstanceOf(GatewayUnavailable)
     })
 
     it("fails loudly on a wrong API key, a configuration error no retry fixes, without echoing the key", async () => {
-      const error = await gateway("wrong-key").submitDeregistration(twoPlates, "key-1").catch((caught) => caught)
+      const error = await gateway("wrong-key").submit(twoPlates, "key-1").catch((caught) => caught)
 
       expect(error).not.toBeInstanceOf(GatewayUnavailable)
       expect(error).not.toBeInstanceOf(GatewayRejected)
@@ -108,7 +108,7 @@ describe("ZulexRegistrationGateway", () => {
         ],
       })
 
-      expect(await gateway().getStatus(applicationId)).toEqual({
+      expect(await gateway().getStatus("deregistration", applicationId)).toEqual({
         state: "finished",
         documents: [
           { id: "9007199254740993", kind: "confirmation" },
@@ -123,7 +123,7 @@ describe("ZulexRegistrationGateway", () => {
       const applicationId = await submitted()
       zulex.setStatus(applicationId, "ERROR", { errorInfo: { code: 4711, description: "Fehler", details: ["VIN"] } })
 
-      expect(await gateway().getStatus(applicationId)).toEqual({
+      expect(await gateway().getStatus("deregistration", applicationId)).toEqual({
         state: "failed",
         error: { code: 4711, description: "Fehler", details: ["VIN"] },
         documents: [],
@@ -134,7 +134,7 @@ describe("ZulexRegistrationGateway", () => {
       const applicationId = await submitted()
       zulex.setStatus(applicationId, "WAITING_FOR_AUTHORITY")
 
-      expect(await gateway().getStatus(applicationId)).toEqual({ state: "inProgress" })
+      expect(await gateway().getStatus("deregistration", applicationId)).toEqual({ state: "inProgress" })
     })
   })
 
@@ -145,13 +145,13 @@ describe("ZulexRegistrationGateway", () => {
     await gateway().retry(applicationId)
 
     expect(zulex.requests.at(-1)).toMatchObject({ method: "POST", path: `/zulex-api/v1/applications/${applicationId}/retry` })
-    expect(await gateway().getStatus(applicationId)).toEqual({ state: "inProgress" })
+    expect(await gateway().getStatus("deregistration", applicationId)).toEqual({ state: "inProgress" })
   })
 
   it("patches only the corrected fields", async () => {
     const applicationId = await submitted()
 
-    await gateway().correct(applicationId, {
+    await gateway().correct("deregistration", applicationId, {
       vin: parseVin("FAKEVIN0000000002"),
       codes: { rearPlate: SecurityCode.parse("rearPlate", "AA3") },
     })
@@ -169,6 +169,12 @@ describe("ZulexRegistrationGateway", () => {
   it("asks for the authorities of a plate prefix", async () => {
     zulex.setAuthorities("AAA", [{ kreiscode: "11111", ikfzStatus: "offline" }])
 
-    expect(await gateway().findAuthorities("AAA")).toEqual([{ kreiscode: "11111", ikfzStatus: "offline" }])
+    expect(await gateway().findAuthorities({ prefix: "AAA" })).toEqual([{ kreiscode: "11111", ikfzStatus: "offline" }])
+  })
+
+  it("asks for the authorities of a postcode, where a car is registered by its keeper's address", async () => {
+    zulex.setAuthorities("10115", [{ kreiscode: "22222", ikfzStatus: "unavailable" }])
+
+    expect(await gateway().findAuthorities({ postcode: "10115" })).toEqual([{ kreiscode: "22222", ikfzStatus: "unavailable" }])
   })
 })

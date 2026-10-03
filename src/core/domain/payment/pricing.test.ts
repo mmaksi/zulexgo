@@ -1,14 +1,13 @@
-import { DEREGISTRATION_TOTAL, PROCESSING_FEE, quote, SERVICE_PRICES, type Basket, type Service } from "./pricing"
-
-const SERVICES = Object.keys(SERVICE_PRICES) as Service[]
+import { SERVICES } from "@/src/core/domain/application/service"
+import { PROCESSING_FEE, quote, SERVICE_PRICES, type Basket } from "./pricing"
 
 describe("de-registration price", () => {
   it("is 49 €, all-inclusive", () => {
-    expect(DEREGISTRATION_TOTAL.cents).toBe(4900)
+    expect(SERVICE_PRICES.deregistration.cents).toBe(4900)
   })
 
   it("contains the 19,99 € processing fee, leaving 29,01 € to refund on a cancellation", () => {
-    expect(DEREGISTRATION_TOTAL.subtract(PROCESSING_FEE).cents).toBe(2901)
+    expect(SERVICE_PRICES.deregistration.subtract(PROCESSING_FEE).cents).toBe(2901)
   })
 })
 

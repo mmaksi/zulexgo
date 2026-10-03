@@ -3,17 +3,19 @@
 import Link from "next/link"
 import { useRef, useState, type FormEvent } from "react"
 import { formatEuros } from "@/src/core/domain/payment/money"
-import { DEREGISTRATION_TOTAL, PROCESSING_FEE } from "@/src/core/domain/payment/pricing"
+import { PROCESSING_FEE, SERVICE_PRICES } from "@/src/core/domain/payment/pricing"
 import { Button } from "@/src/ui/button"
 import { Checkbox } from "@/src/ui/checkbox"
-import type { CheckoutActions, PaymentDriver, PaymentMode } from "./checkout-actions"
+import { StripePaymentFields } from "@/app/(funnel)/_components/stripe/stripe-payment-fields"
+import type { PaymentDriver, PaymentMode } from "@/app/(funnel)/_components/payment-driver"
+import type { CheckoutActions } from "./checkout-actions"
 import { SimulatedPaymentFields } from "./simulated-payment-fields"
-import { StripePaymentFields } from "./stripe/stripe-payment-fields"
 import type { PlateCount, VehicleData } from "@/app/_components/vehicle-data"
 import { Alert } from "@/src/ui/alert"
 import { PlateFrame } from "@/src/ui/plate-frame"
 
 const MASK = "•••"
+const TOTAL = SERVICE_PRICES.deregistration
 
 /** site-contract §2.4: masked summary, full price, the fee notice and consent before the pay button. */
 export function ReviewStep({
@@ -106,7 +108,7 @@ export function ReviewStep({
         </h2>
         <dl className="grid max-w-md grid-cols-[1fr_auto] gap-x-6 gap-y-2 text-body">
           <dt className="font-normal text-grau-dark">Abmeldung, Gesamtpreis inkl. Behördengebühr und MwSt.</dt>
-          <dd className="text-right text-h3 text-grau-dark">{formatEuros(DEREGISTRATION_TOTAL)}</dd>
+          <dd className="text-right text-h3 text-grau-dark">{formatEuros(TOTAL)}</dd>
         </dl>
         <Alert variant="warning" className="measure">
           Stornieren Sie nach einem korrigierbaren Fehler oder kann der Antrag nicht korrigiert werden, behalten wir{" "}
@@ -122,7 +124,7 @@ export function ReviewStep({
           Zahlung
         </h2>
         {payment.kind === "stripe" ? (
-          <StripePaymentFields publishableKey={payment.publishableKey} amountCents={DEREGISTRATION_TOTAL.cents} driverRef={driverRef} />
+          <StripePaymentFields publishableKey={payment.publishableKey} amountCents={TOTAL.cents} driverRef={driverRef} />
         ) : (
           <SimulatedPaymentFields driverRef={driverRef} completeSimulatedPayment={actions.completeSimulatedPayment} />
         )}
@@ -163,7 +165,7 @@ export function ReviewStep({
       {/* site-contract §3: on phones the CTA docks at the bottom with the total. */}
       <div className="flex flex-col gap-2 max-md:fixed max-md:inset-x-0 max-md:bottom-0 max-md:z-40 max-md:border-t max-md:border-border max-md:bg-white max-md:px-(--gutter) max-md:py-3 max-md:shadow-elev-2">
         <div className="flex items-center justify-between gap-4 md:justify-start">
-          <span className="text-body text-grau-dark md:hidden">{formatEuros(DEREGISTRATION_TOTAL)}</span>
+          <span className="text-body text-grau-dark md:hidden">{formatEuros(TOTAL)}</span>
           <Button type="submit" disabled={!consented || paying} aria-describedby={consented ? undefined : "pay-hint"}>
             {paying ? "Zahlung läuft …" : "Jetzt bezahlen"}
           </Button>

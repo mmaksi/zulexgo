@@ -68,9 +68,10 @@ export async function correctApplication(deps: Dependencies, token: string, inpu
  * `refused` (the service rejected the data) leaves the order at 5b, exactly as it was.
  */
 async function patch(deps: Dependencies, application: Application, zulexId: string, correction: Correction): Promise<"resubmitted" | "refused"> {
+  const { service } = application.request
   try {
     // A rerun after the first attempt got this far finds the service already working on it: patching again would send it twice.
-    if ((await deps.registration.getStatus(zulexId)).state !== "inProgress") await deps.registration.correct(zulexId, correction)
+    if ((await deps.registration.getStatus(service, zulexId)).state !== "inProgress") await deps.registration.correct(service, zulexId, correction)
   } catch (error) {
     if (error instanceof GatewayRejected) return "refused"
     throw error

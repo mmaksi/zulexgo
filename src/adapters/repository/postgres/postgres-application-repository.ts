@@ -3,6 +3,7 @@ import type { Application, StatusChange } from "@/src/core/domain/application/ap
 import { parseApplicationReference, type ApplicationReference } from "@/src/core/domain/application/application-reference"
 import { OPEN_STATUSES, POLLED_STATUSES, type ApplicationStatus } from "@/src/core/domain/application/application-status"
 import { parseDeregistrationRequest } from "@/src/core/domain/application/deregistration-request"
+import type { Service, ServiceRequest } from "@/src/core/domain/application/service"
 import { emailSchema } from "@/src/core/domain/customer/email"
 import type { Failure } from "@/src/core/domain/registration/failure"
 import { Money } from "@/src/core/domain/payment/money"
@@ -22,6 +23,7 @@ interface ApplicationRow {
   version: number
   status: ApplicationStatus
   email: string
+  service: Service
   plate_count: 1 | 2
   plate_prefix: string
   plate_letters: string
@@ -183,13 +185,13 @@ export class PostgresApplicationRepository implements ApplicationRepository {
   }
 
   /** Served by the `applications_by_vehicle` index (migration 0007); statuses are `OPEN_STATUSES`. */
-  async hasOpenApplication({ licencePlate, vin }: Parameters<ApplicationRepository["hasOpenApplication"]>[0]): Promise<boolean> {
+  async hasOpenApplication({ service, licencePlate, vin }: Parameters<ApplicationRepository["hasOpenApplication"]>[0]): Promise<boolean> {
     const { rows } = await this.pool.query<{ open: boolean }>(
       `SELECT EXISTS (
          SELECT 1 FROM applications
-         WHERE plate_prefix = $1 AND plate_letters = $2 AND plate_numbers = $3 AND vin = $4 AND status = ANY($5)
+         WHERE service = $1 AND plate_prefix = $2 AND plate_letters = $3 AND plate_numbers = $4 AND vin = $5 AND status = ANY($6)
        ) AS open`,
-      [licencePlate.prefix, licencePlate.letters, licencePlate.numbers, vin, OPEN_STATUSES],
+      [service, licencePlate.prefix, licencePlate.letters, licencePlate.numbers, vin, OPEN_STATUSES],
     )
     return rows[0].open
   }
@@ -223,6 +225,7 @@ export class PostgresApplicationRepository implements ApplicationRepository {
     return {
       status: application.status,
       email: application.email,
+      service: request.service,
       plate_count: request.plateCount,
       plate_prefix: request.licencePlate.prefix,
       plate_letters: request.licencePlate.letters,
@@ -252,12 +255,7 @@ export class PostgresApplicationRepository implements ApplicationRepository {
       version: row.version,
       status: row.status,
       history: row.history.map(({ status, at }) => ({ status, at: new Date(at) })),
-      request: parseDeregistrationRequest({
-        plateCount: row.plate_count,
-        licencePlate: { prefix: row.plate_prefix, letters: row.plate_letters, numbers: row.plate_numbers },
-        vin: row.vin,
-        codes: JSON.parse(this.cipher.decrypt(row.encrypted_security_codes, reference)),
-      }),
+      request: this.toRequest(row, reference),
       email: emailSchema.parse(row.email),
       ikfzStatus: row.authority_ikfz_status,
       idempotencyKey: row.idempotency_key,
@@ -267,6 +265,20 @@ export class PostgresApplicationRepository implements ApplicationRepository {
       failure: toFailure(row),
       polling: { nextPollAt: row.next_poll_at ?? undefined, attempts: row.poll_attempts },
     }
+  }
+
+  /**
+   * The request of the row's service. Only de-registration has a request type, and it is the only
+   * service an order can be created for, so any other value is a row this release cannot read.
+   */
+  private toRequest(row: ApplicationRow, reference: ApplicationReference): ServiceRequest {
+    if (row.service !== "deregistration") throw new Error(`Application ${reference} is for a service this release cannot read`)
+    return parseDeregistrationRequest({
+      plateCount: row.plate_count,
+      licencePlate: { prefix: row.plate_prefix, letters: row.plate_letters, numbers: row.plate_numbers },
+      vin: row.vin,
+      codes: JSON.parse(this.cipher.decrypt(row.encrypted_security_codes, reference)),
+    })
   }
 
   /** For the `SELECT_APPLICATION` queries that match at most one row. */

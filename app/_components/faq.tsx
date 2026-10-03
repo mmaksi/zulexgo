@@ -1,7 +1,7 @@
 "use client"
 
 import { formatEuros } from "@/src/core/domain/payment/money"
-import { DEREGISTRATION_TOTAL, PROCESSING_FEE } from "@/src/core/domain/payment/pricing"
+import { PROCESSING_FEE, SERVICE_PRICES } from "@/src/core/domain/payment/pricing"
 import {
   Accordion,
   AccordionContent,
@@ -19,7 +19,7 @@ const FAQ = [
   },
   {
     question: "Was kostet die Abmeldung, und was ist enthalten?",
-    answer: `${formatEuros(DEREGISTRATION_TOTAL)} als Endpreis: Behördengebühr, Mehrwertsteuer und unsere Bearbeitung sind enthalten, weitere Kosten gibt es nicht. Brechen Sie nach einem Fehler ab oder lässt sich der Antrag nicht korrigieren, behalten wir ${formatEuros(PROCESSING_FEE)} Bearbeitungsgebühr ein und erstatten den Rest innerhalb von 3–5 Werktagen.`,
+    answer: `${formatEuros(SERVICE_PRICES.deregistration)} als Endpreis: Behördengebühr, Mehrwertsteuer und unsere Bearbeitung sind enthalten, weitere Kosten gibt es nicht. Brechen Sie nach einem Fehler ab oder lässt sich der Antrag nicht korrigieren, behalten wir ${formatEuros(PROCESSING_FEE)} Bearbeitungsgebühr ein und erstatten den Rest innerhalb von 3–5 Werktagen.`,
   },
   {
     question: "Welche Unterlagen brauche ich?",

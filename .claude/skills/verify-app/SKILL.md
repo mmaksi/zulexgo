@@ -166,7 +166,7 @@ Skip when nothing rendered changed. Otherwise, on the pages you touched:
 Cheap greps for rules the tests don't fully cover:
 
 ```bash
-grep -rnE "from ['\"](stripe|@stripe/|resend|@supabase/)" app src | grep -v "^src/adapters/" | grep -v "^app/(funnel)/deregister/_components/stripe/"   # vendor outside its adapter: must be empty; Stripe's browser SDK has that one folder, fenced by lint
+grep -rnE "from ['\"](stripe|@stripe/|resend|@supabase/)" app src | grep -v "^src/adapters/" | grep -v "^app/(funnel)/_components/stripe/"   # vendor outside its adapter: must be empty; Stripe's browser SDK has that one folder, fenced by lint
 grep -rn "NEXT_PUBLIC_" app src | grep -v NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY                  # only that one may be public
 grep -rnE "from ['\"](@/src/adapters|@/app|\.\./\.\./adapters)" src/core                        # core depends on nothing outward
 grep -rnE "^(export )?(let|var) |= new (Map|WeakMap)\(" app src | grep -v "\.test\." | grep -v "/fake/" | grep -v "^src/config/container.ts"   # module state is per Vercel instance (step 2, Instances)
