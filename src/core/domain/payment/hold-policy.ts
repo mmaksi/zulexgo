@@ -1,5 +1,8 @@
 const HOUR = 60 * 60 * 1000
 
+/** How long a card authorisation stays valid before it lapses: 7 days for an online card payment (Stripe's validity, verified via the Stripe docs MCP, 2026-09-27). */
+export const CARD_HOLD_LIFETIME_MS = 7 * 24 * HOUR
+
 /** How often an application waiting on money is looked at while nothing else would wake it. */
 export const HOLD_CHECK_INTERVAL_MS = 24 * HOUR
 
@@ -8,7 +11,7 @@ export const HOLD_RETRY_MS = HOUR
 
 /**
  * How long before a card hold lapses its money is taken. Two check intervals, so
- * one missed or late check still lands inside the window (a hold lasts 7 days).
+ * one missed or late check still lands inside the window (a hold lasts `CARD_HOLD_LIFETIME_MS`).
  */
 export const HOLD_CAPTURE_MARGIN_MS = 2 * HOLD_CHECK_INTERVAL_MS
 

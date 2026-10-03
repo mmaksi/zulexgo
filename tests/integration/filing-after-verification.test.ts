@@ -1,0 +1,105 @@
+import { anApplication } from "@/tests/fixtures/applications"
+import type { Application } from "@/src/core/domain/application/application"
+import { GatewayUnavailable } from "@/src/core/errors/registration/gateway-unavailable"
+import { submitToKba } from "@/src/core/use-cases/registration/submit-to-kba"
+import { HOUR, setupFlow as setup } from "./flow-harness"
+
+/**
+ * A service that verifies the customer's identity files its application at status 3, days after payment, so what the
+ * flow assumed about filing happening at status 1 has to hold for it too. A Neuzulassung order cannot be stored yet,
+ * so these drive the same use cases with the data that differs: when the order became ready to be filed, and which
+ * service it names.
+ */
+describe("filing an order whose identity was verified after payment", () => {
+  beforeEach(() => {
+    jest.spyOn(console, "warn").mockImplementation(() => {})
+  })
+  afterEach(() => jest.restoreAllMocks())
+
+  it("counts the patience for an unconfirmed filing from when the order became ready to be filed, not from payment", async () => {
+    const flow = setup()
+    flow.deps.registration.failNext("submit", new GatewayUnavailable())
+    const reference = await flow.checkoutAndPay("card")
+
+    // Three days pass before the identity is verified: the day of patience must not already be used up by then.
+    flow.clock.advance(72 * HOUR)
+    const waiting = await flow.stored(reference)
+    await flow.deps.repository.update({
+      ...waiting,
+      history: [...waiting.history, { status: "identity_verified", at: flow.clock.now() }],
+      polling: { attempts: 0, nextPollAt: flow.clock.now() },
+    })
+    flow.deps.registration.failNext("submit", new GatewayUnavailable())
+    await flow.poll(60)
+
+    expect((await flow.stored(reference)).status).toBe("submitted_and_paid")
+    expect(flow.emails()).toEqual(["orderConfirmation"])
+  })
+
+  it("still gives up with a full refund once a day has passed since it became ready, the clock having started there", async () => {
+    const flow = setup()
+    flow.deps.registration.failNext("submit", new GatewayUnavailable())
+    const reference = await flow.checkoutAndPay("card")
+    flow.clock.advance(72 * HOUR)
+    const waiting = await flow.stored(reference)
+    await flow.deps.repository.update({
+      ...waiting,
+      history: [...waiting.history, { status: "identity_verified", at: flow.clock.now() }],
+      polling: { attempts: 0, nextPollAt: flow.clock.now() },
+    })
+
+    for (let hour = 0; hour < 25; hour++) {
+      flow.deps.registration.failNext("submit", new GatewayUnavailable())
+      await flow.poll(60)
+    }
+
+    expect((await flow.stored(reference)).status).toBe("failed_final")
+    expect(await flow.payment(reference)).toMatchObject({ status: "released" })
+  })
+
+  describe("submitToKba, asked to file an order that has not been verified", () => {
+    // The request is not a `ServiceRequest` until Neuzulassung orders can be stored, so the one thing that differs, the service
+    // it names, is set on a stored de-registration order. What is asserted is that nothing is sent or taken.
+    const unverified = (application: Application): Application => ({ ...application, request: { ...application.request, service: "newRegistration" } as unknown as Application["request"] })
+
+    it("files nothing, takes no money and leaves it as it was, since it may only be filed at status 3", async () => {
+      const flow = setup()
+      const reference = await flow.payForCheckout("card")
+      const paid = unverified(await flow.stored(reference))
+      const atStatusOne = await flow.deps.repository.update({ ...paid, status: "submitted_and_paid", history: [...paid.history, { status: "submitted_and_paid", at: flow.clock.now() }] })
+
+      await submitToKba(flow.deps, atStatusOne)
+
+      expect(flow.deps.registration.submissions).toEqual([])
+      expect(await flow.payment(reference)).toMatchObject({ status: "held" })
+      expect((await flow.stored(reference)).status).toBe("submitted_and_paid")
+    })
+
+    it("does file the same order once its identity is verified, from status 3", async () => {
+      const flow = setup()
+      const reference = await flow.payForCheckout("card")
+      const paid = unverified(await flow.stored(reference))
+      // Payment confirmation issues the status link the filing email carries.
+      await flow.deps.repository.setStatusToken(reference, flow.deps.tokens.generate())
+      const verified = await flow.deps.repository.update({
+        ...paid,
+        status: "identity_verified",
+        history: [...paid.history, { status: "submitted_and_paid", at: flow.clock.now() }, { status: "identity_verified", at: flow.clock.now() }],
+      })
+
+      await submitToKba(flow.deps, verified)
+
+      expect(flow.deps.registration.submissions).toHaveLength(1)
+      expect((await flow.stored(reference)).status).toBe("submitted_to_kba")
+    })
+
+    it("is an ordinary de-registration's filing, unchanged: from status 1", async () => {
+      const flow = setup()
+      const reference = await flow.payForCheckout("card")
+      await flow.confirm(reference)
+
+      expect(flow.deps.registration.submissions).toHaveLength(1)
+      expect(anApplication().request.service).toBe("deregistration")
+    })
+  })
+})

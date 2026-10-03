@@ -1,4 +1,23 @@
 import "@testing-library/jest-dom"
+import { expect as jestExpect } from "@jest/globals"
+import { Secret } from "@/src/core/domain/secret"
+import { SecurityCode } from "@/src/core/domain/vehicle/security-code"
+
+/**
+ * A secret keeps its value in a true private field, so `toEqual` sees nothing inside it and calls two
+ * secrets with different values equal. A test that compares whole orders would then pass for a
+ * repository that lost or changed an IBAN or a security code. Secrets are compared by their value,
+ * which only a test may reveal this way. (`@jest/globals` is where `addEqualityTesters` is typed; its `expect`
+ * is the global one.)
+ */
+jestExpect.addEqualityTesters([
+  function secretsByValue(a, b, customTesters) {
+    if (a instanceof Secret && b instanceof Secret) return this.equals(a.reveal(), b.reveal(), customTesters)
+    if (a instanceof SecurityCode && b instanceof SecurityCode) return a.kind === b.kind && a.reveal() === b.reveal()
+    if (a instanceof Secret || b instanceof Secret || a instanceof SecurityCode || b instanceof SecurityCode) return false
+    return undefined
+  },
+])
 
 /**
  * jsdom implements no PointerEvent, which Base UI's radio and checkbox
