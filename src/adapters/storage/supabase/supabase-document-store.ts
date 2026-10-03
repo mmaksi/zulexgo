@@ -1,7 +1,7 @@
 import { StorageClient, type StorageError } from "@supabase/storage-js"
-import type { ApplicationReference } from "@/src/core/domain/application-reference"
-import type { DocumentKind, DocumentRef } from "@/src/core/domain/document"
-import type { DocumentStore, StoredDocument } from "@/src/core/ports/document-store"
+import type { ApplicationReference } from "@/src/core/domain/application/application-reference"
+import type { DocumentKind, DocumentRef } from "@/src/core/domain/registration/document"
+import type { DocumentStore, StoredDocument } from "@/src/core/ports/storage/document-store"
 
 /**
  * Reads an object name back into a `DocumentRef`: Zulex's int64 document id (digits only) and our

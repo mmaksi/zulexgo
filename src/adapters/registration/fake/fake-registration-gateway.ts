@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto"
-import type { DeregistrationRequest } from "@/src/core/domain/deregistration-request"
-import type { RegistrationAuthority } from "@/src/core/domain/registration-authority"
-import type { Correction, GatewayStatus, RegistrationGateway } from "@/src/core/ports/registration-gateway"
+import type { DeregistrationRequest } from "@/src/core/domain/application/deregistration-request"
+import type { RegistrationAuthority } from "@/src/core/domain/registration/registration-authority"
+import type { Correction, GatewayStatus, RegistrationGateway } from "@/src/core/ports/registration/registration-gateway"
 
 /** The calls `failNext` can break. Authority and document lookups cannot be scripted to fail. */
 type Operation = "submit" | "getStatus" | "retry" | "correct"

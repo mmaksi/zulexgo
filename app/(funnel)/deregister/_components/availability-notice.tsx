@@ -1,4 +1,4 @@
-import type { IkfzStatus } from "@/src/core/domain/registration-authority"
+import type { IkfzStatus } from "@/src/core/domain/registration/registration-authority"
 import { Alert } from "@/src/ui/alert"
 
 /** site-contract §2.2: the processing-time expectation, set before payment. */

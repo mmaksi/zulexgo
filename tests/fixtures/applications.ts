@@ -1,8 +1,8 @@
-import type { Application } from "@/src/core/domain/application"
-import { parseApplicationReference } from "@/src/core/domain/application-reference"
-import { parseDeregistrationRequest } from "@/src/core/domain/deregistration-request"
-import { emailSchema } from "@/src/core/domain/email"
-import { Money } from "@/src/core/domain/money"
+import type { Application } from "@/src/core/domain/application/application"
+import { parseApplicationReference } from "@/src/core/domain/application/application-reference"
+import { parseDeregistrationRequest } from "@/src/core/domain/application/deregistration-request"
+import { emailSchema } from "@/src/core/domain/customer/email"
+import { Money } from "@/src/core/domain/payment/money"
 
 /** Obviously fake values that still pass the same validation as production input. */
 export const FAKE_REQUEST = {

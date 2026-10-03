@@ -91,7 +91,7 @@ Six emails now, eight once Verimi is added (trigger, subject, content): table in
 2. **Rejection reason copy and 5b/5c split** — depend on undocumented `errorInfo` code catalogue, Q10, Q18. Until it exists, unrecognised error → 5b (launch-plan fallback).
 3. **Timestamps** — only backend-owned steps have them; API-side transitions don't, so we timestamp at poll time (approximate; acceptable, note it).
 4. **Status 1 wording** — "Payment captured" vs "payment authorised" depends on when a held card payment is captured (Q7).
-5. **Authority fee amount** — API returns fees only as post-hoc `FEE` document; displayed price comes from our own table (the founder's price list: one all-inclusive price per service, in `src/core/domain/pricing.ts`). The monthly reconciliation against the `FEE` documents has no owner yet.
+5. **Authority fee amount** — API returns fees only as post-hoc `FEE` document; displayed price comes from our own table (the founder's price list: one all-inclusive price per service, in `src/core/domain/payment/pricing.ts`). The monthly reconciliation against the `FEE` documents has no owner yet.
 6. **Special plates (E/H/seasonal)** — eligibility warns "may be rejected" until API provider clarifies.
 
 ## 3. Behaviour Spec

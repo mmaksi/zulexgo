@@ -1,7 +1,7 @@
 import type Stripe from "stripe"
-import { applicationReferenceSchema } from "@/src/core/domain/application-reference"
-import { Money } from "@/src/core/domain/money"
-import type { Payment, PaymentNotification, PaymentStatus } from "@/src/core/ports/payment-provider"
+import { applicationReferenceSchema } from "@/src/core/domain/application/application-reference"
+import { Money } from "@/src/core/domain/payment/money"
+import type { Payment, PaymentNotification, PaymentStatus } from "@/src/core/ports/payment/payment-provider"
 
 const STATUSES: Partial<Record<Stripe.PaymentIntent.Status, PaymentStatus>> = {
   requires_capture: "held",

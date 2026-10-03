@@ -1,12 +1,12 @@
-import type { RejectionCatalogue } from "@/src/core/domain/rejection-catalogue"
-import type { ApplicationRepository } from "@/src/core/ports/application-repository"
-import type { Clock } from "@/src/core/ports/clock"
-import type { DocumentStore } from "@/src/core/ports/document-store"
-import type { Mailer } from "@/src/core/ports/mailer"
-import type { PaymentProvider } from "@/src/core/ports/payment-provider"
-import type { RateLimiter } from "@/src/core/ports/rate-limiter"
-import type { RegistrationGateway } from "@/src/core/ports/registration-gateway"
-import type { TokenGenerator } from "@/src/core/ports/token-generator"
+import type { RejectionCatalogue } from "@/src/core/domain/registration/rejection-catalogue"
+import type { ApplicationRepository } from "@/src/core/ports/repository/application-repository"
+import type { Clock } from "@/src/core/ports/clock/clock"
+import type { DocumentStore } from "@/src/core/ports/storage/document-store"
+import type { Mailer } from "@/src/core/ports/mail/mailer"
+import type { PaymentProvider } from "@/src/core/ports/payment/payment-provider"
+import type { RateLimiter } from "@/src/core/ports/rate-limit/rate-limiter"
+import type { RegistrationGateway } from "@/src/core/ports/registration/registration-gateway"
+import type { TokenGenerator } from "@/src/core/ports/tokens/token-generator"
 
 /**
  * Everything a use case may touch, handed in by the composition root or a test.

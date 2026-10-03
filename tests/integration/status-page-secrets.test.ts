@@ -6,7 +6,7 @@ import { FakeClock } from "@/src/adapters/clock/fake/fake-clock"
 import { FakePaymentProvider } from "@/src/adapters/payment/fake/fake-payment-provider"
 import { InMemoryApplicationRepository } from "@/src/adapters/repository/fake/in-memory-application-repository"
 import { InMemoryDocumentStore } from "@/src/adapters/storage/fake/in-memory-document-store"
-import { getStatusByToken } from "@/src/core/use-cases/get-status-by-token"
+import { getStatusByToken } from "@/src/core/use-cases/status/get-status-by-token"
 
 jest.mock("next/navigation", () => ({ useRouter: () => ({ refresh: jest.fn() }) }))
 

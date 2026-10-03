@@ -1,7 +1,7 @@
 import { FAKE_REQUEST } from "@/tests/fixtures/applications"
-import { Money } from "@/src/core/domain/money"
-import { DEREGISTRATION_TOTAL } from "@/src/core/domain/pricing"
-import { GatewayRejected } from "@/src/core/errors/gateway-rejected"
+import { Money } from "@/src/core/domain/payment/money"
+import { DEREGISTRATION_TOTAL } from "@/src/core/domain/payment/pricing"
+import { GatewayRejected } from "@/src/core/errors/registration/gateway-rejected"
 import { CODES, MINUTE, setupFlow } from "./flow-harness"
 
 /**

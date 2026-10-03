@@ -2,8 +2,8 @@ import { HttpResponse } from "msw"
 import { setupServer } from "msw/node"
 import { anApplication } from "@/tests/fixtures/applications"
 import { RESEND_TEST_API_KEY, ResendDouble } from "@/tests/msw/resend"
-import { Money } from "@/src/core/domain/money"
-import { mailerContract } from "@/src/core/ports/mailer.contract"
+import { Money } from "@/src/core/domain/payment/money"
+import { mailerContract } from "@/src/core/ports/mail/mailer.contract"
 import { ResendMailer } from "./resend-mailer"
 
 let resend = new ResendDouble()

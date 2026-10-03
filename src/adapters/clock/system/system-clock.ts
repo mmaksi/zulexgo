@@ -1,4 +1,4 @@
-import type { Clock } from "@/src/core/ports/clock"
+import type { Clock } from "@/src/core/ports/clock/clock"
 
 /**
  * `Clock` on the wall clock, the one place in the app that reads it; real in every stage,

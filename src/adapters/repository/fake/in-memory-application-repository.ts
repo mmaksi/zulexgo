@@ -1,9 +1,9 @@
-import type { Application } from "@/src/core/domain/application"
-import type { ApplicationReference } from "@/src/core/domain/application-reference"
-import { OPEN_STATUSES, POLLED_STATUSES } from "@/src/core/domain/application-status"
-import { DuplicateApplication } from "@/src/core/errors/duplicate-application"
-import { StaleApplication } from "@/src/core/errors/stale-application"
-import type { ApplicationRepository } from "@/src/core/ports/application-repository"
+import type { Application } from "@/src/core/domain/application/application"
+import type { ApplicationReference } from "@/src/core/domain/application/application-reference"
+import { OPEN_STATUSES, POLLED_STATUSES } from "@/src/core/domain/application/application-status"
+import { DuplicateApplication } from "@/src/core/errors/application/duplicate-application"
+import { StaleApplication } from "@/src/core/errors/application/stale-application"
+import type { ApplicationRepository } from "@/src/core/ports/repository/application-repository"
 
 /**
  * Codes stay in plaintext here: nothing leaves the process. The Postgres adapter encrypts them.

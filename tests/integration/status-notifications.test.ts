@@ -1,10 +1,10 @@
 import { renderEmail } from "@/src/adapters/mail/resend/render"
-import type { ApplicationReference } from "@/src/core/domain/application-reference"
-import { Money } from "@/src/core/domain/money"
-import { DEREGISTRATION_TOTAL, PROCESSING_FEE } from "@/src/core/domain/pricing"
-import { GatewayUnavailable } from "@/src/core/errors/gateway-unavailable"
-import type { EmailTemplate } from "@/src/core/ports/mailer"
-import { confirmRefund } from "@/src/core/use-cases/confirm-refund"
+import type { ApplicationReference } from "@/src/core/domain/application/application-reference"
+import { Money } from "@/src/core/domain/payment/money"
+import { DEREGISTRATION_TOTAL, PROCESSING_FEE } from "@/src/core/domain/payment/pricing"
+import { GatewayUnavailable } from "@/src/core/errors/registration/gateway-unavailable"
+import type { EmailTemplate } from "@/src/core/ports/mail/mailer"
+import { confirmRefund } from "@/src/core/use-cases/payment/confirm-refund"
 import { CODES, keepServiceDown, setupFlow } from "./flow-harness"
 
 const FINISHED = { state: "finished", documents: [] } as const

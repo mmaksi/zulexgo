@@ -1,10 +1,10 @@
-import { Money } from "@/src/core/domain/money"
-import { DEREGISTRATION_TOTAL, PROCESSING_FEE } from "@/src/core/domain/pricing"
-import { GatewayRejected } from "@/src/core/errors/gateway-rejected"
-import { InvalidTransition } from "@/src/core/errors/invalid-transition"
-import { StaleApplication } from "@/src/core/errors/stale-application"
-import { TokenInvalid } from "@/src/core/errors/token-invalid"
-import { cancelApplication } from "@/src/core/use-cases/cancel-application"
+import { Money } from "@/src/core/domain/payment/money"
+import { DEREGISTRATION_TOTAL, PROCESSING_FEE } from "@/src/core/domain/payment/pricing"
+import { GatewayRejected } from "@/src/core/errors/registration/gateway-rejected"
+import { InvalidTransition } from "@/src/core/errors/application/invalid-transition"
+import { StaleApplication } from "@/src/core/errors/application/stale-application"
+import { TokenInvalid } from "@/src/core/errors/application/token-invalid"
+import { cancelApplication } from "@/src/core/use-cases/application/cancel-application"
 import { CODES, MINUTE, setupFlow } from "./flow-harness"
 
 /** M6, 5b option B: the customer cancels; 19.99 € stays, the rest goes back, and email 6 follows. */

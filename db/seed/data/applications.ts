@@ -1,10 +1,10 @@
-import { applyEvent, type Application } from "@/src/core/domain/application"
-import type { Failure } from "@/src/core/domain/failure"
-import { parseApplicationReference } from "@/src/core/domain/application-reference"
-import type { ApplicationEvent, ApplicationStatus } from "@/src/core/domain/application-status"
-import { parseDeregistrationRequest } from "@/src/core/domain/deregistration-request"
-import { emailSchema } from "@/src/core/domain/email"
-import { DEREGISTRATION_TOTAL } from "@/src/core/domain/pricing"
+import { applyEvent, type Application } from "@/src/core/domain/application/application"
+import type { Failure } from "@/src/core/domain/registration/failure"
+import { parseApplicationReference } from "@/src/core/domain/application/application-reference"
+import type { ApplicationEvent, ApplicationStatus } from "@/src/core/domain/application/application-status"
+import { parseDeregistrationRequest } from "@/src/core/domain/application/deregistration-request"
+import { emailSchema } from "@/src/core/domain/customer/email"
+import { DEREGISTRATION_TOTAL } from "@/src/core/domain/payment/pricing"
 
 const CREATED_AT = new Date("2026-01-05T09:00:00.000Z")
 const HOUR = 60 * 60 * 1000

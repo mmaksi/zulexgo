@@ -1,8 +1,8 @@
 import type { z } from "zod"
-import { emailSchema } from "@/src/core/domain/email"
-import { licencePlateSchema } from "@/src/core/domain/licence-plate"
-import { SecurityCode } from "@/src/core/domain/security-code"
-import { vinSchema } from "@/src/core/domain/vin"
+import { emailSchema } from "@/src/core/domain/customer/email"
+import { licencePlateSchema } from "@/src/core/domain/vehicle/licence-plate"
+import { SecurityCode } from "@/src/core/domain/vehicle/security-code"
+import { vinSchema } from "@/src/core/domain/vehicle/vin"
 
 export type PlateCount = 1 | 2
 

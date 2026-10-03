@@ -1,8 +1,8 @@
-import type { DocumentKind } from "@/src/core/domain/document"
-import { RATE_LIMITS } from "@/src/core/domain/rate-limits"
-import { TokenInvalid } from "@/src/core/errors/token-invalid"
+import type { DocumentKind } from "@/src/core/domain/registration/document"
+import { RATE_LIMITS } from "@/src/core/domain/rate-limit/rate-limits"
+import { TokenInvalid } from "@/src/core/errors/application/token-invalid"
 import type { Dependencies } from "@/src/core/use-cases/dependencies"
-import { getDocumentByToken } from "@/src/core/use-cases/get-document-by-token"
+import { getDocumentByToken } from "@/src/core/use-cases/status/get-document-by-token"
 import { clientAddress } from "@/src/lib/client-address"
 
 /** ASCII, since a filename in a header is not the place for umlauts. */

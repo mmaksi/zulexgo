@@ -1,7 +1,7 @@
-import { PROCESSING_FEE } from "@/src/core/domain/pricing"
-import { SUPPORT_EMAIL } from "@/src/core/domain/contact"
-import { formatEuros } from "@/src/core/domain/money"
-import type { EmailTemplate } from "@/src/core/ports/mailer"
+import { PROCESSING_FEE } from "@/src/core/domain/payment/pricing"
+import { SUPPORT_EMAIL } from "@/src/core/domain/customer/contact"
+import { formatEuros } from "@/src/core/domain/payment/money"
+import type { EmailTemplate } from "@/src/core/ports/mail/mailer"
 
 /**
  * The German wording of business logic §5, one statement and one button per

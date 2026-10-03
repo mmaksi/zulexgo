@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react"
-import { customerSteps } from "@/src/core/domain/customer-steps"
-import { Money } from "@/src/core/domain/money"
-import type { StatusView as View } from "@/src/core/use-cases/get-status-by-token"
+import { customerSteps } from "@/src/core/domain/application/customer-steps"
+import { Money } from "@/src/core/domain/payment/money"
+import type { StatusView as View } from "@/src/core/use-cases/status/get-status-by-token"
 import { anApplication } from "@/tests/fixtures/applications"
 import { StatusView } from "./status-view"
 

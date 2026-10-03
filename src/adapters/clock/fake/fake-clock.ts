@@ -1,4 +1,4 @@
-import type { Clock } from "@/src/core/ports/clock"
+import type { Clock } from "@/src/core/ports/clock/clock"
 
 /** A fixed instant, so a test never depends on when it runs. */
 const DEFAULT_START = new Date("2026-01-01T00:00:00.000Z")

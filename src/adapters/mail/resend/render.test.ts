@@ -1,6 +1,6 @@
-import { EVERY_TEMPLATE } from "@/src/core/ports/mailer.contract"
-import { Money } from "@/src/core/domain/money"
-import type { EmailTemplate } from "@/src/core/ports/mailer"
+import { EVERY_TEMPLATE } from "@/src/core/ports/mail/mailer.contract"
+import { Money } from "@/src/core/domain/payment/money"
+import type { EmailTemplate } from "@/src/core/ports/mail/mailer"
 import { renderEmail } from "./render"
 
 const { reference } = EVERY_TEMPLATE[0]

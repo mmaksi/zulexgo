@@ -1,6 +1,6 @@
-import { NotificationRejected } from "@/src/core/errors/notification-rejected"
+import { NotificationRejected } from "@/src/core/errors/mail/notification-rejected"
 import type { Dependencies } from "@/src/core/use-cases/dependencies"
-import { confirmPayment } from "@/src/core/use-cases/confirm-payment"
+import { confirmPayment } from "@/src/core/use-cases/payment/confirm-payment"
 
 /**
  * Stripe's webhook: verify, then act. A rejected signature is a 400, which

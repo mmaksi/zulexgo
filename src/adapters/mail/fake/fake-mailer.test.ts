@@ -1,5 +1,5 @@
 import { anApplication } from "@/tests/fixtures/applications"
-import { mailerContract } from "@/src/core/ports/mailer.contract"
+import { mailerContract } from "@/src/core/ports/mail/mailer.contract"
 import { FakeMailer } from "./fake-mailer"
 
 mailerContract("FakeMailer", () => new FakeMailer())

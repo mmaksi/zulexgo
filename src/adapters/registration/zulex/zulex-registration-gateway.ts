@@ -1,7 +1,7 @@
-import type { DeregistrationRequest } from "@/src/core/domain/deregistration-request"
-import type { DocumentKind, DocumentRef } from "@/src/core/domain/document"
-import type { RegistrationAuthority } from "@/src/core/domain/registration-authority"
-import type { Correction, GatewayStatus, RegistrationGateway } from "@/src/core/ports/registration-gateway"
+import type { DeregistrationRequest } from "@/src/core/domain/application/deregistration-request"
+import type { DocumentKind, DocumentRef } from "@/src/core/domain/registration/document"
+import type { RegistrationAuthority } from "@/src/core/domain/registration/registration-authority"
+import type { Correction, GatewayStatus, RegistrationGateway } from "@/src/core/ports/registration/registration-gateway"
 import { readJson, zulexRequest, type ZulexConfig } from "./http"
 import {
   createApplicationResponse,

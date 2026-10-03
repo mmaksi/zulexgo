@@ -1,6 +1,6 @@
 import { handlePaymentNotification } from "@/app/api/webhooks/stripe/handle"
 import { FAKE_REQUEST } from "@/tests/fixtures/applications"
-import { submitCheckout } from "@/src/core/use-cases/submit-checkout"
+import { submitCheckout } from "@/src/core/use-cases/checkout/submit-checkout"
 import { webhookRequest, withVendorsAtTheNetwork } from "./network-harness"
 
 /**

@@ -1,6 +1,6 @@
 import type { Metadata } from "next"
 import Link from "next/link"
-import { applicationReferenceSchema } from "@/src/core/domain/application-reference"
+import { applicationReferenceSchema } from "@/src/core/domain/application/application-reference"
 import { buttonLink } from "@/src/ui/button"
 import { Confirmation } from "@/app/(funnel)/deregister/_components/confirmation"
 

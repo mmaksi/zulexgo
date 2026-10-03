@@ -1,4 +1,4 @@
-import type { Mailer, MailMessage } from "@/src/core/ports/mailer"
+import type { Mailer, MailMessage } from "@/src/core/ports/mail/mailer"
 
 const MASKED_TOKEN = "[status token hidden outside dev]"
 

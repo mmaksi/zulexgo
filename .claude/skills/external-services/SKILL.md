@@ -26,10 +26,10 @@ If swapping a vendor requires editing a file outside `src/adapters/` and one lin
 
 ## Defining a port
 
-Ports live in `src/core/ports/`, one file per capability. They are pure TypeScript — no imports from `adapters/`, `app/`, or any SDK.
+Ports live in `src/core/ports/`, one folder per capability (`payment/`, `registration/`, `mail/`…, the same names as the folders in `src/adapters/`), holding the port and its `*.contract.ts` suite. They are pure TypeScript — no imports from `adapters/`, `app/`, or any SDK.
 
 ```ts
-// src/core/ports/payment-provider.ts
+// src/core/ports/payment/payment-provider.ts
 export interface PaymentProvider {
   /** Reserve funds without capturing. Returns our own reference, not the vendor's. */
   authorize(input: AuthorizeInput): Promise<Authorization>;
@@ -65,7 +65,7 @@ The adapter owns: SDK construction, auth/credentials, retries and backoff, vendo
 Each port has one shared test suite that every adapter must pass. This is what guarantees the fake behaves like the real thing, and what makes the next vendor cheap.
 
 ```ts
-// src/core/ports/payment-provider.contract.ts
+// src/core/ports/payment/payment-provider.contract.ts
 export function paymentProviderContract(name: string, makeSubject: () => PaymentProvider) {
   describe(`PaymentProvider contract: ${name}`, () => {
     it('release() after release() does not throw', async () => { /* ... */ });

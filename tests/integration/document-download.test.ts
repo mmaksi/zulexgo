@@ -3,7 +3,7 @@ import { FakeClock } from "@/src/adapters/clock/fake/fake-clock"
 import { InMemoryRateLimiter } from "@/src/adapters/rate-limit/fake/in-memory-rate-limiter"
 import { InMemoryApplicationRepository } from "@/src/adapters/repository/fake/in-memory-application-repository"
 import { InMemoryDocumentStore } from "@/src/adapters/storage/fake/in-memory-document-store"
-import { RATE_LIMITS } from "@/src/core/domain/rate-limits"
+import { RATE_LIMITS } from "@/src/core/domain/rate-limit/rate-limits"
 import { handleDocumentDownload } from "@/app/status/[token]/documents/[documentId]/handle"
 
 const OWN_TOKEN = "faketoken-own-download"

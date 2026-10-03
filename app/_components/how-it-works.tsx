@@ -1,5 +1,5 @@
-import { formatEuros } from "@/src/core/domain/money"
-import { PROCESSING_FEE } from "@/src/core/domain/pricing"
+import { formatEuros } from "@/src/core/domain/payment/money"
+import { PROCESSING_FEE } from "@/src/core/domain/payment/pricing"
 import { Section, SectionHeading } from "@/src/ui/section"
 
 // site-contract.md §2.1 — exactly four steps, title <=30, text <=120 chars.

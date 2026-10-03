@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { SUPPORT_EMAIL } from "@/src/core/domain/contact"
+import { SUPPORT_EMAIL } from "@/src/core/domain/customer/contact"
 import { Wedge } from "@/src/ui/wedge"
 import { Wordmark } from "@/src/ui/wordmark"
 import { CurrentYear } from "./current-year"

@@ -1,6 +1,6 @@
 import type { z } from "zod"
-import { GatewayRejected } from "@/src/core/errors/gateway-rejected"
-import { GatewayUnavailable } from "@/src/core/errors/gateway-unavailable"
+import { GatewayRejected } from "@/src/core/errors/registration/gateway-rejected"
+import { GatewayUnavailable } from "@/src/core/errors/registration/gateway-unavailable"
 
 /**
  * A request that outlives this is aborted and reported as `GatewayUnavailable`. The abort proves

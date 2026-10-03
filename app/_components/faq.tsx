@@ -1,7 +1,7 @@
 "use client"
 
-import { formatEuros } from "@/src/core/domain/money"
-import { DEREGISTRATION_TOTAL, PROCESSING_FEE } from "@/src/core/domain/pricing"
+import { formatEuros } from "@/src/core/domain/payment/money"
+import { DEREGISTRATION_TOTAL, PROCESSING_FEE } from "@/src/core/domain/payment/pricing"
 import {
   Accordion,
   AccordionContent,
