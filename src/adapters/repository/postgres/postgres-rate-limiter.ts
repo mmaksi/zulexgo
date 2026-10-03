@@ -1,7 +1,7 @@
 import { createHmac } from "node:crypto"
 import { Pool } from "pg"
-import type { Clock } from "@/src/core/ports/clock"
-import { MAX_WINDOW_MS, type RateLimit, type RateLimitDecision, type RateLimiter } from "@/src/core/ports/rate-limiter"
+import type { Clock } from "@/src/core/ports/clock/clock"
+import { MAX_WINDOW_MS, type RateLimit, type RateLimitDecision, type RateLimiter } from "@/src/core/ports/rate-limit/rate-limiter"
 
 /**
  * One statement, so concurrent attempts queue on the row: each sees the count the last one left.

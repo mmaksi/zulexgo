@@ -1,12 +1,12 @@
 "use server"
 
 import { getContainer } from "@/src/config/container"
-import { parseApplicationReference } from "@/src/core/domain/application-reference"
-import { OpenApplicationExists } from "@/src/core/errors/open-application-exists"
+import { parseApplicationReference } from "@/src/core/domain/application/application-reference"
+import { OpenApplicationExists } from "@/src/core/errors/application/open-application-exists"
 import { ValidationError } from "@/src/core/errors/validation-error"
-import { checkEligibility } from "@/src/core/use-cases/check-eligibility"
-import { confirmPayment } from "@/src/core/use-cases/confirm-payment"
-import { submitCheckout } from "@/src/core/use-cases/submit-checkout"
+import { checkEligibility } from "@/src/core/use-cases/checkout/check-eligibility"
+import { confirmPayment } from "@/src/core/use-cases/payment/confirm-payment"
+import { submitCheckout } from "@/src/core/use-cases/checkout/submit-checkout"
 import type { CheckoutActions } from "./_components/checkout-actions"
 import { toRequest } from "@/app/_components/vehicle-data"
 

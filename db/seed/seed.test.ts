@@ -1,11 +1,11 @@
-import { APPLICATION_STATUSES } from "@/src/core/domain/application-status"
+import { APPLICATION_STATUSES } from "@/src/core/domain/application/application-status"
 import { InMemoryApplicationRepository } from "@/src/adapters/repository/fake/in-memory-application-repository"
 import { InMemoryDocumentStore } from "@/src/adapters/storage/fake/in-memory-document-store"
 import { anApplication } from "@/tests/fixtures/applications"
 import { JOURNEYS, seededApplications } from "./data/applications"
 import { FakePaymentProvider } from "@/src/adapters/payment/fake/fake-payment-provider"
-import { retainedOf } from "@/src/core/domain/refund-policy"
-import { PROCESSING_FEE } from "@/src/core/domain/pricing"
+import { retainedOf } from "@/src/core/domain/payment/refund-policy"
+import { PROCESSING_FEE } from "@/src/core/domain/payment/pricing"
 import { loadDocuments, loadSeed, seedDocumentsFor, seedFor, seedPaymentsFor } from "./seed"
 
 describe("seedFor", () => {

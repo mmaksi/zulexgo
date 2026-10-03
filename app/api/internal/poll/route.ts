@@ -1,5 +1,5 @@
 import { getContainer } from "@/src/config/container"
-import { pollDueApplications } from "@/src/core/use-cases/poll-due-applications"
+import { pollDueApplications } from "@/src/core/use-cases/registration/poll-due-applications"
 import { handlePoll } from "./handle"
 
 export async function GET(request: Request) {

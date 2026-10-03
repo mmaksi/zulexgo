@@ -33,7 +33,7 @@ tick, which is the behavior the backoff replaces, and now assert the backoff fir
 These are not fixed or certified by this review:
 
 1. **Correction recovery needs a durable intent.** In
-   `src/core/use-cases/correct-application.ts`, a PATCH can succeed and the final
+   `src/core/use-cases/application/correct-application.ts`, a PATCH can succeed and the final
    repository update can fail. The request changes are not saved before PATCH.
    A later correction sees `inProgress`, skips PATCH, and saves the later input,
    which may differ from what Zulex accepted. Nothing repairs this interruption

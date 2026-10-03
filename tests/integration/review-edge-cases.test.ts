@@ -1,10 +1,10 @@
-import { Money } from "@/src/core/domain/money"
-import { DEREGISTRATION_TOTAL, PROCESSING_FEE } from "@/src/core/domain/pricing"
+import { Money } from "@/src/core/domain/payment/money"
+import { DEREGISTRATION_TOTAL, PROCESSING_FEE } from "@/src/core/domain/payment/pricing"
 import { FAKE_REQUEST } from "@/tests/fixtures/applications"
-import { GatewayRejected } from "@/src/core/errors/gateway-rejected"
-import { GatewayUnavailable } from "@/src/core/errors/gateway-unavailable"
-import { cancelApplication } from "@/src/core/use-cases/cancel-application"
-import { settlePayment } from "@/src/core/use-cases/settle-payment"
+import { GatewayRejected } from "@/src/core/errors/registration/gateway-rejected"
+import { GatewayUnavailable } from "@/src/core/errors/registration/gateway-unavailable"
+import { cancelApplication } from "@/src/core/use-cases/application/cancel-application"
+import { settlePayment } from "@/src/core/use-cases/payment/settle-payment"
 import { keepServiceDown, setupFlow } from "./flow-harness"
 
 describe("payment and polling recovery", () => {

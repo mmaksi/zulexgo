@@ -1,6 +1,6 @@
 import { render, screen, within } from "@testing-library/react"
-import { formatEuros } from "@/src/core/domain/money"
-import { DEREGISTRATION_TOTAL, SERVICE_PRICES } from "@/src/core/domain/pricing"
+import { formatEuros } from "@/src/core/domain/payment/money"
+import { DEREGISTRATION_TOTAL, SERVICE_PRICES } from "@/src/core/domain/payment/pricing"
 import { ServiceSelection } from "./service-selection"
 
 /**

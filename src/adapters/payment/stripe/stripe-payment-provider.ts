@@ -1,8 +1,8 @@
 import Stripe from "stripe"
-import type { Money } from "@/src/core/domain/money"
-import { HoldExpired } from "@/src/core/errors/hold-expired"
-import { NotificationRejected } from "@/src/core/errors/notification-rejected"
-import type { Payment, PaymentNotification, PaymentProvider } from "@/src/core/ports/payment-provider"
+import type { Money } from "@/src/core/domain/payment/money"
+import { HoldExpired } from "@/src/core/errors/payment/hold-expired"
+import { NotificationRejected } from "@/src/core/errors/mail/notification-rejected"
+import type { Payment, PaymentNotification, PaymentProvider } from "@/src/core/ports/payment/payment-provider"
 import { toNotification, toPayment } from "./map"
 
 /** Stripe's API version this adapter's mapping was written against; pinned so an account upgrade changes nothing here. */

@@ -7,13 +7,13 @@ import { InMemoryRateLimiter } from "@/src/adapters/rate-limit/fake/in-memory-ra
 import { InMemoryApplicationRepository } from "@/src/adapters/repository/fake/in-memory-application-repository"
 import { InMemoryDocumentStore } from "@/src/adapters/storage/fake/in-memory-document-store"
 import { FakeTokenGenerator } from "@/src/adapters/tokens/fake/fake-token-generator"
-import type { ApplicationReference } from "@/src/core/domain/application-reference"
-import { GatewayUnavailable } from "@/src/core/errors/gateway-unavailable"
-import type { RejectionCatalogue } from "@/src/core/domain/rejection-catalogue"
-import type { PaymentMethodKind } from "@/src/core/ports/payment-provider"
-import { confirmPayment } from "@/src/core/use-cases/confirm-payment"
-import { pollDueApplications } from "@/src/core/use-cases/poll-due-applications"
-import { submitCheckout } from "@/src/core/use-cases/submit-checkout"
+import type { ApplicationReference } from "@/src/core/domain/application/application-reference"
+import { GatewayUnavailable } from "@/src/core/errors/registration/gateway-unavailable"
+import type { RejectionCatalogue } from "@/src/core/domain/registration/rejection-catalogue"
+import type { PaymentMethodKind } from "@/src/core/ports/payment/payment-provider"
+import { confirmPayment } from "@/src/core/use-cases/payment/confirm-payment"
+import { pollDueApplications } from "@/src/core/use-cases/registration/poll-due-applications"
+import { submitCheckout } from "@/src/core/use-cases/checkout/submit-checkout"
 
 /** Every fake wired as the container wires them, for tests that drive the whole flow. */
 export const MINUTE = 60_000

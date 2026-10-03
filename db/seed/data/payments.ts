@@ -1,8 +1,8 @@
-import type { ApplicationReference } from "@/src/core/domain/application-reference"
-import type { ApplicationStatus } from "@/src/core/domain/application-status"
-import { Money } from "@/src/core/domain/money"
-import { PROCESSING_FEE } from "@/src/core/domain/pricing"
-import type { PaymentStatus } from "@/src/core/ports/payment-provider"
+import type { ApplicationReference } from "@/src/core/domain/application/application-reference"
+import type { ApplicationStatus } from "@/src/core/domain/application/application-status"
+import { Money } from "@/src/core/domain/payment/money"
+import { PROCESSING_FEE } from "@/src/core/domain/payment/pricing"
+import type { PaymentStatus } from "@/src/core/ports/payment/payment-provider"
 import { SEEDED_APPLICATIONS } from "./applications"
 
 export interface SeededPayment {

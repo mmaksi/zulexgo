@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { ArrowRight } from "lucide-react"
-import { formatEuros } from "@/src/core/domain/money"
+import { formatEuros } from "@/src/core/domain/payment/money"
 import {
   CARBON_SURCHARGE,
   FINE_DUST_STICKER_PRICE,
@@ -8,7 +8,7 @@ import {
   PLATE_SHIPPING,
   SERVICE_PRICES,
   type Service,
-} from "@/src/core/domain/pricing"
+} from "@/src/core/domain/payment/pricing"
 import { Badge } from "@/src/ui/badge"
 import { buttonLink } from "@/src/ui/button"
 import {

@@ -1,5 +1,5 @@
 import { Resend } from "resend"
-import type { Mailer, MailMessage } from "@/src/core/ports/mailer"
+import type { Mailer, MailMessage } from "@/src/core/ports/mail/mailer"
 import { renderEmail } from "./render"
 
 /**

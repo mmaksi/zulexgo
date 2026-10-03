@@ -1,5 +1,5 @@
-import type { Clock } from "@/src/core/ports/clock"
-import { MAX_WINDOW_MS, type RateLimit, type RateLimitDecision, type RateLimiter } from "@/src/core/ports/rate-limiter"
+import type { Clock } from "@/src/core/ports/clock/clock"
+import { MAX_WINDOW_MS, type RateLimit, type RateLimitDecision, type RateLimiter } from "@/src/core/ports/rate-limit/rate-limiter"
 
 /**
  * Counts in this process only: right for dev and tests, and worthless across Vercel instances.

@@ -2,8 +2,8 @@ import { handlePaymentNotification } from "@/app/api/webhooks/stripe/handle"
 import { handlePoll } from "@/app/api/internal/poll/handle"
 import { seedFor } from "@/db/seed/seed"
 import { FAKE_REQUEST } from "@/tests/fixtures/applications"
-import { pollDueApplications } from "@/src/core/use-cases/poll-due-applications"
-import { submitCheckout } from "@/src/core/use-cases/submit-checkout"
+import { pollDueApplications } from "@/src/core/use-cases/registration/poll-due-applications"
+import { submitCheckout } from "@/src/core/use-cases/checkout/submit-checkout"
 import { webhookRequest, withVendorsAtTheNetwork } from "./network-harness"
 
 /** M4: the poll heartbeat advances a filed application from what Zulex reports, on the backoff schedule. */

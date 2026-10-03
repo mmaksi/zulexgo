@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, type FormEvent } from "react"
-import type { IkfzStatus } from "@/src/core/domain/registration-authority"
+import type { IkfzStatus } from "@/src/core/domain/registration/registration-authority"
 import { Button } from "@/src/ui/button"
 import { RadioGroup, RadioGroupItem } from "@/src/ui/radio-group"
 import type { CheckoutActions } from "./checkout-actions"

@@ -1,5 +1,5 @@
-import type { ApplicationReference } from "@/src/core/domain/application-reference"
-import type { IdentityVerification, VerificationResult } from "@/src/core/ports/identity-verification"
+import type { ApplicationReference } from "@/src/core/domain/application/application-reference"
+import type { IdentityVerification, VerificationResult } from "@/src/core/ports/identity/identity-verification"
 
 /**
  * In-memory stand-in for Verimi; `customerFinishes` plays the customer at the provider.

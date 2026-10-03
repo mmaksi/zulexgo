@@ -26,10 +26,21 @@ app/                    Next.js App Router. Routing, layouts, pages, route handl
 
 src/
   core/                 The application. No framework, no SDK, no I/O. Pure TypeScript.
-    domain/             Entities and value objects: LicencePlate, SecurityCode, Application, Money.
-    ports/              Interfaces the core requires of the outside world. See `external-services`.
-    use-cases/          One file per business operation: submit-to-kba.ts, advance-status.ts.
-    errors/             Domain error types the whole app throws and maps.
+    domain/             Entities and value objects, one folder per area: application/ (Application,
+                        status machine), vehicle/ (LicencePlate, Vin, SecurityCode), payment/ (Money,
+                        pricing, hold and refund policy), registration/ (KBA error algorithm, poll
+                        schedule), customer/, rate-limit/. `validate.ts` stays at the root.
+    ports/              Interfaces the core requires of the outside world, one folder per capability
+                        with the same names as `adapters/`: payment/, registration/, repository/,
+                        mail/, storage/, identity/, clock/, tokens/, rate-limit/. Each holds the port
+                        and its `*.contract.ts`. See `external-services`.
+    use-cases/          One file per business operation, grouped by the part of the order's life it
+                        belongs to: checkout/, payment/, registration/ (filing, polling, failures),
+                        application/ (cancel, correct), status/ (what the customer reads), mail/.
+                        `dependencies.ts` stays at the root.
+    errors/             Domain error types the whole app throws and maps, in the same folders as the
+                        area that throws them. `domain-error.ts` and `validation-error.ts` stay at
+                        the root.
   adapters/             Implementations of ports. One folder per capability, then per vendor.
     payment/stripe/     |  payment/fake/
     registration/zulex/ |  registration/fake/
@@ -73,6 +84,7 @@ Cross-folder imports go through `@/`; a relative `../` import is a lint error, b
 
 - Files and folders: `kebab-case.ts`. One primary export per file, named after the file.
 - Use cases read as verbs: `submit-deregistration.ts`, not `deregistrationService.ts`.
+- Inside `src/core/`, a folder is an area or a service (`payment/`, `registration/`), not a role. Reuse the area's name in every layer, so `payment` means the same folder in `domain/`, `ports/`, `errors/`, `use-cases/` and `adapters/`. A file that touches several areas goes where its operation belongs (`submit-to-kba` is `registration/`, though it captures the payment).
 - Ports read as roles: `payment-provider.ts`, not `stripe-service.ts`.
 - Tests sit next to their subject (`x.ts` → `x.test.ts`); integration tests live in `tests/integration/`.
 - Path alias: `@/*` maps to the repo root, so `@/src/core/...` and `@/app/...`.

@@ -1,10 +1,10 @@
 import { createHmac, timingSafeEqual } from "node:crypto"
-import type { ApplicationReference } from "@/src/core/domain/application-reference"
-import { Money } from "@/src/core/domain/money"
-import { HoldExpired } from "@/src/core/errors/hold-expired"
-import { NotificationRejected } from "@/src/core/errors/notification-rejected"
-import type { Clock } from "@/src/core/ports/clock"
-import type { Payment, PaymentMethodKind, PaymentNotification, PaymentProvider } from "@/src/core/ports/payment-provider"
+import type { ApplicationReference } from "@/src/core/domain/application/application-reference"
+import { Money } from "@/src/core/domain/payment/money"
+import { HoldExpired } from "@/src/core/errors/payment/hold-expired"
+import { NotificationRejected } from "@/src/core/errors/mail/notification-rejected"
+import type { Clock } from "@/src/core/ports/clock/clock"
+import type { Payment, PaymentMethodKind, PaymentNotification, PaymentProvider } from "@/src/core/ports/payment/payment-provider"
 
 /** Stripe's validity for an online card authorisation (verified via the Stripe docs MCP, 2026-09-27). */
 const HOLD_VALIDITY_MS = 7 * 24 * 60 * 60 * 1000

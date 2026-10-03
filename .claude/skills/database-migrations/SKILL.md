@@ -60,7 +60,7 @@ The composition root loads the seed into the in-memory repository at every boot,
 - **Idempotent.** Loading twice produces the same data, not duplicates: keyed by reference. On a database, a seeded row that already exists is left alone, so changes made while testing on staging survive the next deploy.
 - **Deterministic.** Fixed IDs and a seeded RNG, so a bug found against seed data is reproducible by everyone.
 - **Obviously fake.** Security codes, VINs, plates, emails, and tokens must be recognisable as test data (`AAA111`, `example.test`). Never copy a real value from a production payload or a support ticket into seed data.
-- **Covers the states, not just the happy path.** Seed at least one application in every value of `APPLICATION_STATUSES` (`src/core/domain/application-status.ts`); `db/seed/seed.test.ts` iterates the list, and the seed's journey table is a `Record` over it, so a new status fails to compile until it is seeded. If a developer cannot see every UI state right after starting the dev server, the seed is incomplete.
+- **Covers the states, not just the happy path.** Seed at least one application in every value of `APPLICATION_STATUSES` (`src/core/domain/application/application-status.ts`); `db/seed/seed.test.ts` iterates the list, and the seed's journey table is a `Record` over it, so a new status fails to compile until it is seeded. If a developer cannot see every UI state right after starting the dev server, the seed is incomplete.
 - Seed data is not test fixtures. Jest fixtures live in `tests/fixtures/`; do not import one from the other.
 
 ## Running migrations

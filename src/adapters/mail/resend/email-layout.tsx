@@ -1,5 +1,5 @@
 import { Body, Button, Container, Head, Heading, Html, Preview, Section, Text } from "react-email"
-import { SUPPORT_EMAIL } from "@/src/core/domain/contact"
+import { SUPPORT_EMAIL } from "@/src/core/domain/customer/contact"
 import type { EmailCopy } from "./copy"
 
 /** design-standard §2: literal values, since no email client reads the app's CSS variables. */

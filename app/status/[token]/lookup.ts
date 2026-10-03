@@ -1,7 +1,7 @@
-import { RATE_LIMITS } from "@/src/core/domain/rate-limits"
-import { TokenInvalid } from "@/src/core/errors/token-invalid"
-import type { RateLimiter } from "@/src/core/ports/rate-limiter"
-import { getStatusByToken, type StatusView } from "@/src/core/use-cases/get-status-by-token"
+import { RATE_LIMITS } from "@/src/core/domain/rate-limit/rate-limits"
+import { TokenInvalid } from "@/src/core/errors/application/token-invalid"
+import type { RateLimiter } from "@/src/core/ports/rate-limit/rate-limiter"
+import { getStatusByToken, type StatusView } from "@/src/core/use-cases/status/get-status-by-token"
 import { clientAddress } from "@/src/lib/client-address"
 
 export type StatusLookup =

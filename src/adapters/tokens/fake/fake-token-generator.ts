@@ -1,4 +1,4 @@
-import { TOKEN_MIN_LENGTH, type TokenGenerator } from "@/src/core/ports/token-generator"
+import { TOKEN_MIN_LENGTH, type TokenGenerator } from "@/src/core/ports/tokens/token-generator"
 
 /** Makes a fake token unmistakable wherever it surfaces, in output or in a link. */
 const PREFIX = "faketoken"

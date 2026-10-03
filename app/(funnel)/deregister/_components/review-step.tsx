@@ -2,8 +2,8 @@
 
 import Link from "next/link"
 import { useRef, useState, type FormEvent } from "react"
-import { formatEuros } from "@/src/core/domain/money"
-import { DEREGISTRATION_TOTAL, PROCESSING_FEE } from "@/src/core/domain/pricing"
+import { formatEuros } from "@/src/core/domain/payment/money"
+import { DEREGISTRATION_TOTAL, PROCESSING_FEE } from "@/src/core/domain/payment/pricing"
 import { Button } from "@/src/ui/button"
 import { Checkbox } from "@/src/ui/checkbox"
 import type { CheckoutActions, PaymentDriver, PaymentMode } from "./checkout-actions"

@@ -1,6 +1,6 @@
 import { join } from "node:path"
 import { Migrator, readMigrations } from "@/src/adapters/repository/postgres/migrator"
-import { APPLICATION_STATUSES } from "@/src/core/domain/application-status"
+import { APPLICATION_STATUSES } from "@/src/core/domain/application/application-status"
 import { createTestDatabase, describeWithPostgres, type TestDatabase } from "@/src/adapters/repository/postgres/test-database"
 
 const SCHEMA_OBJECTS = `

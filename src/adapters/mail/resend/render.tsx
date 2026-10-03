@@ -1,5 +1,5 @@
 import { render } from "react-email"
-import type { EmailTemplate } from "@/src/core/ports/mailer"
+import type { EmailTemplate } from "@/src/core/ports/mail/mailer"
 import { copyFor } from "./copy"
 import { EmailLayout } from "./email-layout"
 

@@ -7,12 +7,12 @@ import { InMemoryRateLimiter } from "@/src/adapters/rate-limit/fake/in-memory-ra
 import { InMemoryApplicationRepository } from "@/src/adapters/repository/fake/in-memory-application-repository"
 import { InMemoryDocumentStore } from "@/src/adapters/storage/fake/in-memory-document-store"
 import { FakeTokenGenerator } from "@/src/adapters/tokens/fake/fake-token-generator"
-import { GatewayUnavailable } from "@/src/core/errors/gateway-unavailable"
-import { confirmPayment } from "@/src/core/use-cases/confirm-payment"
-import { confirmRefund } from "@/src/core/use-cases/confirm-refund"
-import { pollDueApplications } from "@/src/core/use-cases/poll-due-applications"
-import { resendStatusLink } from "@/src/core/use-cases/resend-status-link"
-import { submitCheckout } from "@/src/core/use-cases/submit-checkout"
+import { GatewayUnavailable } from "@/src/core/errors/registration/gateway-unavailable"
+import { confirmPayment } from "@/src/core/use-cases/payment/confirm-payment"
+import { confirmRefund } from "@/src/core/use-cases/payment/confirm-refund"
+import { pollDueApplications } from "@/src/core/use-cases/registration/poll-due-applications"
+import { resendStatusLink } from "@/src/core/use-cases/status/resend-status-link"
+import { submitCheckout } from "@/src/core/use-cases/checkout/submit-checkout"
 
 /**
  * CLAUDE.md non-negotiable: security codes never reach a log, in any stage.

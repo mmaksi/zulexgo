@@ -1,4 +1,4 @@
-import type { Mailer, MailMessage } from "@/src/core/ports/mailer"
+import type { Mailer, MailMessage } from "@/src/core/ports/mail/mailer"
 
 /**
  * Records every message so tests can assert which emails went out, and how

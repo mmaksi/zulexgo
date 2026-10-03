@@ -1,8 +1,8 @@
 import { anApplication } from "@/tests/fixtures/applications"
-import type { Application } from "@/src/core/domain/application"
-import { RATE_LIMITS } from "@/src/core/domain/rate-limits"
-import type { MailMessage } from "@/src/core/ports/mailer"
-import type { RateLimit, RateLimitDecision } from "@/src/core/ports/rate-limiter"
+import type { Application } from "@/src/core/domain/application/application"
+import { RATE_LIMITS } from "@/src/core/domain/rate-limit/rate-limits"
+import type { MailMessage } from "@/src/core/ports/mail/mailer"
+import type { RateLimit, RateLimitDecision } from "@/src/core/ports/rate-limit/rate-limiter"
 import { requestStatusLink } from "./request"
 
 const order = anApplication({ status: "submitted_to_kba" })

@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto"
 import { join } from "node:path"
 import { anApplication, FAKE_REQUEST } from "@/tests/fixtures/applications"
-import { applicationRepositoryContract } from "@/src/core/ports/application-repository.contract"
+import { applicationRepositoryContract } from "@/src/core/ports/repository/application-repository.contract"
 import { Migrator, readMigrations } from "./migrator"
 import { PostgresApplicationRepository } from "./postgres-application-repository"
 import { createTestDatabase, describeWithPostgres, type TestDatabase } from "./test-database"

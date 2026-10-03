@@ -1,7 +1,7 @@
-import { GatewayRejected } from "@/src/core/errors/gateway-rejected"
+import { GatewayRejected } from "@/src/core/errors/registration/gateway-rejected"
 import { CODES, setupFlow } from "@/tests/integration/flow-harness"
-import { RATE_LIMITS } from "@/src/core/domain/rate-limits"
-import { GatewayUnavailable } from "@/src/core/errors/gateway-unavailable"
+import { RATE_LIMITS } from "@/src/core/domain/rate-limit/rate-limits"
+import { GatewayUnavailable } from "@/src/core/errors/registration/gateway-unavailable"
 import { cancelOrder, correctOrder } from "./order-change"
 
 const headers = new Headers({ "x-forwarded-for": "203.0.113.7" })

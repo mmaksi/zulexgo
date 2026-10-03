@@ -1,5 +1,5 @@
-import { parseApplicationReference, type ApplicationReference } from "@/src/core/domain/application-reference"
-import type { DocumentRef } from "@/src/core/domain/document"
+import { parseApplicationReference, type ApplicationReference } from "@/src/core/domain/application/application-reference"
+import type { DocumentRef } from "@/src/core/domain/registration/document"
 
 export interface SeededDocument {
   readonly reference: ApplicationReference

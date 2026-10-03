@@ -1,6 +1,6 @@
-import type { ApplicationReference } from "@/src/core/domain/application-reference"
-import type { DocumentRef } from "@/src/core/domain/document"
-import type { DocumentStore, StoredDocument } from "@/src/core/ports/document-store"
+import type { ApplicationReference } from "@/src/core/domain/application/application-reference"
+import type { DocumentRef } from "@/src/core/domain/registration/document"
+import type { DocumentStore, StoredDocument } from "@/src/core/ports/storage/document-store"
 
 /**
  * `DocumentStore` in process memory: documents live per application reference, keyed by the vendor's

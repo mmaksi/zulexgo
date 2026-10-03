@@ -10,7 +10,7 @@ import { InMemoryRateLimiter } from "@/src/adapters/rate-limit/fake/in-memory-ra
 import { InMemoryApplicationRepository } from "@/src/adapters/repository/fake/in-memory-application-repository"
 import { InMemoryDocumentStore } from "@/src/adapters/storage/fake/in-memory-document-store"
 import { FakeTokenGenerator } from "@/src/adapters/tokens/fake/fake-token-generator"
-import type { ApplicationReference } from "@/src/core/domain/application-reference"
+import type { ApplicationReference } from "@/src/core/domain/application/application-reference"
 import type { Dependencies } from "@/src/core/use-cases/dependencies"
 
 /**

@@ -1,6 +1,6 @@
 import { anApplication } from "@/tests/fixtures/applications"
-import { RATE_LIMITS } from "@/src/core/domain/rate-limits"
-import type { RateLimit, RateLimitDecision } from "@/src/core/ports/rate-limiter"
+import { RATE_LIMITS } from "@/src/core/domain/rate-limit/rate-limits"
+import type { RateLimit, RateLimitDecision } from "@/src/core/ports/rate-limit/rate-limiter"
 import { lookupStatus } from "./lookup"
 
 const TOKEN = "faketoken-lookup"

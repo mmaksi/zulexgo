@@ -1,9 +1,9 @@
 import { FAKE_REQUEST } from "@/tests/fixtures/applications"
-import { parseDeregistrationRequest } from "@/src/core/domain/deregistration-request"
-import { parseVin } from "@/src/core/domain/vin"
-import { GatewayRejected } from "@/src/core/errors/gateway-rejected"
-import { GatewayUnavailable } from "@/src/core/errors/gateway-unavailable"
-import { registrationGatewayContract } from "@/src/core/ports/registration-gateway.contract"
+import { parseDeregistrationRequest } from "@/src/core/domain/application/deregistration-request"
+import { parseVin } from "@/src/core/domain/vehicle/vin"
+import { GatewayRejected } from "@/src/core/errors/registration/gateway-rejected"
+import { GatewayUnavailable } from "@/src/core/errors/registration/gateway-unavailable"
+import { registrationGatewayContract } from "@/src/core/ports/registration/registration-gateway.contract"
 import { FakeRegistrationGateway } from "./fake-registration-gateway"
 
 registrationGatewayContract("FakeRegistrationGateway", () => new FakeRegistrationGateway())

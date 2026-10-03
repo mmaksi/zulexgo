@@ -1,9 +1,9 @@
 import { handlePaymentNotification } from "@/app/api/webhooks/stripe/handle"
 import { FAKE_REQUEST } from "@/tests/fixtures/applications"
-import { submitCheckout } from "@/src/core/use-cases/submit-checkout"
-import { cancelApplication } from "@/src/core/use-cases/cancel-application"
-import { correctApplication } from "@/src/core/use-cases/correct-application"
-import { pollDueApplications } from "@/src/core/use-cases/poll-due-applications"
+import { submitCheckout } from "@/src/core/use-cases/checkout/submit-checkout"
+import { cancelApplication } from "@/src/core/use-cases/application/cancel-application"
+import { correctApplication } from "@/src/core/use-cases/application/correct-application"
+import { pollDueApplications } from "@/src/core/use-cases/registration/poll-due-applications"
 import { webhookRequest, withVendorsAtTheNetwork } from "./network-harness"
 
 /**
