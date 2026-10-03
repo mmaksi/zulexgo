@@ -24,7 +24,7 @@ mailerContract("ResendMailer", () => mailer())
 
 const { reference, email } = anApplication()
 const statusLink = "https://zulexgo.example.test/status/faketoken-resend-test"
-const orderConfirmation = { name: "orderConfirmation", reference, statusLink } as const
+const orderConfirmation = { name: "orderConfirmation", service: "deregistration", reference, statusLink } as const
 
 describe("ResendMailer", () => {
   it("sends the order confirmation with its status link, from our sender, keyed against resending", async () => {
@@ -60,6 +60,7 @@ describe("ResendMailer", () => {
   it("states in the rejection email the amount that is returned", async () => {
     const rejected = {
       name: "rejected",
+      service: "deregistration",
       reference,
       statusLink: "https://zulexgo.example.test/status/t",
       reason: "Das Fahrzeug ist bereits abgemeldet.",

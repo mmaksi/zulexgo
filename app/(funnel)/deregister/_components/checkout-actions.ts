@@ -16,15 +16,3 @@ export interface CheckoutActions {
   /** Only where no real payment provider is configured: plays the customer paying. */
   completeSimulatedPayment(reference: string): Promise<{ ok: boolean }>
 }
-
-/**
- * How the review step takes the money. `prepare` validates the payment form
- * before anything is stored; `confirm` completes it once the order exists.
- * Each returns an error message for the customer, or nothing.
- */
-export interface PaymentDriver {
-  prepare(): Promise<string | undefined>
-  confirm(order: { reference: string; clientSecret: string }): Promise<string | undefined>
-}
-
-export type PaymentMode = { kind: "stripe"; publishableKey: string } | { kind: "simulated" }

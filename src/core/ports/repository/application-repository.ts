@@ -21,8 +21,9 @@ import type { DeregistrationRequest } from "@/src/core/domain/application/deregi
  *   same link; adapters that persist it keep it encrypted and look it up by
  *   hash. Setting a new one revokes the old one.
  * - `hasOpenApplication` says whether a paid order that is not finished exists
- *   for the plate and VIN; one still awaiting payment, completed, failed for
- *   good or cancelled does not count. It says nothing more: no reference, no status.
+ *   for the service, plate and VIN; one still awaiting payment, completed, failed for
+ *   good or cancelled does not count, nor does one for another service. It says nothing
+ *   more: no reference, no status.
  * - `findDueForPolling` returns applications whose next check is due, soonest
  *   first: a status check at the KBA, a silent resubmission after a technical
  *   failure, or a look at the money of a 5b that waits for the customer.
@@ -66,10 +67,10 @@ export interface ApplicationRepository {
    */
   findByStatusToken(token: string): Promise<Application | undefined>
   /**
-   * Plate (prefix, letters, numbers) and VIN must both match. Advisory, not a
-   * lock: two checkouts racing can both see `false`.
+   * Service, plate (prefix, letters, numbers) and VIN must all match. Takes the request itself,
+   * as checkout holds it. Advisory, not a lock: two checkouts racing can both see `false`.
    */
-  hasOpenApplication(vehicle: Pick<DeregistrationRequest, "licencePlate" | "vin">): Promise<boolean>
+  hasOpenApplication(vehicle: Pick<DeregistrationRequest, "service" | "licencePlate" | "vin">): Promise<boolean>
   /**
    * Due means `polling.nextPollAt <= now`, a moment exactly equal to `now`
    * included, among the statuses that are polled at all. An application

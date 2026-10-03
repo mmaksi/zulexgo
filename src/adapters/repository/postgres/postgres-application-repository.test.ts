@@ -35,6 +35,31 @@ describeWithPostgres("PostgresApplicationRepository", () => {
     await expect(database.query(`UPDATE applications SET ${assignments} WHERE reference = '${created.reference}'`)).rejects.toThrow(/failure/)
   })
 
+  describe("the service of an order", () => {
+    const paidOrder = () => anApplication({ status: "submitted_to_kba", history: [{ status: "submitted_to_kba", at: new Date("2026-01-01T00:00:00.000Z") }] })
+
+    it("is stored in a column of its own, where a query by service can find it", async () => {
+      await repository.create(anApplication())
+
+      expect(await database.query("SELECT service FROM applications")).toEqual([{ service: "deregistration" }])
+    })
+
+    it("does not make an open order of another service a duplicate", async () => {
+      const created = await repository.create(paidOrder())
+      expect(await repository.hasOpenApplication(created.request)).toBe(true)
+
+      await database.query(`UPDATE applications SET service = 'newRegistration' WHERE reference = '${created.reference}'`)
+
+      expect(await repository.hasOpenApplication(created.request)).toBe(false)
+    })
+
+    it("refuses a service the price list does not have, however the row is written", async () => {
+      const created = await repository.create(anApplication())
+
+      await expect(database.query(`UPDATE applications SET service = 'not-a-service' WHERE reference = '${created.reference}'`)).rejects.toThrow(/applications_service_known/)
+    })
+  })
+
   it("keeps security codes and status tokens out of every stored row", async () => {
     const created = await repository.create(anApplication())
     await repository.setStatusToken(created.reference, TOKEN)

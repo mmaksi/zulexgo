@@ -13,7 +13,7 @@ describe("ConsoleMailer", () => {
     const lines: string[] = []
     await new ConsoleMailer({ revealStatusLinks, log: (line) => lines.push(line) }).send({
       to: email,
-      template: { name: "orderConfirmation", reference, statusLink },
+      template: { name: "orderConfirmation", service: "deregistration", reference, statusLink },
       idempotencyKey: "k",
     })
     return lines.join("\n")

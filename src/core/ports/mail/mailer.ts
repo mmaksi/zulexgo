@@ -1,25 +1,29 @@
 import type { ApplicationReference } from "@/src/core/domain/application/application-reference"
+import type { OrderableService } from "@/src/core/domain/application/service"
 import type { Email } from "@/src/core/domain/customer/email"
 import type { Money } from "@/src/core/domain/payment/money"
 
 /**
  * The customer emails of business logic §5, without Verimi's two. Each carries
  * only what its email shows, so a security code has nowhere to go: the types
- * leave no field for one. Rendering to HTML is the adapter's job.
+ * leave no field for one. Rendering to HTML is the adapter's job. The emails that
+ * say what was ordered or what the KBA did carry the `service`, since their
+ * wording differs per service; the others read the same for every one.
  */
 export type EmailTemplate =
   /** Email 1: the payment is in and the order exists; carries the status link. */
-  | { readonly name: "orderConfirmation"; readonly reference: ApplicationReference; readonly statusLink: string }
+  | { readonly name: "orderConfirmation"; readonly service: OrderableService; readonly reference: ApplicationReference; readonly statusLink: string }
   /** Email 4: submitted to the KBA, whose answer is awaited. Sent again after a correction. */
   | {
       readonly name: "submittedToKba"
+      readonly service: OrderableService
       readonly reference: ApplicationReference
       readonly statusLink: string
       /** The authority is not online: processing is manual and can take days. */
       readonly manualProcessing: boolean
     }
-  /** Email 5a: the KBA confirmed the de-registration; the confirmation is on the status page. */
-  | { readonly name: "completed"; readonly reference: ApplicationReference; readonly statusLink: string }
+  /** Email 5a: the KBA completed the service; its confirmation is on the status page. */
+  | { readonly name: "completed"; readonly service: OrderableService; readonly reference: ApplicationReference; readonly statusLink: string }
   /** Email 5b: the order failed but can still be corrected or cancelled by the customer. */
   | {
       readonly name: "correctionRequired"
@@ -31,6 +35,7 @@ export type EmailTemplate =
   /** Email 5c: the order failed for good; says what goes back and what is kept. */
   | {
       readonly name: "rejected"
+      readonly service: OrderableService
       readonly reference: ApplicationReference
       readonly statusLink: string
       /** What went wrong, in our words (the rejection catalogue), never the vendor's. */

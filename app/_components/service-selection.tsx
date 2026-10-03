@@ -1,5 +1,6 @@
 import Link from "next/link"
 import { ArrowRight } from "lucide-react"
+import { isOnSale, type OrderableService, type Service } from "@/src/core/domain/application/service"
 import { formatEuros } from "@/src/core/domain/payment/money"
 import {
   CARBON_SURCHARGE,
@@ -7,7 +8,6 @@ import {
   PLATE_PRICE,
   PLATE_SHIPPING,
   SERVICE_PRICES,
-  type Service,
 } from "@/src/core/domain/payment/pricing"
 import { Badge } from "@/src/ui/badge"
 import { buttonLink } from "@/src/ui/button"
@@ -21,50 +21,52 @@ import {
 } from "@/src/ui/card"
 import { Section, SectionHeading } from "@/src/ui/section"
 
+/** Where each service's funnel is, and what its button says: site-contract.md §2.1, CTA label <=20 chars. */
+const FUNNELS: Record<OrderableService, { href: string; label: string }> = {
+  deregistration: { href: "/deregister", label: "Jetzt abmelden" },
+}
+
 /**
- * prd.md §3 — the MVP sells de-registration only; every other service is
- * visible but disabled, so the roadmap is legible without being clickable.
- * site-contract.md §2.1 — title <=30, description <=90, CTA label <=20 chars.
+ * prd.md §3 — a card is actionable only for a service on sale (`SERVICES_ON_SALE`); every
+ * other service is visible but disabled, so the roadmap is legible without being clickable.
+ * site-contract.md §2.1 — title <=30, description <=90 chars.
  * Prices come from the price list, so a card can never quote what the
  * checkout does not charge.
  */
-const SERVICES: { service: Service; title: string; description: string; available: boolean }[] = [
+const SERVICES: { service: Service; title: string; description: string }[] = [
   {
     service: "deregistration",
     title: "Abmeldung",
     description:
       "Fahrzeug offiziell außer Betrieb setzen — bei Verkauf, Verschrottung oder Export.",
-    available: true,
   },
   {
     service: "newRegistration",
     title: "Neuzulassung",
     description:
       "Neues Fahrzeug erstmals anmelden. Kennzeichen bestellen Sie auf Wunsch dazu.",
-    available: false,
   },
   {
     service: "reRegistration",
     title: "Wiederzulassung",
     description:
       "Abgemeldetes Fahrzeug wieder zulassen — ohne Gang zur Zulassungsstelle.",
-    available: false,
   },
   {
     service: "changeOfKeeper",
     title: "Ummeldung",
     description:
       "Fahrzeug auf einen neuen Halter ummelden — ohne Gang zur Zulassungsstelle.",
-    available: false,
   },
   {
     service: "addressChange",
     title: "Adressänderung",
     description:
       "Neue Anschrift in den Fahrzeugpapieren eintragen — ohne Termin.",
-    available: false,
   },
 ]
+
+const CARDS = SERVICES.map((card) => ({ ...card, funnel: isOnSale(card.service) ? FUNNELS[card.service] : undefined }))
 
 export function ServiceSelection() {
   return (
@@ -76,12 +78,12 @@ export function ServiceSelection() {
       />
 
       <ul className="grid gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 xl:grid-cols-5">
-        {SERVICES.map((service) => (
+        {CARDS.map((service) => (
           <li key={service.service} className="flex">
             <Card
-              aria-disabled={!service.available || undefined}
+              aria-disabled={!service.funnel || undefined}
               className={
-                service.available
+                service.funnel
                   ? "relative flex-1 transition-[border-color,box-shadow] hover:border-grau-bright hover:shadow-elev-1"
                   : "flex-1 bg-bg-blue"
               }
@@ -101,14 +103,14 @@ export function ServiceSelection() {
                   {formatEuros(SERVICE_PRICES[service.service])}
                 </p>
                 <div className="flex min-h-12 w-full items-center">
-                  {service.available ? (
+                  {service.funnel ? (
                     // The link stretches over the card, so the whole card is
                     // the click target its hover state promises (§5.3).
                     <Link
-                      href="/deregister"
+                      href={service.funnel.href}
                       className={buttonLink({ className: "w-full after:absolute after:inset-0" })}
                     >
-                      Jetzt abmelden
+                      {service.funnel.label}
                       <ArrowRight aria-hidden="true" />
                     </Link>
                   ) : (

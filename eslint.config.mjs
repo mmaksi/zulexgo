@@ -22,8 +22,8 @@ const VENDORS = [
 }));
 
 // Stripe's browser SDKs are UI, so they cannot live in an adapter; they get one
-// folder of their own in the funnel instead.
-const STRIPE_UI_FOLDER = "app/(funnel)/deregister/_components/stripe";
+// folder of their own, shared by every funnel, instead.
+const STRIPE_UI_FOLDER = "app/(funnel)/_components/stripe";
 const STRIPE_UI = {
   group: ["@stripe/*"],
   message: `Stripe's browser SDK lives in ${STRIPE_UI_FOLDER}/ only.`,

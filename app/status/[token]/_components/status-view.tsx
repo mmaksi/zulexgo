@@ -40,6 +40,39 @@ function describe(step: CustomerStep, failureReason?: string): { title: string; 
   }
 }
 
+const TITLES: Record<View["service"], string> = {
+  deregistration: "Ihre Abmeldung",
+}
+
+/** What the order is about, as the service sees it: for a de-registration, the plate and the end of the VIN. */
+function Summary({ view }: { view: View }) {
+  switch (view.service) {
+    case "deregistration":
+      return (
+        <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-body">
+          <dt className="text-grau-bright">Kennzeichen</dt>
+          <dd>
+            <PlateFrame className="inline-flex">
+              <span className="plate-text block px-3 py-1 text-grau-dark">
+                {view.licencePlate.prefix} {view.licencePlate.letters} {view.licencePlate.numbers}
+              </span>
+            </PlateFrame>
+          </dd>
+          <dt className="text-grau-bright">FIN</dt>
+          <dd className="text-grau-dark">endet auf {view.vinEnding}</dd>
+        </dl>
+      )
+  }
+}
+
+/** The form that corrects what the customer entered, which fields it asks for being the service's. */
+function CorrectionForm({ view, action }: { view: View; action: CorrectOrderAction }) {
+  switch (view.service) {
+    case "deregistration":
+      return <CorrectOrder action={action} plateCount={view.plateCount} />
+  }
+}
+
 const DOCUMENT_LABELS: Record<DocumentKind, string> = {
   confirmation: "Bestätigung der Abmeldung",
   rejection: "Ablehnung",
@@ -67,24 +100,12 @@ export function StatusView({
   cancelAction: CancelOrderAction
   correctAction: CorrectOrderAction
 }) {
-  const { licencePlate } = view
   return (
     <div className="flex flex-col gap-(--heading-space-above)">
       <header className="flex flex-col gap-(--heading-space-below)">
         <p className="text-small tracking-[0.1em] text-grau-bright uppercase">Auftrag {view.reference}</p>
-        <h1 className="text-grau-dark">Ihre Abmeldung</h1>
-        <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-body">
-          <dt className="text-grau-bright">Kennzeichen</dt>
-          <dd>
-            <PlateFrame className="inline-flex">
-              <span className="plate-text block px-3 py-1 text-grau-dark">
-                {licencePlate.prefix} {licencePlate.letters} {licencePlate.numbers}
-              </span>
-            </PlateFrame>
-          </dd>
-          <dt className="text-grau-bright">FIN</dt>
-          <dd className="text-grau-dark">endet auf {view.vinEnding}</dd>
-        </dl>
+        <h1 className="text-grau-dark">{TITLES[view.service]}</h1>
+        <Summary view={view} />
       </header>
 
       <section aria-labelledby="status-steps">
@@ -160,7 +181,7 @@ function OutcomeBlock({
             <div className="flex flex-col gap-4">
               <h3 className="text-subtitle text-grau-dark">Angaben korrigieren</h3>
               <p className="text-body text-grau">Korrigieren Sie Ihre Angaben und reichen Sie den Antrag erneut ein. Das kostet nichts extra.</p>
-              <CorrectOrder action={correctAction} plateCount={view.plateCount} />
+              <CorrectionForm view={view} action={correctAction} />
             </div>
           )}
           {view.cancellation ? (

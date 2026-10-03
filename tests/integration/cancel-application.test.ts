@@ -1,5 +1,5 @@
 import { Money } from "@/src/core/domain/payment/money"
-import { DEREGISTRATION_TOTAL, PROCESSING_FEE } from "@/src/core/domain/payment/pricing"
+import { PROCESSING_FEE, SERVICE_PRICES } from "@/src/core/domain/payment/pricing"
 import { GatewayRejected } from "@/src/core/errors/registration/gateway-rejected"
 import { InvalidTransition } from "@/src/core/errors/application/invalid-transition"
 import { StaleApplication } from "@/src/core/errors/application/stale-application"
@@ -8,7 +8,7 @@ import { cancelApplication } from "@/src/core/use-cases/application/cancel-appli
 import { CODES, MINUTE, setupFlow } from "./flow-harness"
 
 /** M6, 5b option B: the customer cancels; 19.99 € stays, the rest goes back, and email 6 follows. */
-const REFUND = DEREGISTRATION_TOTAL.subtract(PROCESSING_FEE)
+const REFUND = SERVICE_PRICES.deregistration.subtract(PROCESSING_FEE)
 
 /** A 5b whose card was already captured, as an online authority's is once the KBA refuses the data. */
 async function correctableAfterCapture() {
@@ -36,7 +36,7 @@ describe("cancelApplication", () => {
     await cancelApplication(flow.deps, await tokenOf(flow))
 
     expect((await flow.stored(flow.reference)).status).toBe("cancelled")
-    expect(await flow.payment(flow.reference)).toMatchObject({ status: "captured", captured: DEREGISTRATION_TOTAL, refunded: REFUND })
+    expect(await flow.payment(flow.reference)).toMatchObject({ status: "captured", captured: SERVICE_PRICES.deregistration, refunded: REFUND })
     expect(flow.emails()).toEqual(["orderConfirmation", "submittedToKba", "correctionRequired", "refundIssued"])
     expect(flow.deps.mailer.sent.at(-1)?.template).toMatchObject({ name: "refundIssued", amount: REFUND })
   })
@@ -134,7 +134,7 @@ describe("cancelApplication", () => {
     await cancelApplication(flow.deps, await tokenOf(flow))
 
     expect((await flow.stored(flow.reference)).status).toBe("cancelled")
-    expect(flow.deps.mailer.sent.at(-1)?.template).toMatchObject({ name: "refundIssued", amount: DEREGISTRATION_TOTAL })
+    expect(flow.deps.mailer.sent.at(-1)?.template).toMatchObject({ name: "refundIssued", amount: SERVICE_PRICES.deregistration })
     warn.mockRestore()
   })
 

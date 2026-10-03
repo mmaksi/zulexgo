@@ -1,6 +1,6 @@
 import { FAKE_REQUEST } from "@/tests/fixtures/applications"
 import { Money } from "@/src/core/domain/payment/money"
-import { DEREGISTRATION_TOTAL, PROCESSING_FEE } from "@/src/core/domain/payment/pricing"
+import { PROCESSING_FEE, SERVICE_PRICES } from "@/src/core/domain/payment/pricing"
 import { GatewayRejected } from "@/src/core/errors/registration/gateway-rejected"
 import { GatewayUnavailable } from "@/src/core/errors/registration/gateway-unavailable"
 import { confirmPayment } from "@/src/core/use-cases/payment/confirm-payment"
@@ -30,7 +30,7 @@ describe("de-registration flow on fakes", () => {
 
       expect((await stored(reference)).status).toBe("completed")
       expect(emails()).toEqual(["orderConfirmation", "submittedToKba", "completed"])
-      expect(await payment(reference)).toMatchObject({ status: "captured", captured: DEREGISTRATION_TOTAL })
+      expect(await payment(reference)).toMatchObject({ status: "captured", captured: SERVICE_PRICES.deregistration })
       expect(await deps.documents.list(reference)).toEqual([{ id: "77", kind: "confirmation" }])
     })
 
@@ -41,7 +41,7 @@ describe("de-registration flow on fakes", () => {
       deps.registration.setStatus(await zulexId(reference), { state: "finished", documents: [] })
       await poll(1)
 
-      expect(await payment(reference)).toMatchObject({ status: "captured", captured: DEREGISTRATION_TOTAL })
+      expect(await payment(reference)).toMatchObject({ status: "captured", captured: SERVICE_PRICES.deregistration })
     })
 
     it("sends the same status link in every email", async () => {
@@ -69,7 +69,7 @@ describe("de-registration flow on fakes", () => {
 
     it("resumes on the provider's retry when email 1 failed, keeping the status link it already issued", async () => {
       const { deps, emails, stored } = setup()
-      const { reference } = await submitCheckout(deps, { request: FAKE_REQUEST, email: "customer@example.test" })
+      const { reference } = await submitCheckout(deps, { service: "deregistration", request: FAKE_REQUEST, email: "customer@example.test" })
       await deps.payments.customerPays((await stored(reference)).payment.id, "card")
       jest.spyOn(deps.mailer, "send").mockRejectedValueOnce(new Error("Resend refused the message"))
 
@@ -85,7 +85,7 @@ describe("de-registration flow on fakes", () => {
 
     it("leaves a submission that died after payment was recorded for the poller to resume", async () => {
       const { deps, emails, stored, poll } = setup()
-      const { reference } = await submitCheckout(deps, { request: FAKE_REQUEST, email: "customer@example.test" })
+      const { reference } = await submitCheckout(deps, { service: "deregistration", request: FAKE_REQUEST, email: "customer@example.test" })
       await deps.payments.customerPays((await stored(reference)).payment.id, "card")
       deps.registration.failNext("submit", new Error("the process died"))
 
@@ -98,7 +98,7 @@ describe("de-registration flow on fakes", () => {
 
     it("does nothing until the customer has actually paid", async () => {
       const { deps, emails, stored } = setup()
-      const { reference } = await submitCheckout(deps, { request: FAKE_REQUEST, email: "customer@example.test" })
+      const { reference } = await submitCheckout(deps, { service: "deregistration", request: FAKE_REQUEST, email: "customer@example.test" })
 
       await confirmPayment(deps, reference)
 
@@ -110,6 +110,7 @@ describe("de-registration flow on fakes", () => {
   describe("J8, a second order for a vehicle that already has one open", () => {
     const again = (flow: ReturnType<typeof setup>, options: { acknowledgedDuplicate?: boolean; vin?: string } = {}) =>
       submitCheckout(flow.deps, {
+        service: "deregistration",
         request: { ...FAKE_REQUEST, vin: options.vin ?? FAKE_REQUEST.vin },
         email: "customer@example.test",
         acknowledgedDuplicate: options.acknowledgedDuplicate,
@@ -170,7 +171,7 @@ describe("de-registration flow on fakes", () => {
 
     it("keeps resubmitting under the same idempotency key while the service cannot be reached, telling nobody and refunding nothing (D6)", async () => {
       const flow = setup()
-      const submit = jest.spyOn(flow.deps.registration, "submitDeregistration")
+      const submit = jest.spyOn(flow.deps.registration, "submit")
       flow.deps.registration.failNext("submit", new GatewayUnavailable())
       const reference = await flow.checkoutAndPay("card")
 
@@ -264,7 +265,7 @@ describe("de-registration flow on fakes", () => {
       expect(warn.mock.calls.flat().join(" ")).toContain(reference)
       await confirmRefund(flow.deps, reference)
       expect(flow.emails()).toEqual(["orderConfirmation", "rejected", "refundIssued"])
-      expect(flow.deps.mailer.sent.at(-1)?.template).toMatchObject({ amount: DEREGISTRATION_TOTAL })
+      expect(flow.deps.mailer.sent.at(-1)?.template).toMatchObject({ amount: SERVICE_PRICES.deregistration })
       warn.mockRestore()
     })
 
@@ -377,7 +378,7 @@ describe("de-registration flow on fakes", () => {
         await confirmRefund(deps, reference)
 
         expect(emails()).toEqual(["orderConfirmation", "submittedToKba", "rejected", "refundIssued"])
-        expect(deps.mailer.sent.at(-1)?.template).toMatchObject({ amount: DEREGISTRATION_TOTAL.subtract(PROCESSING_FEE) })
+        expect(deps.mailer.sent.at(-1)?.template).toMatchObject({ amount: SERVICE_PRICES.deregistration.subtract(PROCESSING_FEE) })
       },
     )
 
@@ -414,8 +415,8 @@ describe("de-registration flow on fakes", () => {
       expect((await stored(reference)).status).toBe("failed_final")
       expect(await payment(reference)).toMatchObject({
         status: "captured",
-        captured: DEREGISTRATION_TOTAL,
-        refunded: DEREGISTRATION_TOTAL.subtract(PROCESSING_FEE),
+        captured: SERVICE_PRICES.deregistration,
+        refunded: SERVICE_PRICES.deregistration.subtract(PROCESSING_FEE),
       })
       expect(emails()).toEqual(["orderConfirmation", "submittedToKba", "rejected", "refundIssued"])
     })

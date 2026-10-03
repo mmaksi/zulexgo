@@ -21,7 +21,7 @@ const heartbeat = (afterMinutes: number, authorization = `Bearer ${CRON_SECRET}`
 }
 
 async function filedApplication() {
-  const { reference } = await submitCheckout(world.deps, { request: FAKE_REQUEST, email: "customer@example.test" })
+  const { reference } = await submitCheckout(world.deps, { service: "deregistration", request: FAKE_REQUEST, email: "customer@example.test" })
   const { payment } = await stored(reference)
   world.stripe.customerPays(payment.id, "card")
   await handlePaymentNotification(world.deps, webhookRequest(world.stripe.event("payment_intent.amount_capturable_updated", payment.id)))

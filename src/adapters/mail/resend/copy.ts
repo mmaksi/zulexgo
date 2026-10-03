@@ -1,3 +1,4 @@
+import type { OrderableService } from "@/src/core/domain/application/service"
 import { PROCESSING_FEE } from "@/src/core/domain/payment/pricing"
 import { SUPPORT_EMAIL } from "@/src/core/domain/customer/contact"
 import { formatEuros } from "@/src/core/domain/payment/money"
@@ -25,9 +26,18 @@ export interface EmailCopy {
 
 const REFUND_TIMEFRAME = "Je nach Bank ist der Betrag in 3 bis 5 Werktagen auf Ihrem Konto."
 
+/** The emails whose wording says what was ordered or what the KBA did, so it differs per service. */
+type ServiceEmail = Extract<EmailTemplate, { service: OrderableService }>
+
+/** A service's wording for `ServiceEmail`. A service that is added has none until it is written here. */
+const SERVICE_COPY: Record<OrderableService, (template: ServiceEmail) => EmailCopy> = {
+  deregistration: deregistrationCopy,
+}
+
 /**
  * The German subject and body for one template. The switch has no default, so a template
- * added to `EmailTemplate` does not compile until it has wording here. What depends on the data:
+ * added to `EmailTemplate` does not compile until it has wording here. The emails that name
+ * the service take theirs from `SERVICE_COPY`; what depends on the data:
  * - `orderConfirmation` says the card is charged once the application is filed and, at the
  *   latest, shortly before the hold lapses (the margin is `HOLD_CAPTURE_MARGIN_MS`).
  * - `submittedToKba` promises minutes to hours, or days when `manualProcessing`.
@@ -38,6 +48,50 @@ const REFUND_TIMEFRAME = "Je nach Bank ist der Betrag in 3 bis 5 Werktagen auf I
  * - `refundIssued` is the only email without a status link, hence without a button.
  */
 export function copyFor(template: EmailTemplate): EmailCopy {
+  const { reference } = template
+
+  switch (template.name) {
+    case "orderConfirmation":
+    case "submittedToKba":
+    case "completed":
+    case "rejected":
+      return SERVICE_COPY[template.service](template)
+    case "correctionRequired":
+      return {
+        subject: `Ihr Antrag ${reference} braucht eine Korrektur`,
+        preview: "Die Zulassungsstelle konnte den Antrag so nicht bearbeiten.",
+        heading: "Ihr Antrag braucht eine Korrektur",
+        paragraphs: [
+          `${template.reason} Das lässt sich meist korrigieren.`,
+          "Auf Ihrer Statusseite korrigieren Sie die Angaben und reichen den Antrag erneut ein. Das kostet nichts extra.",
+        ],
+        note: `Sie können den Antrag dort auch stornieren. Wir behalten dann die Bearbeitungsgebühr von ${formatEuros(PROCESSING_FEE)} ein und erstatten den Rest.`,
+        action: { label: "Antrag korrigieren", href: template.statusLink },
+      }
+    case "statusLinkResent":
+      return {
+        subject: `Ihr neuer Statuslink zu ${reference}`,
+        preview: "Der bisherige Link ist nicht mehr gültig.",
+        heading: "Ihr neuer Statuslink",
+        paragraphs: [
+          `Sie haben einen neuen Link zu Ihrem Antrag ${reference} angefordert. Der bisherige Link funktioniert nicht mehr.`,
+          "Der neue Link ist nur für Sie bestimmt: Bitte geben Sie ihn nicht weiter.",
+          `Sie haben ihn nicht angefordert? Dann schreiben Sie uns an ${SUPPORT_EMAIL}.`,
+        ],
+        action: { label: "Status ansehen", href: template.statusLink },
+      }
+    case "refundIssued":
+      return {
+        subject: `Ihre Erstattung zu ${reference} ist unterwegs`,
+        preview: `Wir haben ${formatEuros(template.amount)} erstattet.`,
+        heading: "Ihre Erstattung ist unterwegs",
+        paragraphs: [`Wir haben Ihnen ${formatEuros(template.amount)} zu Auftrag ${reference} erstattet.`, REFUND_TIMEFRAME],
+      }
+  }
+}
+
+/** The wording of a de-registration's emails: what the customer ordered, and how the KBA answers it. */
+function deregistrationCopy(template: ServiceEmail): EmailCopy {
   const { reference } = template
 
   switch (template.name) {
@@ -78,18 +132,6 @@ export function copyFor(template: EmailTemplate): EmailCopy {
         ],
         action: { label: "Bestätigung ansehen", href: template.statusLink },
       }
-    case "correctionRequired":
-      return {
-        subject: `Ihr Antrag ${reference} braucht eine Korrektur`,
-        preview: "Die Zulassungsstelle konnte den Antrag so nicht bearbeiten.",
-        heading: "Ihr Antrag braucht eine Korrektur",
-        paragraphs: [
-          `${template.reason} Das lässt sich meist korrigieren.`,
-          "Auf Ihrer Statusseite korrigieren Sie die Angaben und reichen den Antrag erneut ein. Das kostet nichts extra.",
-        ],
-        note: `Sie können den Antrag dort auch stornieren. Wir behalten dann die Bearbeitungsgebühr von ${formatEuros(PROCESSING_FEE)} ein und erstatten den Rest.`,
-        action: { label: "Antrag korrigieren", href: template.statusLink },
-      }
     case "rejected":
       return {
         subject: `Ihr Antrag ${reference} wurde abgelehnt`,
@@ -102,25 +144,6 @@ export function copyFor(template: EmailTemplate): EmailCopy {
             : `Sie erhalten ${formatEuros(template.refund)} zurück. Eine weitere E-Mail bestätigt die Erstattung.`,
         ],
         action: { label: "Status ansehen", href: template.statusLink },
-      }
-    case "statusLinkResent":
-      return {
-        subject: `Ihr neuer Statuslink zu ${reference}`,
-        preview: "Der bisherige Link ist nicht mehr gültig.",
-        heading: "Ihr neuer Statuslink",
-        paragraphs: [
-          `Sie haben einen neuen Link zu Ihrem Antrag ${reference} angefordert. Der bisherige Link funktioniert nicht mehr.`,
-          "Der neue Link ist nur für Sie bestimmt: Bitte geben Sie ihn nicht weiter.",
-          `Sie haben ihn nicht angefordert? Dann schreiben Sie uns an ${SUPPORT_EMAIL}.`,
-        ],
-        action: { label: "Status ansehen", href: template.statusLink },
-      }
-    case "refundIssued":
-      return {
-        subject: `Ihre Erstattung zu ${reference} ist unterwegs`,
-        preview: `Wir haben ${formatEuros(template.amount)} erstattet.`,
-        heading: "Ihre Erstattung ist unterwegs",
-        paragraphs: [`Wir haben Ihnen ${formatEuros(template.amount)} zu Auftrag ${reference} erstattet.`, REFUND_TIMEFRAME],
       }
   }
 }

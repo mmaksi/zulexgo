@@ -12,7 +12,7 @@ describe("checkEligibility", () => {
     ])
 
     expect(await checkEligibility({ registration }, " aaa ")).toEqual({ prefix: "AAA", ikfzStatus: "unavailable" })
-    expect(registration.findAuthorities).toHaveBeenCalledWith("AAA")
+    expect(registration.findAuthorities).toHaveBeenCalledWith({ prefix: "AAA" })
   })
 
   it("rejects a prefix the API would refuse without asking it", async () => {

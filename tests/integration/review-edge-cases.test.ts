@@ -1,5 +1,5 @@
 import { Money } from "@/src/core/domain/payment/money"
-import { DEREGISTRATION_TOTAL, PROCESSING_FEE } from "@/src/core/domain/payment/pricing"
+import { PROCESSING_FEE, SERVICE_PRICES } from "@/src/core/domain/payment/pricing"
 import { FAKE_REQUEST } from "@/tests/fixtures/applications"
 import { GatewayRejected } from "@/src/core/errors/registration/gateway-rejected"
 import { GatewayUnavailable } from "@/src/core/errors/registration/gateway-unavailable"
@@ -20,7 +20,7 @@ describe("payment and polling recovery", () => {
     const retained = type === "cancelled" ? PROCESSING_FEE : Money.ofCents(0)
     expect(payment.captured.subtract(payment.refunded)).toEqual(retained)
     expect(decision.retained).toEqual(retained)
-    expect(decision.returned).toEqual(DEREGISTRATION_TOTAL.subtract(retained))
+    expect(decision.returned).toEqual(SERVICE_PRICES.deregistration.subtract(retained))
   })
 
   it.each(["partial capture", "partial refund", "wrong amount"])("does not file an order with a %s, and says so in the log", async (scenario) => {
@@ -30,7 +30,7 @@ describe("payment and polling recovery", () => {
     const { payment } = await flow.stored(reference)
     if (scenario === "partial capture") await flow.deps.payments.capture(payment.id, PROCESSING_FEE)
     if (scenario === "partial refund") {
-      await flow.deps.payments.capture(payment.id, DEREGISTRATION_TOTAL)
+      await flow.deps.payments.capture(payment.id, SERVICE_PRICES.deregistration)
       await flow.deps.payments.refund(payment.id, Money.ofCents(100), "external-refund")
     }
     if (scenario === "wrong amount") {
@@ -56,7 +56,7 @@ describe("payment and polling recovery", () => {
     const reference = await flow.checkoutAndPay()
     const capture = flow.deps.payments.capture.bind(flow.deps.payments)
     jest.spyOn(flow.deps.payments, "capture").mockImplementationOnce(async (id, amount) => {
-      await capture(id, DEREGISTRATION_TOTAL)
+      await capture(id, SERVICE_PRICES.deregistration)
       return capture(id, amount)
     })
 
@@ -65,7 +65,7 @@ describe("payment and polling recovery", () => {
     const paid = await flow.payment(reference)
     expect(paid.captured.subtract(paid.refunded)).toEqual(PROCESSING_FEE)
     expect((await flow.stored(reference)).status).toBe("cancelled")
-    expect(flow.deps.mailer.sent.at(-1)?.template).toMatchObject({ amount: DEREGISTRATION_TOTAL.subtract(PROCESSING_FEE) })
+    expect(flow.deps.mailer.sent.at(-1)?.template).toMatchObject({ amount: SERVICE_PRICES.deregistration.subtract(PROCESSING_FEE) })
   })
 
   it("retries a failed completion within minutes even when the authority works by hand", async () => {

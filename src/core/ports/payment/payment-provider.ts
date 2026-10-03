@@ -1,4 +1,5 @@
 import type { ApplicationReference } from "@/src/core/domain/application/application-reference"
+import type { Service } from "@/src/core/domain/application/service"
 import type { Email } from "@/src/core/domain/customer/email"
 import type { Money } from "@/src/core/domain/payment/money"
 
@@ -65,13 +66,15 @@ export type PaymentNotification =
  */
 export interface PaymentProvider {
   /**
-   * The reference is what a repeat is recognised by. `clientSecret` is what
+   * The reference is what a repeat is recognised by. `service` is what the payment is for, so the
+   * provider's own records say which service took the money. `clientSecret` is what
    * the browser needs to confirm the payment; the server never does. `email` is
    * offered to adapters, but the Stripe adapter deliberately sends none: the
    * reference is its only link to the customer.
    */
   createPayment(input: {
     reference: ApplicationReference
+    service: Service
     amount: Money
     email: Email
   }): Promise<{ paymentId: string; clientSecret: string }>

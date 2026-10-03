@@ -1,4 +1,4 @@
-import type { DeregistrationRequest } from "@/src/core/domain/application/deregistration-request"
+import type { OrderableService, ServiceRequest } from "@/src/core/domain/application/service"
 import type { DocumentKind, DocumentRef } from "@/src/core/domain/registration/document"
 import type { RegistrationAuthority } from "@/src/core/domain/registration/registration-authority"
 import type { Correction, GatewayStatus, RegistrationGateway } from "@/src/core/ports/registration/registration-gateway"
@@ -21,6 +21,11 @@ const DOCUMENT_KINDS = new Map<string, DocumentKind>([
   ["FEE", "fee"],
 ])
 
+/** Where each service's applications live in the API: the create, read and patch calls share the path. */
+const APPLICATION_PATHS: Record<OrderableService, string> = {
+  deregistration: "/deregistration-applications",
+}
+
 /**
  * `RegistrationGateway` on the Zulex API (docs/api-1.yaml). Every call is
  * server-side: the API key is a merchant credential.
@@ -38,22 +43,22 @@ export class ZulexRegistrationGateway implements RegistrationGateway {
   constructor(private readonly config: ZulexConfig) {}
 
   /**
-   * Looks up by plate prefix only (the endpoint also takes a postcode or kreiscode). Returns every
-   * authority the prefix has, unfiltered: what `ikfzStatus` means for the order is the caller's call.
+   * Looks up by plate prefix or by postcode (the endpoint also takes a kreiscode). Returns every
+   * authority it has, unfiltered: what `ikfzStatus` means for the order is the caller's call.
    */
-  async findAuthorities(licencePlatePrefix: string): Promise<RegistrationAuthority[]> {
-    const query = new URLSearchParams({ licencePlatePrefix })
+  async findAuthorities(where: { prefix: string } | { postcode: string }): Promise<RegistrationAuthority[]> {
+    const query = new URLSearchParams("prefix" in where ? { licencePlatePrefix: where.prefix } : { postcode: where.postcode })
     const response = await zulexRequest(this.config, "GET", `/registration-authorities?${query}`)
     return (await readJson(response, registrationAuthoritiesResponse)).registrationAuthorities
   }
 
   /**
-   * POST /deregistration-applications. The idempotency key becomes `X-Idempotency-Key`, which the spec
-   * limits to 100 characters; that a replayed key returns the same application is Zulex's promise
-   * (launch plan Q23 asks whether the live API keeps it). The front plate code is sent only for a
-   * two-plate vehicle.
+   * POST to the request's service (/deregistration-applications). The idempotency key becomes
+   * `X-Idempotency-Key`, which the spec limits to 100 characters; that a replayed key returns the same
+   * application is Zulex's promise (launch plan Q23 asks whether the live API keeps it). The front
+   * plate code is sent only for a two-plate vehicle.
    */
-  async submitDeregistration(request: DeregistrationRequest, idempotencyKey: string) {
+  async submit(request: ServiceRequest, idempotencyKey: string) {
     const { licencePlate, vin, codes } = request
     const body = {
       licencePlate,
@@ -64,13 +69,13 @@ export class ZulexRegistrationGateway implements RegistrationGateway {
       // Reserving the plate is out of scope for the MVP (founder decision).
       reserveLicencePlate: false,
     }
-    const response = await zulexRequest(this.config, "POST", "/deregistration-applications", { body, idempotencyKey })
+    const response = await zulexRequest(this.config, "POST", APPLICATION_PATHS[request.service], { body, idempotencyKey })
     return readJson(response, createApplicationResponse)
   }
 
   /** One GET per call; an id Zulex does not know answers 404, surfacing as `ZulexRequestFailed`. */
-  async getStatus(applicationId: string): Promise<GatewayStatus> {
-    const response = await zulexRequest(this.config, "GET", `/deregistration-applications/${encodeURIComponent(applicationId)}`)
+  async getStatus(service: OrderableService, applicationId: string): Promise<GatewayStatus> {
+    const response = await zulexRequest(this.config, "GET", `${APPLICATION_PATHS[service]}/${encodeURIComponent(applicationId)}`)
     return toGatewayStatus(await readJson(response, deregistrationApplicationResponse))
   }
 
@@ -84,12 +89,12 @@ export class ZulexRegistrationGateway implements RegistrationGateway {
   }
 
   /**
-   * PATCH /deregistration-applications/{id}, which the spec describes as patching a rejected
+   * PATCH on the service's path (/deregistration-applications/{id}), which the spec describes as patching a rejected
    * application and resubmitting it to the KBA. Only the fields the customer changed are sent, so
    * everything else stays as Zulex holds it. The 200 body (the updated application) is ignored: the
    * new status is read by polling like any other.
    */
-  async correct(applicationId: string, { licencePlate, vin, codes }: Correction): Promise<void> {
+  async correct(service: OrderableService, applicationId: string, { licencePlate, vin, codes }: Correction): Promise<void> {
     const body = {
       ...(licencePlate ? { licencePlate } : {}),
       ...(vin ? { vin } : {}),
@@ -97,7 +102,7 @@ export class ZulexRegistrationGateway implements RegistrationGateway {
       ...(codes?.frontPlate ? { frontLicencePlateSecurityCode: codes.frontPlate.reveal() } : {}),
       ...(codes?.certificate ? { securityCodeRegistrationCertificationPart1: codes.certificate.reveal() } : {}),
     }
-    await zulexRequest(this.config, "PATCH", `/deregistration-applications/${encodeURIComponent(applicationId)}`, { body })
+    await zulexRequest(this.config, "PATCH", `${APPLICATION_PATHS[service]}/${encodeURIComponent(applicationId)}`, { body })
   }
 
   /**

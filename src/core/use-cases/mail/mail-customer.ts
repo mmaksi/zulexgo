@@ -31,17 +31,18 @@ export async function mailCustomer(
 ): Promise<void> {
   const token = await deps.repository.getStatusToken(application.reference)
   if (!token) throw new Error(`Application ${application.reference} has no status token`)
+  const { service } = application.request
   const common = { reference: application.reference, statusLink: deps.statusLink(token) }
   const reason = () => reasonFor(application.failure ?? { kind: "rejected" }, deps.errorCatalogue)
 
   const template =
     name === "submittedToKba"
-      ? { name, ...common, manualProcessing: application.ikfzStatus !== "online" }
+      ? { name, service, ...common, manualProcessing: application.ikfzStatus !== "online" }
       : name === "rejected"
-        ? { name, ...common, reason: reason(), refund: extra.refund!, retained: extra.retained! }
+        ? { name, service, ...common, reason: reason(), refund: extra.refund!, retained: extra.retained! }
         : name === "correctionRequired"
           ? { name, ...common, reason: reason() }
-          : { name, ...common }
+          : { name, service, ...common }
   // The history length names the transition, so an email repeated by a later transition (a correction back at the KBA) is still sent.
   const idempotencyKey = `${application.reference}/${name}/${application.history.length}`
   await deps.mailer.send({ to: application.email, template, idempotencyKey })

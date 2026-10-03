@@ -46,7 +46,7 @@ export async function submitToKba(deps: Dependencies, application: Application):
   if (!application.zulexApplicationId) {
     let applicationId: string
     try {
-      ;({ applicationId } = await deps.registration.submitDeregistration(application.request, application.idempotencyKey))
+      ;({ applicationId } = await deps.registration.submit(application.request, application.idempotencyKey))
     } catch (error) {
       await handleFailure(deps, application, toFailure(error, application), resubmitLater(error))
       // A refusal or an outage is expected; anything else (a wrong API key, an answer we cannot read) is rescheduled like them but left loud.

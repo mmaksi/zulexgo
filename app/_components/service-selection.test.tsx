@@ -1,6 +1,6 @@
 import { render, screen, within } from "@testing-library/react"
 import { formatEuros } from "@/src/core/domain/payment/money"
-import { DEREGISTRATION_TOTAL, SERVICE_PRICES } from "@/src/core/domain/payment/pricing"
+import { SERVICE_PRICES } from "@/src/core/domain/payment/pricing"
 import { ServiceSelection } from "./service-selection"
 
 /**
@@ -42,7 +42,7 @@ describe("ServiceSelection prices", () => {
     render(<ServiceSelection />)
 
     const card = cards().find((item) => within(item).queryByRole("link"))!
-    expect(card.textContent).toContain(formatEuros(DEREGISTRATION_TOTAL))
+    expect(card.textContent).toContain(formatEuros(SERVICE_PRICES.deregistration))
   })
 
   it("quotes every service at its price from the price list, as a final price", () => {

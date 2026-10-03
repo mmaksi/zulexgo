@@ -1,7 +1,8 @@
 "use client"
 
 import { useEffect, type RefObject } from "react"
-import type { CheckoutActions, PaymentDriver } from "./checkout-actions"
+import type { PaymentDriver } from "@/app/(funnel)/_components/payment-driver"
+import type { CheckoutActions } from "./checkout-actions"
 import { Alert } from "@/src/ui/alert"
 
 /** Where no payment provider is configured (dev, a demo): no money moves, the server plays the customer paying. */

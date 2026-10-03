@@ -28,7 +28,7 @@ describe("FakePaymentProvider hold expiry, driven by the clock", () => {
     const { clock, advance } = movableClock(new Date("2026-03-01T09:00:00.000Z"))
     const provider = new FakePaymentProvider(clock)
     const { reference, email } = anApplication()
-    const { paymentId } = await provider.createPayment({ reference, amount: Money.ofCents(6999), email })
+    const { paymentId } = await provider.createPayment({ reference, service: "deregistration", amount: Money.ofCents(6999), email })
     await provider.customerPays(paymentId, "card")
 
     expect((await provider.getPayment(paymentId)).holdExpiresAt).toEqual(new Date("2026-03-08T09:00:00.000Z"))

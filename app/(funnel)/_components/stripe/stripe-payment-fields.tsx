@@ -3,7 +3,7 @@
 import { Elements, PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js"
 import { loadStripe, type Appearance } from "@stripe/stripe-js"
 import { useEffect, useMemo, type RefObject } from "react"
-import type { PaymentDriver } from "@/app/(funnel)/deregister/_components/checkout-actions"
+import type { PaymentDriver } from "@/app/(funnel)/_components/payment-driver"
 
 /** design-standard.md tokens, as far as Stripe's Appearance API reaches into its iframe. */
 const APPEARANCE: Appearance = {

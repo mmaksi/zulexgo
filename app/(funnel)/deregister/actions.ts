@@ -34,6 +34,7 @@ export const startCheckoutAction: CheckoutActions["startCheckout"] = async ({ pl
   if (consents?.terms !== true || consents?.earlyStart !== true) return { ok: false, reason: "consent" }
   try {
     const { reference, clientSecret } = await submitCheckout(getContainer(), {
+      service: "deregistration",
       request: toRequest(vehicle, plateCount),
       email: vehicle.email,
       acknowledgedDuplicate: acknowledgedDuplicate === true,

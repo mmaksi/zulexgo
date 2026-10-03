@@ -21,6 +21,6 @@ export async function checkEligibility(
   prefix: unknown,
 ): Promise<{ prefix: string; ikfzStatus: IkfzStatus }> {
   const valid = validate(licencePlateSchema.shape.prefix, prefix, "licencePlate.prefix")
-  const ikfzStatus = combinedIkfzStatus(await deps.registration.findAuthorities(valid))
+  const ikfzStatus = combinedIkfzStatus(await deps.registration.findAuthorities({ prefix: valid }))
   return { prefix: valid, ikfzStatus }
 }

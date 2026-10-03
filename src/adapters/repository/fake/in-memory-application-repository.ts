@@ -78,10 +78,11 @@ export class InMemoryApplicationRepository implements ApplicationRepository {
     return reference && this.get(reference)
   }
 
-  async hasOpenApplication({ licencePlate, vin }: Parameters<ApplicationRepository["hasOpenApplication"]>[0]): Promise<boolean> {
+  async hasOpenApplication({ service, licencePlate, vin }: Parameters<ApplicationRepository["hasOpenApplication"]>[0]): Promise<boolean> {
     return this.all().some(
       ({ status, request }) =>
         OPEN_STATUSES.includes(status) &&
+        request.service === service &&
         request.vin === vin &&
         request.licencePlate.prefix === licencePlate.prefix &&
         request.licencePlate.letters === licencePlate.letters &&

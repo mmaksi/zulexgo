@@ -46,17 +46,18 @@ export class StripePaymentProvider implements PaymentProvider {
   /**
    * Opens a card PaymentIntent with manual capture, so the customer's confirmation holds the
    * money rather than taking it. The metadata carries `order_id`, which `readNotification`
-   * uses to tell our orders from other intents on the account. Idempotent on the reference,
-   * within Stripe's 24-hour window. `email` from the port is deliberately not sent.
+   * uses to tell our orders from other intents on the account, and `service_type`, the service
+   * the payment is for. Idempotent on the reference, within Stripe's 24-hour window. `email`
+   * from the port is deliberately not sent.
    */
-  async createPayment({ reference, amount }: Parameters<PaymentProvider["createPayment"]>[0]) {
+  async createPayment({ reference, service, amount }: Parameters<PaymentProvider["createPayment"]>[0]) {
     const intent = await this.stripe.paymentIntents.create(
       {
         amount: amount.cents,
         currency: "eur",
         payment_method_types: ["card"],
         capture_method: "manual",
-        metadata: { order_id: reference, service_type: "deregistration" },
+        metadata: { order_id: reference, service_type: service },
       },
       { idempotencyKey: `payment/${reference}` },
     )
