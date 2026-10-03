@@ -1,6 +1,6 @@
 import { advance, type ApplicationEvent, type ApplicationStatus } from "./application-status"
 import type { ApplicationReference } from "./application-reference"
-import type { ServiceRequest } from "./service"
+import type { Service, ServiceRequest } from "./service"
 import type { Email } from "@/src/core/domain/customer/email"
 import type { Failure } from "@/src/core/domain/registration/failure"
 import type { Money } from "@/src/core/domain/payment/money"
@@ -76,13 +76,26 @@ export interface Application {
 }
 
 /**
+ * When the order last became ready to be filed: paid (status 1) or, for a service that verifies the
+ * customer's identity first, verified (status 3), whichever came last. The latest, so an order that
+ * is refiled starts again. Absent for an order that was never paid.
+ */
+export const filingDueSince = (history: readonly StatusChange[]): Date | undefined =>
+  history.findLast(({ status }) => status === "submitted_and_paid" || status === "identity_verified")?.at
+
+/** What the status machine reads of an order: where it is, how it got there, and which service it is for. */
+type Moving = Pick<Application, "status" | "history"> & { readonly request: { readonly service: Service } }
+
+/**
  * Moves the application one event along the status machine and records when. Only `status`
  * and `history` change; the caller sets `failure`, `polling` and the rest. An event that
  * keeps the status returns the same object and adds no history. Throws `InvalidTransition`
- * if the status refuses the event.
+ * if the status refuses the event on the path of the order's service, given whether its
+ * identity was ever verified (it has been when its history shows status 3).
  */
-export function applyEvent(application: Application, event: ApplicationEvent, now: Date): Application {
-  const status = advance(application.status, event)
+export function applyEvent<Order extends Moving>(application: Order, event: ApplicationEvent, now: Date): Order {
+  const identityVerified = application.history.some(({ status }) => status === "identity_verified")
+  const status = advance(application.status, event, { service: application.request.service, identityVerified })
   if (status === application.status) return application
 
   return { ...application, status, history: [...application.history, { status, at: now }] }

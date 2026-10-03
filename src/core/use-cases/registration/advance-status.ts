@@ -23,7 +23,9 @@ import { afterFailure, submitToKba } from "./submit-to-kba"
  * - `submitted_to_kba`: ask the registration service how the KBA is doing. Still working:
  *   back off. Finished with a confirmation: 5a. Failed, or finished with only a rejection
  *   document: the error algorithm decides (`handleFailure`).
- * - Any other status is not polled, and nothing happens.
+ * - Any other status is not polled, and nothing happens. That includes `awaiting_identity_verification`
+ *   and `identity_verified`, which are in `POLLED_STATUSES` but have no step yet: nothing moves an
+ *   order into them until the identity step exists, and one that got there due would stay first in the queue.
  *
  * Every step is safe to repeat. One that fails part-way leaves the order at its old status
  * and backs it off (`backOffOnFailure`), so a later tick redoes it without hammering the
