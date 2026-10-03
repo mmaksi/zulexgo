@@ -1,6 +1,6 @@
 import { advance, type ApplicationEvent, type ApplicationStatus } from "./application-status"
 import type { ApplicationReference } from "./application-reference"
-import type { DeregistrationRequest } from "./deregistration-request"
+import type { ServiceRequest } from "./service"
 import type { Email } from "@/src/core/domain/customer/email"
 import type { Failure } from "@/src/core/domain/registration/failure"
 import type { Money } from "@/src/core/domain/payment/money"
@@ -13,7 +13,7 @@ export interface StatusChange {
 }
 
 /**
- * One de-registration order. Identified by its reference, which is also the
+ * One order, for the service its `request` names. Identified by its reference, which is also the
  * `order_id` sent to the payment provider. Changes return a new object; the
  * repository persists it and bumps `version`, so two writers cannot both win.
  */
@@ -31,10 +31,10 @@ export interface Application {
    */
   readonly history: readonly StatusChange[]
   /**
-   * What the customer entered and Zulex receives. Its security codes print as a
-   * placeholder, never as the code.
+   * What the customer entered and Zulex receives; `request.service` says which service the
+   * order is for. Its security codes print as a placeholder, never as the code.
    */
-  readonly request: DeregistrationRequest
+  readonly request: ServiceRequest
   /** The only address the status link and the status emails go to. */
   readonly email: Email
   /**
