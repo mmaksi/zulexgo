@@ -87,13 +87,21 @@ export async function zulexRequest(
  *
  * Relies on `JSON.parse` handing the reviver the number's source text (Node 21 and later). Where
  * that is missing the id stays a number and the schemas, which expect a string, reject it.
- * A body that does not match `schema` throws a `ZodError`, which is not a domain error.
+ * A body that does not match `schema` throws a `ZodError`, which is not a domain error. A body that
+ * is not JSON throws a plain `Error` that says only so: a `SyntaxError` quotes the stretch of the body it
+ * choked on, and a response echoes what was filed.
  */
 export async function readJson<Schema extends z.ZodType>(response: Response, schema: Schema): Promise<z.output<Schema>> {
   const text = await response.text()
   const reviver = (key: string, value: unknown, context?: { source?: string }) =>
     key === "id" && typeof value === "number" && context?.source ? context.source : value
-  return schema.parse(JSON.parse(text, reviver as Parameters<typeof JSON.parse>[1]))
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(text, reviver as Parameters<typeof JSON.parse>[1])
+  } catch {
+    throw new Error("Zulex answered with a body that is not JSON")
+  }
+  return schema.parse(parsed)
 }
 
 /** Retry-After is either delay-seconds or an HTTP date. A past date clamps to zero; junk is ignored. */

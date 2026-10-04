@@ -1,5 +1,5 @@
 import { anApplication } from "@/tests/fixtures/applications"
-import type { DocumentRef } from "@/src/core/domain/registration/document"
+import { DOCUMENT_KINDS, type DocumentRef } from "@/src/core/domain/registration/document"
 import type { DocumentStore } from "./document-store"
 
 // 2^53 + 1: a JS number cannot hold it, so an adapter that coerces ids to numbers is caught.
@@ -27,6 +27,16 @@ export function documentStoreContract(name: string, makeSubject: () => DocumentS
       await store.put(reference, confirmation, pdf())
 
       expect(await store.get(reference, confirmation.id)).toEqual({ kind: "confirmation", bytes: pdf() })
+    })
+
+    // An adapter that spells the kinds out loses a new one silently: its documents are stored but never listed.
+    it.each(DOCUMENT_KINDS)("lists and returns a %s document", async (kind) => {
+      const { reference } = anApplication()
+
+      await store.put(reference, { id: "7", kind }, pdf())
+
+      expect(await store.list(reference)).toEqual([{ id: "7", kind }])
+      expect((await store.get(reference, "7"))?.kind).toBe(kind)
     })
 
     it("finds nothing under another application's reference, so one customer cannot fetch another's document", async () => {

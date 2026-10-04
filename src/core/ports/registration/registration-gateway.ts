@@ -2,6 +2,7 @@ import type { OrderableService, ServiceRequest } from "@/src/core/domain/applica
 import type { DocumentRef } from "@/src/core/domain/registration/document"
 import type { LicencePlate } from "@/src/core/domain/vehicle/licence-plate"
 import type { RegistrationAuthority } from "@/src/core/domain/registration/registration-authority"
+import type { Secret } from "@/src/core/domain/secret"
 import type { SecurityCode } from "@/src/core/domain/vehicle/security-code"
 import type { Vin } from "@/src/core/domain/vehicle/vin"
 
@@ -33,6 +34,24 @@ export interface Correction {
 }
 
 /**
+ * What a filed Neuzulassung can be patched with: the eVB number and the Teil II number and code, the
+ * only fields the vendor's patch takes. The owner and the vehicle cannot be changed once it is filed,
+ * so a correction to the owner's name or birth date (possible only before filing) is applied to the
+ * order and never sent. The secrets are revealed only to build the request, never logged.
+ */
+export interface NewRegistrationPatch {
+  readonly evbNumber?: Secret<string>
+  readonly part2Number?: string
+  readonly part2SecurityCode?: Secret<string>
+}
+
+/** What `correct` takes, by the service of the application it patches. */
+export interface Corrections {
+  readonly deregistration: Correction
+  readonly newRegistration: NewRegistrationPatch
+}
+
+/**
  * Files applications with the KBA through a registration service (Zulex), one kind of
  * application per service: the service decides where an application lives at the vendor, so
  * the calls that ask after one by id name its service.
@@ -49,8 +68,9 @@ export interface Correction {
  * - `GatewayRejected` and `GatewayUnavailable` can come from any method. Anything
  *   else that goes wrong (a wrong API key, an unknown id, an answer that cannot
  *   be read) is an ordinary `Error`, neither retried nor classified here.
- * - The requests carry security codes: an adapter reveals them only to build
- *   the outgoing request and never logs them or puts them in an error.
+ * - The requests carry secrets (security codes; a Neuzulassung's eVB number, Teil II code, owner
+ *   details and bank account): an adapter reveals them only to build the outgoing request and
+ *   never logs them or puts them in an error, nor anything the vendor echoes back.
  */
 export interface RegistrationGateway {
   /**
@@ -89,7 +109,7 @@ export interface RegistrationGateway {
    * blindly: a second patch reaches the KBA again, so callers check `getStatus`
    * first and patch only an application that is not already `inProgress`.
    */
-  correct(service: OrderableService, applicationId: string, correction: Correction): Promise<void>
+  correct<Service extends OrderableService>(service: Service, applicationId: string, correction: Corrections[Service]): Promise<void>
   /** The raw bytes of one document, by an id a `GatewayStatus` listed. */
   fetchDocument(documentId: string): Promise<Uint8Array>
 }

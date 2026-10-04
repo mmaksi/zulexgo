@@ -1,41 +1,34 @@
 import type { OrderableService, ServiceRequest } from "@/src/core/domain/application/service"
 import type { DocumentKind, DocumentRef } from "@/src/core/domain/registration/document"
 import type { RegistrationAuthority } from "@/src/core/domain/registration/registration-authority"
-import type { Correction, GatewayStatus, RegistrationGateway } from "@/src/core/ports/registration/registration-gateway"
+import type { Corrections, GatewayStatus, RegistrationGateway } from "@/src/core/ports/registration/registration-gateway"
 import { readJson, zulexRequest, type ZulexConfig } from "./http"
-import {
-  createApplicationResponse,
-  deregistrationApplicationResponse,
-  registrationAuthoritiesResponse,
-  type DeregistrationApplicationResponse,
-} from "./schemas"
+import { createBody, PATCH_BODIES } from "./request-bodies"
+import { applicationResponse, createApplicationResponse, registrationAuthoritiesResponse, type ApplicationResponse } from "./schemas"
 
 /**
- * The document types a de-registration yields, in domain terms. The other types in the spec's enum
- * (registration confirmation, UNKNOWN...) and any added later are absent on purpose: the lookup
- * falls through to `unknown`.
+ * The document types each service yields, in domain terms. The other types in the spec's enum
+ * (another service's confirmation, UNKNOWN...) and any added later are absent on purpose: the
+ * lookup falls through to `unknown`.
  */
-const DOCUMENT_KINDS = new Map<string, DocumentKind>([
-  ["DEREGISTRATION_CONFIRMATION", "confirmation"],
-  ["REJECTION", "rejection"],
-  ["FEE", "fee"],
-])
-
-/**
- * Where each service's applications live in the API: the create, read and patch calls share the path.
- * A service has an entry once this adapter files it; an order of one without is refused, never sent
- * to another service's endpoint.
- */
-const APPLICATION_PATHS: Partial<Record<OrderableService, string>> = {
-  deregistration: "/deregistration-applications",
+const DOCUMENT_KINDS: Record<OrderableService, ReadonlyMap<string, DocumentKind>> = {
+  deregistration: new Map<string, DocumentKind>([
+    ["DEREGISTRATION_CONFIRMATION", "confirmation"],
+    ["REJECTION", "rejection"],
+    ["FEE", "fee"],
+  ]),
+  newRegistration: new Map<string, DocumentKind>([
+    ["REGISTRATION_CONFIRMATION", "confirmation"],
+    ["TEMPORARY_REGISTRATION_CERTIFICATE", "temporaryCertificate"],
+    ["REJECTION", "rejection"],
+    ["FEE", "fee"],
+  ]),
 }
 
-const notFiledYet = (service: OrderableService) => new Error(`ZulexRegistrationGateway: ${service} is not filed through Zulex yet`)
-
-function applicationPath(service: OrderableService): string {
-  const path = APPLICATION_PATHS[service]
-  if (!path) throw notFiledYet(service)
-  return path
+/** Where each service's applications live in the API: the create, read and patch calls share the path. */
+const APPLICATION_PATHS: Record<OrderableService, string> = {
+  deregistration: "/deregistration-applications",
+  newRegistration: "/registration-applications",
 }
 
 /**
@@ -48,7 +41,10 @@ function applicationPath(service: OrderableService): string {
  * any other status is a plain `ZulexRequestFailed`. Responses are parsed with the schemas in
  * `schemas.ts` and mapped to port types here, so no Zulex shape leaves this class.
  *
- * Security codes are unwrapped with `reveal()` only to build a request body, and are never logged.
+ * What the customer entered that is secret (security codes, eVB number, Teil II code, the owner's
+ * details, the bank account) is unwrapped with `reveal()` only to build a request body
+ * (`request-bodies.ts`), and is never logged. A response echoes it back in plain text, so a body is
+ * read only through the schemas, which declare four fields, and is never put in an error.
  * Ids are placed in paths with `encodeURIComponent`, so a malformed stored id cannot change the route.
  */
 export class ZulexRegistrationGateway implements RegistrationGateway {
@@ -65,58 +61,42 @@ export class ZulexRegistrationGateway implements RegistrationGateway {
   }
 
   /**
-   * POST to the request's service (/deregistration-applications). The idempotency key becomes
-   * `X-Idempotency-Key`, which the spec limits to 100 characters; that a replayed key returns the same
-   * application is Zulex's promise (launch plan Q23 asks whether the live API keeps it). The front
-   * plate code is sent only for a two-plate vehicle.
+   * POST to the request's service (/deregistration-applications or /registration-applications). The
+   * idempotency key becomes `X-Idempotency-Key`, which the spec limits to 100 characters; that a
+   * replayed key returns the same application is Zulex's promise (launch plan Q23 asks whether the
+   * live API keeps it).
    */
   async submit(request: ServiceRequest, idempotencyKey: string) {
-    // The body below is a de-registration's, so no other service is built from it.
-    if (request.service !== "deregistration") throw notFiledYet(request.service)
-    const { licencePlate, vin, codes } = request
-    const body = {
-      licencePlate,
-      vin,
-      rearLicencePlateSecurityCode: codes.rearPlate.reveal(),
-      ...(codes.frontPlate ? { frontLicencePlateSecurityCode: codes.frontPlate.reveal() } : {}),
-      securityCodeRegistrationCertificationPart1: codes.certificate.reveal(),
-      // Reserving the plate is out of scope for the MVP (founder decision).
-      reserveLicencePlate: false,
-    }
-    const response = await zulexRequest(this.config, "POST", applicationPath(request.service), { body, idempotencyKey })
+    const response = await zulexRequest(this.config, "POST", APPLICATION_PATHS[request.service], { body: createBody(request), idempotencyKey })
     return readJson(response, createApplicationResponse)
   }
 
   /** One GET per call; an id Zulex does not know answers 404, surfacing as `ZulexRequestFailed`. */
   async getStatus(service: OrderableService, applicationId: string): Promise<GatewayStatus> {
-    const response = await zulexRequest(this.config, "GET", `${applicationPath(service)}/${encodeURIComponent(applicationId)}`)
-    return toGatewayStatus(await readJson(response, deregistrationApplicationResponse))
+    const response = await zulexRequest(this.config, "GET", `${APPLICATION_PATHS[service]}/${encodeURIComponent(applicationId)}`)
+    return toGatewayStatus(service, await readJson(response, applicationResponse))
   }
 
   /**
-   * POST /applications/{id}/retry. The path is the generic one, not under /deregistration-applications.
-   * The spec has it resume processing from the failed step for an application in ERROR from a
-   * technical issue, changing no data, and answer 204 with no body. No idempotency key is sent.
+   * POST /applications/{id}/retry. The path is the generic one, not under a service's own. The spec
+   * has it resume processing from the failed step for an application in ERROR from a technical
+   * issue, changing no data, and answer 204 with no body. No idempotency key is sent.
    */
   async retry(applicationId: string): Promise<void> {
     await zulexRequest(this.config, "POST", `/applications/${encodeURIComponent(applicationId)}/retry`)
   }
 
   /**
-   * PATCH on the service's path (/deregistration-applications/{id}), which the spec describes as patching a rejected
-   * application and resubmitting it to the KBA. Only the fields the customer changed are sent, so
-   * everything else stays as Zulex holds it. The 200 body (the updated application) is ignored: the
-   * new status is read by polling like any other.
+   * PATCH on the service's path, which the spec describes as patching a rejected application and
+   * resubmitting it to the KBA. Only the fields the customer changed are sent, so everything else
+   * stays as Zulex holds it. A patch that changes nothing is refused as a plain `Error`, since it
+   * would still send the application to the KBA again. The 200 body (the updated application) is
+   * ignored: the new status is read by polling like any other.
    */
-  async correct(service: OrderableService, applicationId: string, { licencePlate, vin, codes }: Correction): Promise<void> {
-    const body = {
-      ...(licencePlate ? { licencePlate } : {}),
-      ...(vin ? { vin } : {}),
-      ...(codes?.rearPlate ? { rearLicencePlateSecurityCode: codes.rearPlate.reveal() } : {}),
-      ...(codes?.frontPlate ? { frontLicencePlateSecurityCode: codes.frontPlate.reveal() } : {}),
-      ...(codes?.certificate ? { securityCodeRegistrationCertificationPart1: codes.certificate.reveal() } : {}),
-    }
-    await zulexRequest(this.config, "PATCH", `${applicationPath(service)}/${encodeURIComponent(applicationId)}`, { body })
+  async correct<Service extends OrderableService>(service: Service, applicationId: string, correction: Corrections[Service]): Promise<void> {
+    const body = PATCH_BODIES[service](correction)
+    if (Object.keys(body).length === 0) throw new Error("ZulexRegistrationGateway: nothing to correct")
+    await zulexRequest(this.config, "PATCH", `${APPLICATION_PATHS[service]}/${encodeURIComponent(applicationId)}`, { body })
   }
 
   /**
@@ -137,8 +117,9 @@ export class ZulexRegistrationGateway implements RegistrationGateway {
  * algorithm handles like any code it does not know, so the status read still succeeds.
  * Documents are read whatever the status, as the port's `failed` state carries them too.
  */
-function toGatewayStatus({ status, documents, errorInfo }: DeregistrationApplicationResponse): GatewayStatus {
-  const refs: DocumentRef[] = documents.map(({ id, type }) => ({ id, kind: DOCUMENT_KINDS.get(type) ?? "unknown" }))
+function toGatewayStatus(service: OrderableService, { status, documents, errorInfo }: ApplicationResponse): GatewayStatus {
+  const kinds = DOCUMENT_KINDS[service]
+  const refs: DocumentRef[] = documents.map(({ id, type }) => ({ id, kind: kinds.get(type) ?? "unknown" }))
 
   if (status === "FINISHED") return { state: "finished", documents: refs }
   if (status === "ERROR") {

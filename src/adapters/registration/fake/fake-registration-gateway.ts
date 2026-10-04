@@ -1,7 +1,13 @@
 import { createHash } from "node:crypto"
 import type { OrderableService, ServiceRequest } from "@/src/core/domain/application/service"
 import type { RegistrationAuthority } from "@/src/core/domain/registration/registration-authority"
-import type { Correction, GatewayStatus, RegistrationGateway } from "@/src/core/ports/registration/registration-gateway"
+import type {
+  Correction,
+  Corrections,
+  GatewayStatus,
+  NewRegistrationPatch,
+  RegistrationGateway,
+} from "@/src/core/ports/registration/registration-gateway"
 
 /** The calls `failNext` can break. Authority and document lookups cannot be scripted to fail. */
 type Operation = "submit" | "getStatus" | "retry" | "correct"
@@ -27,13 +33,19 @@ export class FakeRegistrationGateway implements RegistrationGateway {
   readonly submissions: { request: ServiceRequest; idempotencyKey: string; applicationId: string }[] = []
   /** Application ids `retry` was called for. */
   readonly retries: string[] = []
-  /** What `correct` was asked to change; the fake records it and applies nothing. */
+  /** What `correct` was asked to change on a de-registration; the fake records it and applies nothing. */
   readonly corrections: { applicationId: string; correction: Correction }[] = []
+  /** What `correct` was asked to change on a Neuzulassung, recorded the same way. */
+  readonly patches: { applicationId: string; patch: NewRegistrationPatch }[] = []
 
   private readonly statuses = new Map<string, GatewayStatus>()
   private readonly authorities = new Map<string, RegistrationAuthority[]>()
   private readonly documents = new Map<string, Uint8Array>()
   private readonly failures = new Map<Operation, Error>()
+  private readonly recorders: { [Service in OrderableService]: (applicationId: string, correction: Corrections[Service]) => void } = {
+    deregistration: (applicationId, correction) => this.corrections.push({ applicationId, correction }),
+    newRegistration: (applicationId, patch) => this.patches.push({ applicationId, patch }),
+  }
 
   /** Sets what `getStatus` reports, until `retry` or `correct` restarts the application. */
   setStatus(applicationId: string, status: GatewayStatus): void {
@@ -91,9 +103,9 @@ export class FakeRegistrationGateway implements RegistrationGateway {
   }
 
   /** Records the correction and restarts the application; the fields are not validated or stored. */
-  async correct(_service: OrderableService, applicationId: string, correction: Correction): Promise<void> {
+  async correct<Service extends OrderableService>(service: Service, applicationId: string, correction: Corrections[Service]): Promise<void> {
     this.throwIfScripted("correct")
-    this.corrections.push({ applicationId, correction })
+    this.recorders[service](applicationId, correction)
     this.statuses.set(applicationId, IN_PROGRESS)
   }
 

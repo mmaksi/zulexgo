@@ -1,5 +1,7 @@
 import { FAKE_REQUEST } from "@/tests/fixtures/applications"
+import { FAKE_NEW_REGISTRATION, FAKE_NEW_REGISTRATION_NOW } from "@/tests/fixtures/new-registration"
 import { parseDeregistrationRequest } from "@/src/core/domain/application/deregistration-request"
+import { parseNewRegistrationRequest } from "@/src/core/domain/application/new-registration-request"
 import { parseVin } from "@/src/core/domain/vehicle/vin"
 import { GatewayRejected } from "@/src/core/errors/registration/gateway-rejected"
 import { GatewayUnavailable } from "@/src/core/errors/registration/gateway-unavailable"
@@ -76,6 +78,19 @@ describe("FakeRegistrationGateway scripting, which the use-case tests rely on", 
     expect(gateway.retries).toEqual([applicationId])
     expect(gateway.corrections).toEqual([{ applicationId, correction }])
     expect(await gateway.getStatus("deregistration", applicationId)).toEqual({ state: "inProgress" })
+  })
+
+  it("records what a Neuzulassung was filed and patched with, apart from a de-registration's corrections", async () => {
+    const newRegistration = parseNewRegistrationRequest(FAKE_NEW_REGISTRATION, FAKE_NEW_REGISTRATION_NOW)
+    const { applicationId: filed } = await gateway.submit(newRegistration, "new-registration-key")
+    const patch = { part2Number: "NEW0002" }
+
+    await gateway.correct("newRegistration", filed, patch)
+
+    expect(gateway.submissions.at(-1)).toEqual({ request: newRegistration, idempotencyKey: "new-registration-key", applicationId: filed })
+    expect(gateway.patches).toEqual([{ applicationId: filed, patch }])
+    expect(gateway.corrections).toEqual([])
+    expect(await gateway.getStatus("newRegistration", filed)).toEqual({ state: "inProgress" })
   })
 
   it("serves the bytes of a document a test sets", async () => {

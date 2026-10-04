@@ -1,10 +1,11 @@
 /** In the order the customer sees them: what they came for first. The status page sorts by it. */
-export const DOCUMENT_KINDS = ["confirmation", "rejection", "fee", "unknown"] as const
+export const DOCUMENT_KINDS = ["confirmation", "temporaryCertificate", "rejection", "fee", "unknown"] as const
 
 /**
- * Documents the KBA produces, in our terms: `confirmation` is the Abmeldebescheinigung,
- * `rejection` a refusal document, `fee` the authority's charge. Anything we do not recognise
- * is shown as a generic "Dokument".
+ * Documents the KBA produces, in our terms: `confirmation` is the Abmeldebescheinigung of a
+ * de-registration or the registration's confirmation, `temporaryCertificate` the proof of registration
+ * issued before the plates and papers arrive, `rejection` a refusal document, `fee` the authority's
+ * charge. Anything we do not recognise is shown as a generic "Dokument".
  */
 export type DocumentKind = (typeof DOCUMENT_KINDS)[number]
 

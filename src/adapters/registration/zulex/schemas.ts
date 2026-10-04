@@ -3,8 +3,8 @@ import { z } from "zod"
 /** Response shapes from docs/api-1.yaml, as far as this adapter reads them. */
 
 /**
- * The 201 body of POST /deregistration-applications. The id is a uuid in the spec, but only ever
- * echoed back in later paths, so it is kept as an opaque non-empty string.
+ * The 201 body of POST /deregistration-applications and POST /registration-applications. The id is
+ * a uuid in the spec, but only ever echoed back in later paths, so it is kept as an opaque non-empty string.
  */
 export const createApplicationResponse = z.object({ applicationId: z.string().min(1) })
 
@@ -28,11 +28,13 @@ export const registrationAuthoritiesResponse = z.object({
 const document = z.object({ id: z.string(), type: z.string() })
 
 /**
- * GET and PATCH /deregistration-applications/{id}. The body also echoes the plate, VIN and
- * security codes; they are not declared here, and `z.object` drops undeclared keys, so those
- * never leave this parse.
+ * GET and PATCH on /deregistration-applications/{id} and /registration-applications/{id}, which
+ * answer in the same four fields. The body also echoes what was filed: a de-registration's plate,
+ * VIN and security codes, a Neuzulassung's owner, address, bank account, eVB number and Teil II
+ * code. None of it is declared here, and `z.object` drops undeclared keys, so it never leaves this
+ * parse.
  */
-export const deregistrationApplicationResponse = z.object({
+export const applicationResponse = z.object({
   applicationId: z.string(),
   /**
    * The spec's enum is IN_PROGRESS, FINISHED and ERROR, but it tells clients to expect statuses
@@ -49,4 +51,4 @@ export const deregistrationApplicationResponse = z.object({
 })
 
 /** The parsed shape, not the wire one: ids are strings and `documents` is always an array. */
-export type DeregistrationApplicationResponse = z.output<typeof deregistrationApplicationResponse>
+export type ApplicationResponse = z.output<typeof applicationResponse>

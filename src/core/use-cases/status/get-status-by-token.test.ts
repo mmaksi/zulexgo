@@ -104,6 +104,19 @@ describe("getStatusByToken", () => {
       ])
     })
 
+    it("lists the temporary certificate after the confirmation and before a refusal, the fee and the unknown", async () => {
+      const stored = new Map<ApplicationReference, DocumentRef[]>([
+        [
+          finished.reference,
+          [{ id: "5", kind: "unknown" }, { id: "4", kind: "fee" }, { id: "3", kind: "rejection" }, { id: "2", kind: "temporaryCertificate" }, { id: "1", kind: "confirmation" }],
+        ],
+      ])
+
+      const view = await getStatusByToken({ repository: finishedRepository, documents: storeOf(stored), payments }, TOKEN)
+
+      expect(view.documents.map(({ kind }) => kind)).toEqual(["confirmation", "temporaryCertificate", "rejection", "fee", "unknown"])
+    })
+
     it("lists none for a finished order that has none", async () => {
       expect((await getStatusByToken({ repository: finishedRepository, documents: storeOf(), payments }, TOKEN)).documents).toEqual([])
     })

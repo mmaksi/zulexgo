@@ -72,7 +72,8 @@ export async function correctApplication(deps: Dependencies, token: string, inpu
  * `refused` (the service rejected the data) leaves the order at 5b, exactly as it was.
  */
 async function patch(deps: Dependencies, application: Application, zulexId: string, correction: Correction): Promise<"resubmitted" | "refused"> {
-  const { service } = application.request
+  // Only a de-registration gets here (`correctApplication` refuses the rest), and a `Correction` is its patch: the literal makes the compiler check it.
+  const service = "deregistration"
   try {
     // A rerun after the first attempt got this far finds the service already working on it: patching again would send it twice.
     if ((await deps.registration.getStatus(service, zulexId)).state !== "inProgress") await deps.registration.correct(service, zulexId, correction)
