@@ -1,4 +1,8 @@
+import { HttpResponse } from "msw"
 import { FAKE_REQUEST } from "@/tests/fixtures/applications"
+import { FAKE_NEW_REGISTRATION } from "@/tests/fixtures/new-registration"
+import { secretsOf } from "@/tests/fixtures/secrets"
+import { ZULEX_TEST_API_KEY } from "@/tests/msw/zulex"
 import { FakeClock } from "@/src/adapters/clock/fake/fake-clock"
 import { ConsoleMailer } from "@/src/adapters/mail/console/console-mailer"
 import { FakePaymentProvider } from "@/src/adapters/payment/fake/fake-payment-provider"
@@ -11,8 +15,10 @@ import { GatewayUnavailable } from "@/src/core/errors/registration/gateway-unava
 import { confirmPayment } from "@/src/core/use-cases/payment/confirm-payment"
 import { confirmRefund } from "@/src/core/use-cases/payment/confirm-refund"
 import { pollDueApplications } from "@/src/core/use-cases/registration/poll-due-applications"
+import { submitToKba } from "@/src/core/use-cases/registration/submit-to-kba"
 import { resendStatusLink } from "@/src/core/use-cases/status/resend-status-link"
 import { submitCheckout } from "@/src/core/use-cases/checkout/submit-checkout"
+import { withVendorsAtTheNetwork } from "./network-harness"
 
 /**
  * CLAUDE.md non-negotiable: security codes never reach a log, in any stage.
@@ -106,6 +112,60 @@ describe("secrets in logs", () => {
     console.restore()
 
     for (const token of tokens) expect(console.output()).toContain(token)
+  })
+})
+
+/**
+ * The Zulex API echoes back everything a Neuzulassung was filed with (the owner, the address, the IBAN,
+ * the eVB number, the Teil II code), and its KBA error text can quote it. None of it may reach a log.
+ */
+describe("a Neuzulassung's secrets in logs", () => {
+  const { world, stored, verifiedNewRegistration } = withVendorsAtTheNetwork()
+  const HOUR = 60 * 60_000
+  const poll = async () => {
+    world.clock.advance(HOUR)
+    await pollDueApplications(world.deps, 50)
+  }
+
+  /** Every path through the Zulex adapter that logs: an outage, an answer it cannot read, a KBA error that quotes a secret, a refusal. */
+  async function runEveryPath(): Promise<string[]> {
+    const order = await verifiedNewRegistration()
+    const secrets = secretsOf(order.request)
+
+    // The poller does not file an order at status 3 yet (N5): the retry after the outage is made as it will be.
+    world.zulex.failNext("create", new Response(null, { status: 503 }))
+    await submitToKba(world.deps, order)
+    await submitToKba(world.deps, await stored(order.reference))
+    const id = (await stored(order.reference)).zulexApplicationId!
+
+    world.zulex.failNext("get", HttpResponse.json({ ...(world.zulex.applications.get(id)!.body as object), applicationId: id, status: 42 }))
+    await poll()
+
+    const { registrationCertificate, bankAccount } = FAKE_NEW_REGISTRATION
+    const error = {
+      code: 9999,
+      description: `Teil II ${registrationCertificate.securityCode} passt nicht`,
+      details: [`IBAN ${bankAccount.iban}`],
+    }
+    world.zulex.setStatus(id, "ERROR", { errorInfo: error })
+    await poll()
+    world.zulex.setStatus(id, "ERROR", { errorInfo: error })
+    await poll()
+
+    world.zulex.failNext("create", new Response(null, { status: 400 }))
+    await submitToKba(world.deps, await verifiedNewRegistration())
+    return secrets
+  }
+
+  it("never logs what the customer entered, nor what the API echoed or quoted back", async () => {
+    const console = captureConsole()
+    const secrets = await runEveryPath()
+    console.restore()
+
+    expect(console.output()).toContain("[poll]")
+    expect(console.output()).toContain("[error-algorithm]")
+    for (const secret of secrets) expect(console.output()).not.toContain(secret)
+    expect(console.output()).not.toContain(ZULEX_TEST_API_KEY)
   })
 })
 

@@ -99,6 +99,7 @@ function Correction({ view, action }: { view: View; action: CorrectOrderAction }
 
 const DOCUMENT_LABELS: Record<DocumentKind, string> = {
   confirmation: "Bestätigung der Abmeldung",
+  temporaryCertificate: "Vorläufiger Zulassungsnachweis",
   rejection: "Ablehnung",
   fee: "Gebührenbeleg",
   unknown: "Dokument",

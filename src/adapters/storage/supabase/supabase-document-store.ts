@@ -1,13 +1,13 @@
 import { StorageClient, type StorageError } from "@supabase/storage-js"
 import type { ApplicationReference } from "@/src/core/domain/application/application-reference"
-import type { DocumentKind, DocumentRef } from "@/src/core/domain/registration/document"
+import { DOCUMENT_KINDS, type DocumentKind, type DocumentRef } from "@/src/core/domain/registration/document"
 import type { DocumentStore, StoredDocument } from "@/src/core/ports/storage/document-store"
 
 /**
  * Reads an object name back into a `DocumentRef`: Zulex's int64 document id (digits only) and our
  * kind. Anything else in an application's folder is not ours and `list` skips it.
  */
-const OBJECT_NAME = /^(\d+)\.(confirmation|rejection|fee|unknown)$/
+const OBJECT_NAME = new RegExp(`^(\\d+)\\.(${DOCUMENT_KINDS.join("|")})$`)
 
 /** The kind is part of the name, so `list` can rebuild a `DocumentRef` without a database. */
 const objectName = ({ id, kind }: DocumentRef) => `${id}.${kind}`

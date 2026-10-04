@@ -1,6 +1,9 @@
 import { http, HttpResponse } from "msw"
 import {
+  applicationResponseJson,
+  createRegistrationApplicationSpec,
   deregistrationResponseJson,
+  patchRegistrationApplicationSpec,
   ZULEX_BASE_URL,
   type CreateDeregistrationBody,
   type ZulexDocument,
@@ -13,17 +16,60 @@ export const ZULEX_TEST_API_KEY = "fake-zulex-api-key"
 type Operation = "create" | "get" | "patch" | "retry" | "authorities" | "document"
 
 interface Stored {
-  body: CreateDeregistrationBody
+  /** The endpoint it was filed at: an id is known only to the service it belongs to. */
+  path: string
+  /** What was filed, echoed back by a GET: the API returns the personal data and the codes it was given. */
+  body: object
   status: ZulexStatus | string
   documents: ZulexDocument[]
   errorInfo?: ZulexErrorInfo
+}
+
+/** How one service's applications behave at the vendor. */
+interface Routes {
+  path: string
+  /** Zulex answers 400 to a create or patch body the spec does not accept. */
+  accepts: (body: unknown) => boolean
+  acceptsPatch: (body: unknown) => boolean
+  patched: (filed: object, patch: object) => object
+  json: (applicationId: string, stored: Stored) => string
+}
+
+const DEREGISTRATION: Routes = {
+  path: "/deregistration-applications",
+  accepts: () => true,
+  acceptsPatch: () => true,
+  patched: (filed, patch) => ({ ...filed, ...patch }),
+  json: (applicationId, { body, status, documents, errorInfo }) =>
+    deregistrationResponseJson({ applicationId, body: body as CreateDeregistrationBody, status, documents, errorInfo }),
+}
+
+const NEW_REGISTRATION: Routes = {
+  path: "/registration-applications",
+  accepts: (body) => createRegistrationApplicationSpec.safeParse(body).success,
+  acceptsPatch: (body) => patchRegistrationApplicationSpec.safeParse(body).success,
+  patched: (filed, patch) => {
+    const { evbNumber, registrationCertificatePart2Number, registrationCertificatePart2SecurityCode } = patch as Record<string, string | undefined>
+    return {
+      ...filed,
+      ...(evbNumber ? { evbNumber } : {}),
+      registrationCertificateInfo: {
+        ...(filed as { registrationCertificateInfo: object }).registrationCertificateInfo,
+        ...(registrationCertificatePart2Number ? { registrationCertificatePart2Number } : {}),
+        ...(registrationCertificatePart2SecurityCode ? { registrationCertificatePart2SecurityCode } : {}),
+      },
+    }
+  },
+  json: (applicationId, { body, status, documents, errorInfo }) => applicationResponseJson({ applicationId, echoed: body, status, documents, errorInfo }),
 }
 
 /**
  * A stand-in for the Zulex integration environment at the network boundary,
  * following docs/api-1.yaml: API key required, idempotent create, the three
  * status values, bare-binary documents. Tests script its state and its next
- * failure; `requests` records what the adapter sent.
+ * failure; `requests` records what the adapter sent. A registration's create
+ * and patch bodies are checked against the spec's schemas, and answered with
+ * a 400 when they do not match, as the API does.
  */
 export class ZulexDouble {
   readonly requests: { method: string; path: string; headers: Headers; body?: unknown }[] = []
@@ -62,38 +108,8 @@ export class ZulexDouble {
       }),
     ),
 
-    http.post(`${ZULEX_BASE_URL}/deregistration-applications`, ({ request }) =>
-      this.guard("create", request, async (body) => {
-        const key = request.headers.get("X-Idempotency-Key")
-        const earlier = key ? this.idempotency.get(key) : undefined
-        if (earlier) return HttpResponse.json({ applicationId: earlier }, { status: 201 })
-
-        this.sequence += 1
-        const applicationId = `00000000-0000-4000-8000-${String(this.sequence).padStart(12, "0")}`
-        this.applications.set(applicationId, { body: body as CreateDeregistrationBody, status: "IN_PROGRESS", documents: [] })
-        if (key) this.idempotency.set(key, applicationId)
-        return HttpResponse.json({ applicationId }, { status: 201 })
-      }),
-    ),
-
-    http.get(`${ZULEX_BASE_URL}/deregistration-applications/:id`, ({ request, params }) =>
-      this.guard("get", request, async () => {
-        const stored = this.applications.get(String(params.id))
-        if (!stored) return new HttpResponse(null, { status: 404 })
-        return new HttpResponse(deregistrationResponseJson({ applicationId: String(params.id), ...stored }), {
-          headers: { "Content-Type": "application/json" },
-        })
-      }),
-    ),
-
-    http.patch(`${ZULEX_BASE_URL}/deregistration-applications/:id`, ({ request, params }) =>
-      this.guard("patch", request, async (body) => {
-        const stored = this.applications.get(String(params.id))
-        if (!stored) return new HttpResponse(null, { status: 404 })
-        Object.assign(stored, { body: { ...stored.body, ...(body as object) }, status: "IN_PROGRESS", errorInfo: undefined })
-        return new HttpResponse(deregistrationResponseJson({ applicationId: String(params.id), ...stored }))
-      }),
-    ),
+    ...this.applicationHandlers(DEREGISTRATION),
+    ...this.applicationHandlers(NEW_REGISTRATION),
 
     http.post(`${ZULEX_BASE_URL}/applications/:id/retry`, ({ request, params }) =>
       this.guard("retry", request, async () => {
@@ -112,6 +128,44 @@ export class ZulexDouble {
       }),
     ),
   ]
+
+  /** Create, read and patch share one path per service; the ids come from one counter. */
+  private applicationHandlers({ path, accepts, acceptsPatch, patched, json }: Routes) {
+    return [
+      http.post(`${ZULEX_BASE_URL}${path}`, ({ request }) =>
+        this.guard("create", request, async (body) => {
+          if (!accepts(body)) return new HttpResponse(null, { status: 400 })
+          const key = request.headers.get("X-Idempotency-Key")
+          const earlier = key ? this.idempotency.get(key) : undefined
+          if (earlier) return HttpResponse.json({ applicationId: earlier }, { status: 201 })
+
+          this.sequence += 1
+          const applicationId = `00000000-0000-4000-8000-${String(this.sequence).padStart(12, "0")}`
+          this.applications.set(applicationId, { path, body: body as object, status: "IN_PROGRESS", documents: [] })
+          if (key) this.idempotency.set(key, applicationId)
+          return HttpResponse.json({ applicationId }, { status: 201 })
+        }),
+      ),
+
+      http.get(`${ZULEX_BASE_URL}${path}/:id`, ({ request, params }) =>
+        this.guard("get", request, async () => {
+          const stored = this.applications.get(String(params.id))
+          if (stored?.path !== path) return new HttpResponse(null, { status: 404 })
+          return new HttpResponse(json(String(params.id), stored), { headers: { "Content-Type": "application/json" } })
+        }),
+      ),
+
+      http.patch(`${ZULEX_BASE_URL}${path}/:id`, ({ request, params }) =>
+        this.guard("patch", request, async (body) => {
+          const stored = this.applications.get(String(params.id))
+          if (stored?.path !== path) return new HttpResponse(null, { status: 404 })
+          if (!acceptsPatch(body)) return new HttpResponse(null, { status: 400 })
+          Object.assign(stored, { body: patched(stored.body, body as object), status: "IN_PROGRESS", errorInfo: undefined })
+          return new HttpResponse(json(String(params.id), stored))
+        }),
+      ),
+    ]
+  }
 
   private async guard(operation: Operation, request: Request, respond: (body: unknown) => Promise<Response>) {
     const body = request.method === "GET" ? undefined : await request.text().then((text) => (text ? JSON.parse(text) : undefined))

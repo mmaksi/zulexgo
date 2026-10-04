@@ -1,4 +1,5 @@
 import { setupServer } from "msw/node"
+import { aNewRegistrationApplication } from "@/tests/fixtures/applications"
 import { ZULEX_BASE_URL } from "@/tests/fixtures/zulex"
 import { STRIPE_TEST_SECRET_KEY, STRIPE_TEST_WEBHOOK_SECRET, StripeDouble } from "@/tests/msw/stripe"
 import { ZULEX_TEST_API_KEY, ZulexDouble } from "@/tests/msw/zulex"
@@ -11,6 +12,7 @@ import { InMemoryApplicationRepository } from "@/src/adapters/repository/fake/in
 import { InMemoryDocumentStore } from "@/src/adapters/storage/fake/in-memory-document-store"
 import { FakeTokenGenerator } from "@/src/adapters/tokens/fake/fake-token-generator"
 import type { ApplicationReference } from "@/src/core/domain/application/application-reference"
+import { SERVICE_PRICES } from "@/src/core/domain/payment/pricing"
 import type { Dependencies } from "@/src/core/use-cases/dependencies"
 
 /**
@@ -49,10 +51,38 @@ export function withVendorsAtTheNetwork() {
   })
   afterAll(() => server.close())
 
+  /**
+   * A Neuzulassung as the identity step (N5) will leave it: paid, the card held at Stripe, the identity
+   * verified and nothing filed yet, with the status link the filing email carries.
+   */
+  async function verifiedNewRegistration() {
+    const order = aNewRegistrationApplication({ status: "identity_verified", ikfzStatus: "online" })
+    const { paymentId } = await world.deps.payments.createPayment({
+      reference: order.reference,
+      service: "newRegistration",
+      amount: SERVICE_PRICES.newRegistration,
+      email: order.email,
+    })
+    world.stripe.customerPays(paymentId, "card")
+    const at = world.clock.now()
+    const created = await world.deps.repository.create({
+      ...order,
+      payment: { id: paymentId, total: SERVICE_PRICES.newRegistration },
+      history: [
+        { status: "submitted_and_paid", at },
+        { status: "awaiting_identity_verification", at },
+        { status: "identity_verified", at },
+      ],
+    })
+    await world.deps.repository.setStatusToken(order.reference, world.deps.tokens.generate())
+    return created
+  }
+
   return {
     world,
     stored: async (reference: ApplicationReference) => (await world.deps.repository.get(reference))!,
     emails: () => world.mailer.sent.map((message) => message.template.name),
+    verifiedNewRegistration,
   }
 }
 

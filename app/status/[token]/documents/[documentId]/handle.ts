@@ -8,6 +8,7 @@ import { clientAddress } from "@/src/lib/client-address"
 /** ASCII, since a filename in a header is not the place for umlauts. */
 const FILE_LABELS: Record<DocumentKind, string> = {
   confirmation: "Bestaetigung",
+  temporaryCertificate: "Zulassungsnachweis",
   rejection: "Ablehnung",
   fee: "Gebuehren",
   unknown: "Dokument",
