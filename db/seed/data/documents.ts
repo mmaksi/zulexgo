@@ -44,11 +44,16 @@ const TEST_PDF = [
   "",
 ].join("\n")
 
-/** The completed application's confirmation, so the download can be tried in dev and on staging. Its id is an int64 beyond what a JS number holds, as Zulex's are. */
+/** Each completed application's confirmation, so the download can be tried in dev and on staging. Its id is an int64 beyond what a JS number holds, as Zulex's are. */
 export const SEEDED_DOCUMENTS: readonly SeededDocument[] = [
   {
     reference: parseApplicationReference("ZG-SEED04"),
     document: { id: "9100000000000004", kind: "confirmation" },
+    bytes: new TextEncoder().encode(TEST_PDF),
+  },
+  {
+    reference: parseApplicationReference("ZG-SEED16"),
+    document: { id: "9100000000000016", kind: "confirmation" },
     bytes: new TextEncoder().encode(TEST_PDF),
   },
 ]

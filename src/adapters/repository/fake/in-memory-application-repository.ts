@@ -1,12 +1,13 @@
 import type { Application } from "@/src/core/domain/application/application"
 import type { ApplicationReference } from "@/src/core/domain/application/application-reference"
 import { OPEN_STATUSES, POLLED_STATUSES } from "@/src/core/domain/application/application-status"
+import type { ServiceRequest } from "@/src/core/domain/application/service"
 import { DuplicateApplication } from "@/src/core/errors/application/duplicate-application"
 import { StaleApplication } from "@/src/core/errors/application/stale-application"
 import type { ApplicationRepository } from "@/src/core/ports/repository/application-repository"
 
 /**
- * Codes stay in plaintext here: nothing leaves the process. The Postgres adapter encrypts them.
+ * Codes and personal data stay in plaintext here: nothing leaves the process. The Postgres adapter encrypts them.
  *
  * Wired when `REPOSITORY_DRIVER=fake`, the default outside production (production rejects it at
  * boot), and used directly by tests. It is seeded at every boot, forgets everything on restart, and
@@ -78,16 +79,8 @@ export class InMemoryApplicationRepository implements ApplicationRepository {
     return reference && this.get(reference)
   }
 
-  async hasOpenApplication({ service, licencePlate, vin }: Parameters<ApplicationRepository["hasOpenApplication"]>[0]): Promise<boolean> {
-    return this.all().some(
-      ({ status, request }) =>
-        OPEN_STATUSES.includes(status) &&
-        request.service === service &&
-        request.vin === vin &&
-        request.licencePlate.prefix === licencePlate.prefix &&
-        request.licencePlate.letters === licencePlate.letters &&
-        request.licencePlate.numbers === licencePlate.numbers,
-    )
+  async hasOpenApplication(vehicle: Parameters<ApplicationRepository["hasOpenApplication"]>[0]): Promise<boolean> {
+    return this.all().some(({ status, request }) => OPEN_STATUSES.includes(status) && isTheVehicle(request, vehicle))
   }
 
   async findDueForPolling(now: Date, limit: number): Promise<Application[]> {
@@ -111,16 +104,41 @@ export class InMemoryApplicationRepository implements ApplicationRepository {
   }
 }
 
+/** What names the car depends on the service, as in `hasOpenApplication`: plate and VIN for a de-registration, the VIN alone for a Neuzulassung. */
+function isTheVehicle(request: ServiceRequest, vehicle: Parameters<ApplicationRepository["hasOpenApplication"]>[0]): boolean {
+  if (request.service !== vehicle.service || request.vin !== vehicle.vin) return false
+  if (request.service === "deregistration" && vehicle.service === "deregistration") {
+    const { prefix, letters, numbers } = request.licencePlate
+    return prefix === vehicle.licencePlate.prefix && letters === vehicle.licencePlate.letters && numbers === vehicle.licencePlate.numbers
+  }
+  return true
+}
+
+/** The parts of a request that are mutable objects. A secret is shared, not copied: only what `reveal()` hands out could be changed, and no caller changes it. */
+function copyRequest(request: ServiceRequest): ServiceRequest {
+  switch (request.service) {
+    case "deregistration":
+      return { ...request, licencePlate: { ...request.licencePlate }, codes: { ...request.codes } }
+    case "newRegistration":
+      return {
+        ...request,
+        registrationCertificate: { ...request.registrationCertificate },
+        owner: { ...request.owner },
+        plate: { ...request.plate, ...(request.plate.seasonal && { seasonal: { ...request.plate.seasonal } }) },
+      }
+  }
+}
+
 /** Value objects (codes, money) are immutable and shared; everything mutable is copied, Dates too. */
 const copy = (application: Application): Application => ({
   ...application,
   history: application.history.map((change) => ({ ...change, at: new Date(change.at) })),
-  request: {
-    ...application.request,
-    licencePlate: { ...application.request.licencePlate },
-    codes: { ...application.request.codes },
-  },
+  request: copyRequest(application.request),
   payment: { ...application.payment },
+  identityVerification: application.identityVerification && {
+    ...application.identityVerification,
+    deadline: new Date(application.identityVerification.deadline),
+  },
   polling: {
     ...application.polling,
     nextPollAt: application.polling.nextPollAt && new Date(application.polling.nextPollAt),

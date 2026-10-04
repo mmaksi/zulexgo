@@ -68,6 +68,13 @@ export interface Application {
   /** Why the application is at 5b or 5c, so the page and the email can say so. Cleared when a correction resubmits it. */
   readonly failure?: Failure
   /**
+   * The identity verification a service that verifies (Neuzulassung) waits on: the provider's id, which
+   * `getResult` is asked about, and the moment the wait ends. The deadline is fixed when the verification
+   * starts, so the one in the customer's email is the one enforced if the policy later changes. Absent
+   * until the verification starts, and kept once the order moves on.
+   */
+  readonly identityVerification?: { readonly id: string; readonly deadline: Date }
+  /**
    * When the poller next visits, and how many checks it has made, which indexes the delay
    * before the next one (`nextPollAt` in poll-schedule.ts). Without `nextPollAt` nothing is
    * scheduled: the order is unpaid, finished, or a 5b whose money is safe.

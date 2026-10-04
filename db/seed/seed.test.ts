@@ -1,4 +1,5 @@
-import { APPLICATION_STATUSES } from "@/src/core/domain/application/application-status"
+import { APPLICATION_STATUSES, requiresIdentityVerification } from "@/src/core/domain/application/application-status"
+import type { OrderableService } from "@/src/core/domain/application/service"
 import { InMemoryApplicationRepository } from "@/src/adapters/repository/fake/in-memory-application-repository"
 import { InMemoryDocumentStore } from "@/src/adapters/storage/fake/in-memory-document-store"
 import { anApplication } from "@/tests/fixtures/applications"
@@ -18,11 +19,37 @@ describe("seedFor", () => {
   })
 
   // Statuses 2 and 3 are Neuzulassung's alone: a de-registration goes from payment straight to the KBA.
-  it("seeds at least one application in every status a de-registration passes through, so every UI state is visible on boot", () => {
-    const statuses = new Set(seedFor("dev").map(({ application }) => application.status))
-    const identityStatuses = ["awaiting_identity_verification", "identity_verified"]
+  it.each(Object.keys(JOURNEYS) as OrderableService[])(
+    "seeds at least one %s in every status its journey passes through, so every UI state is visible on boot",
+    (service) => {
+      const identityStatuses = ["awaiting_identity_verification", "identity_verified"]
+      const journey = requiresIdentityVerification(service) ? APPLICATION_STATUSES : APPLICATION_STATUSES.filter((status) => !identityStatuses.includes(status))
+      const seeded = seedFor("dev").filter(({ application }) => application.request.service === service)
 
-    expect([...statuses].sort()).toEqual(APPLICATION_STATUSES.filter((status) => !identityStatuses.includes(status)).sort())
+      expect(seeded.map(({ application }) => application.status).sort()).toEqual([...journey].sort())
+    },
+  )
+
+  it("gives every seeded order a reference, status link, idempotency key and payment of its own", () => {
+    const seed = seedFor("dev")
+
+    for (const own of [
+      ({ application }: (typeof seed)[number]) => application.reference,
+      ({ statusToken }: (typeof seed)[number]) => statusToken,
+      ({ application }: (typeof seed)[number]) => application.idempotencyKey,
+      ({ application }: (typeof seed)[number]) => application.payment.id,
+    ]) {
+      expect(new Set(seed.map(own)).size).toBe(seed.length)
+    }
+  })
+
+  // The verification an order waited on stays with it once it moves on, and only an order that waited on one has it.
+  it("records the identity verification of exactly the orders that reached status 2", () => {
+    for (const { application } of seedFor("dev")) {
+      const reachedStatus2 = application.history.some(({ status }) => status === "awaiting_identity_verification")
+
+      expect(application.identityVerification !== undefined).toBe(reachedStatus2)
+    }
   })
 
   it("is the same data on every boot", () => {
@@ -103,9 +130,9 @@ describe("loadSeed", () => {
   })
 
   it("survives a status added mid-journey: every application keeps its reference and its status link", async () => {
-    const before = Object.fromEntries(Object.entries(JOURNEYS).filter(([status]) => status !== "submitted_and_paid"))
+    const withoutPaid = (journeys: object) => Object.fromEntries(Object.entries(journeys).filter(([status]) => status !== "submitted_and_paid"))
     const repository = new InMemoryApplicationRepository()
-    await loadSeed(repository, seededApplications(before))
+    await loadSeed(repository, seededApplications({ deregistration: withoutPaid(JOURNEYS.deregistration), newRegistration: withoutPaid(JOURNEYS.newRegistration) }))
 
     const seed = seedFor("staging")
     await loadSeed(repository, seed)
@@ -129,12 +156,15 @@ describe("the seeded documents", () => {
     expect(() => seedDocumentsFor("production")).toThrow(/production/)
   })
 
-  it("belong to seeded applications, and the completed one has its confirmation to download", () => {
+  it("belong to seeded applications, and each completed one has its confirmation to download", () => {
     const applications = new Map(seedFor("dev").map(({ application }) => [application.reference, application.status]))
     const documents = seedDocumentsFor("dev")
+    const completed = [...applications].filter(([, status]) => status === "completed").map(([reference]) => reference)
 
     for (const { reference } of documents) expect(applications.has(reference)).toBe(true)
-    expect(documents.filter(({ reference, document }) => applications.get(reference) === "completed" && document.kind === "confirmation")).toHaveLength(1)
+    for (const reference of completed) {
+      expect(documents.filter((document) => document.reference === reference && document.document.kind === "confirmation")).toHaveLength(1)
+    }
   })
 
   it("are real PDFs, so the download opens in a viewer", () => {

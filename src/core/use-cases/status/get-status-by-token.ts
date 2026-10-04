@@ -44,10 +44,20 @@ export interface DeregistrationStatusView extends StatusViewBase {
 }
 
 /**
+ * A Neuzulassung is known by the end of its VIN for now: it has no plate until the authority assigns
+ * one, and what its customer typed (the owner, the address, the bank account, the eVB number and the
+ * Teil II code) never leaves the server.
+ */
+export interface NewRegistrationStatusView extends StatusViewBase {
+  readonly service: "newRegistration"
+  readonly vinEnding: string
+}
+
+/**
  * One member per service, each with the summary of what that service's order is about, so the
  * page picks its summary and its correction form by `service`.
  */
-export type StatusView = DeregistrationStatusView
+export type StatusView = DeregistrationStatusView | NewRegistrationStatusView
 
 /**
  * What the status page shows for a link, rebuilt from our own record on every page view
@@ -73,16 +83,19 @@ export async function getStatusByToken(
   if (!application) throw new TokenInvalid()
 
   const { reference, status, request } = application
+  const vinEnding = request.vin.slice(-VIN_VISIBLE)
+  const summary =
+    request.service === "deregistration"
+      ? { service: request.service, licencePlate: request.licencePlate, plateCount: request.plateCount, vinEnding }
+      : { service: request.service, vinEnding }
   return {
-    service: request.service,
+    ...summary,
     reference,
     status,
-    licencePlate: request.licencePlate,
-    plateCount: request.plateCount,
-    vinEnding: request.vin.slice(-VIN_VISIBLE),
     steps: customerSteps(application),
     failureReason: failureReasonOf(application, deps.errorCatalogue),
-    correctable: status === "failed_correctable" ? await correctableOf(deps.payments, application) : undefined,
+    // Only a de-registration has a correction to offer; a Neuzulassung's is not built yet.
+    correctable: status === "failed_correctable" && request.service === "deregistration" ? await correctableOf(deps.payments, application) : undefined,
     // A preview from the price, beside the cancel button: all but the fee would go back.
     cancellation: status === "failed_correctable" ? { returned: application.payment.total.subtract(PROCESSING_FEE), retained: PROCESSING_FEE } : undefined,
     documents: await documentsOf(deps.documents, application),

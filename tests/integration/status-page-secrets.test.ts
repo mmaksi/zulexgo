@@ -6,6 +6,7 @@ import { FakeClock } from "@/src/adapters/clock/fake/fake-clock"
 import { FakePaymentProvider } from "@/src/adapters/payment/fake/fake-payment-provider"
 import { InMemoryApplicationRepository } from "@/src/adapters/repository/fake/in-memory-application-repository"
 import { InMemoryDocumentStore } from "@/src/adapters/storage/fake/in-memory-document-store"
+import type { ServiceRequest } from "@/src/core/domain/application/service"
 import { getStatusByToken } from "@/src/core/use-cases/status/get-status-by-token"
 
 jest.mock("next/navigation", () => ({ useRouter: () => ({ refresh: jest.fn() }) }))
@@ -15,6 +16,31 @@ jest.mock("next/navigation", () => ({ useRouter: () => ({ refresh: jest.fn() }) 
  * a rendered status page. Checked for an application in every status, as the
  * seed has one per status.
  */
+/** What the customer typed that must stay off the page: a de-registration's codes, everything a Neuzulassung's owner and car papers carry. */
+function secretsOf(request: ServiceRequest): string[] {
+  if (request.service === "deregistration") {
+    const { rearPlate, frontPlate, certificate } = request.codes
+    return [rearPlate, frontPlate, certificate].flatMap((code) => (code ? [code.reveal()] : []))
+  }
+  const { owner, bankAccount, registrationCertificate, evbNumber } = request
+  const { iban, bic, bankName } = bankAccount.reveal()
+  return [
+    evbNumber.reveal(),
+    registrationCertificate.number,
+    registrationCertificate.securityCode.reveal(),
+    iban,
+    bic,
+    bankName,
+    owner.firstName,
+    owner.lastName,
+    owner.birthDate.reveal(),
+    owner.birthPlace.reveal(),
+    owner.phone.reveal(),
+    owner.email,
+    ...Object.values(owner.address.reveal()),
+  ]
+}
+
 const seeded = seedFor("dev")
 const repository = new InMemoryApplicationRepository(seeded)
 const documents = new InMemoryDocumentStore(seedDocumentsFor("dev"))
@@ -28,15 +54,13 @@ describe("the rendered status page", () => {
     async (_, application, token) => {
       const view = await getStatusByToken({ repository, documents, payments }, token)
       const html = renderToStaticMarkup(createElement(StatusView, { view, documentHref: (id: string) => `/status/${token}/documents/${id}`, cancelAction, correctAction }))
-      const { codes, vin } = application.request
+      const { request } = application
 
       expect(html).toContain(application.reference)
-      for (const code of [codes.rearPlate, codes.frontPlate, codes.certificate]) {
-        if (code) expect(html).not.toContain(code.reveal())
-      }
+      for (const secret of secretsOf(request)) expect(html).not.toContain(secret)
       // The link to a document is the one place the page repeats its own token: it is where the download lives.
       expect(html.replaceAll(`/status/${token}/documents/`, "")).not.toContain(token)
-      expect(html).not.toContain(vin)
+      expect(html).not.toContain(request.vin)
     },
   )
 

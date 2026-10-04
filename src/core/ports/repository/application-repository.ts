@@ -1,6 +1,7 @@
 import type { Application } from "@/src/core/domain/application/application"
 import type { ApplicationReference } from "@/src/core/domain/application/application-reference"
 import type { DeregistrationRequest } from "@/src/core/domain/application/deregistration-request"
+import type { NewRegistrationRequest } from "@/src/core/domain/application/new-registration-request"
 
 /**
  * Where applications live between requests. Owns our status machine's state,
@@ -21,7 +22,8 @@ import type { DeregistrationRequest } from "@/src/core/domain/application/deregi
  *   same link; adapters that persist it keep it encrypted and look it up by
  *   hash. Setting a new one revokes the old one.
  * - `hasOpenApplication` says whether a paid order that is not finished exists
- *   for the service, plate and VIN; one still awaiting payment, completed, failed for
+ *   for the car: for a de-registration the same plate and VIN, for a Neuzulassung (a car
+ *   with no plate yet) the VIN; one still awaiting payment, completed, failed for
  *   good or cancelled does not count, nor does one for another service. It says nothing
  *   more: no reference, no status.
  * - `findDueForPolling` returns applications whose next check is due, soonest
@@ -67,10 +69,11 @@ export interface ApplicationRepository {
    */
   findByStatusToken(token: string): Promise<Application | undefined>
   /**
-   * Service, plate (prefix, letters, numbers) and VIN must all match. Takes the request itself,
-   * as checkout holds it. Advisory, not a lock: two checkouts racing can both see `false`.
+   * The service, and what names the car for it, must all match: plate (prefix, letters, numbers)
+   * and VIN for a de-registration, the VIN for a Neuzulassung. Takes the request itself, as
+   * checkout holds it. Advisory, not a lock: two checkouts racing can both see `false`.
    */
-  hasOpenApplication(vehicle: Pick<DeregistrationRequest, "service" | "licencePlate" | "vin">): Promise<boolean>
+  hasOpenApplication(vehicle: Pick<DeregistrationRequest, "service" | "licencePlate" | "vin"> | Pick<NewRegistrationRequest, "service" | "vin">): Promise<boolean>
   /**
    * Due means `polling.nextPollAt <= now`, a moment exactly equal to `now`
    * included, among the statuses that are polled at all. An application

@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { ArrowRight } from "lucide-react"
-import { isOnSale, type OrderableService, type Service } from "@/src/core/domain/application/service"
+import { isOnSale, type Service, type ServiceOnSale } from "@/src/core/domain/application/service"
 import { formatEuros } from "@/src/core/domain/payment/money"
 import {
   CARBON_SURCHARGE,
@@ -22,7 +22,7 @@ import {
 import { Section, SectionHeading } from "@/src/ui/section"
 
 /** Where each service's funnel is, and what its button says: site-contract.md §2.1, CTA label <=20 chars. */
-const FUNNELS: Record<OrderableService, { href: string; label: string }> = {
+const FUNNELS: Record<ServiceOnSale, { href: string; label: string }> = {
   deregistration: { href: "/deregister", label: "Jetzt abmelden" },
 }
 

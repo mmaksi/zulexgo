@@ -3,6 +3,7 @@ import { applyCorrection, parseCorrection, type CorrectionInput } from "@/src/co
 import { nextPollAt } from "@/src/core/domain/registration/poll-schedule"
 import { isWhole } from "@/src/core/domain/payment/refund-policy"
 import { GatewayRejected } from "@/src/core/errors/registration/gateway-rejected"
+import { InvalidTransition } from "@/src/core/errors/application/invalid-transition"
 import { PaymentNoLongerWhole } from "@/src/core/errors/payment/payment-no-longer-whole"
 import { TokenInvalid } from "@/src/core/errors/application/token-invalid"
 import type { Correction } from "@/src/core/ports/registration/registration-gateway"
@@ -38,6 +39,8 @@ import { submitToKba } from "@/src/core/use-cases/registration/submit-to-kba"
 export async function correctApplication(deps: Dependencies, token: string, input: CorrectionInput): Promise<"resubmitted" | "refused"> {
   const application = token ? await deps.repository.findByStatusToken(token) : undefined
   if (!application) throw new TokenInvalid()
+  // This corrects a de-registration's plate codes; a Neuzulassung's own correction is not built yet, so its order is refused, not misread.
+  if (application.request.service !== "deregistration") throw new InvalidTransition(application.status, "correctionResubmitted")
 
   // An order the service refused outright (a 400 at submission) has no id: nothing to patch.
   const filed = application.zulexApplicationId !== undefined
@@ -48,12 +51,13 @@ export async function correctApplication(deps: Dependencies, token: string, inpu
   // amount is not the one this order was priced at.
   if (!payment.amount.equals(application.payment.total) || !isWhole({ ...payment, total: application.payment.total })) throw new PaymentNoLongerWhole()
 
-  const correction = parseCorrection(input, application.request.plateCount)
+  const { request } = application
+  const correction = parseCorrection(input, request.plateCount)
   // A new attempt: the failure shown to the customer and the silent retries used belong
   // to the attempt just corrected, so the order starts clean, with its one retry again.
   const withCorrection = (order: Application): Application => ({
     ...order,
-    request: applyCorrection(order.request, correction),
+    request: applyCorrection(request, correction),
     failure: undefined,
     retryAttempts: 0,
   })
