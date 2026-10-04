@@ -15,8 +15,12 @@ const HOUR = 60 * 60 * 1000
  * so a new status fails to compile until it is seeded. Each status owns its
  * number, which fixes its reference: staging keeps seeded rows across deploys,
  * so numbering by position would move references when a status is inserted.
+ * These are de-registrations, which never wait for an identity verification, so
+ * statuses 2 and 3 have no journey here.
  */
-export const JOURNEYS: Record<ApplicationStatus, { number: number; events: ApplicationEvent[]; failure?: Failure }> = {
+type DeregistrationStatus = Exclude<ApplicationStatus, "awaiting_identity_verification" | "identity_verified">
+
+export const JOURNEYS: Record<DeregistrationStatus, { number: number; events: ApplicationEvent[]; failure?: Failure }> = {
   awaiting_payment: { number: 1, events: [] },
   submitted_and_paid: { number: 2, events: ["paymentConfirmed"] },
   submitted_to_kba: { number: 3, events: ["paymentConfirmed", "submittedToKba"] },
@@ -32,7 +36,7 @@ export interface SeededApplication {
   readonly statusToken: string
 }
 
-function seeded(status: ApplicationStatus, { number, events, failure }: (typeof JOURNEYS)[ApplicationStatus]): SeededApplication {
+function seeded(status: ApplicationStatus, { number, events, failure }: (typeof JOURNEYS)[DeregistrationStatus]): SeededApplication {
   const digits = String(number).padStart(2, "0")
   const slug = status.replaceAll("_", "-")
   const created: Application = {

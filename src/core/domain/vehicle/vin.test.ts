@@ -10,4 +10,9 @@ describe("parseVin", () => {
   it.each(["", "WVWZZZ1JZXW0000012", "WVW-ZZZ"])("rejects %p", (input) => {
     expect(() => parseVin(input)).toThrow(ValidationError)
   })
+
+  // Upper-casing turns ß into SS, ſ into S and the ligature ﬀ into FF: a letter the customer never typed would reach the KBA.
+  it.each(["WVWZZZ1JZXW00ß1", "WVWZZZ1JZXW000ſ1", "WVWZZZ1JZXWﬀ0001", "ÄBC", "ǆ"])("rejects %p, whose upper case is not what was typed", (input) => {
+    expect(() => parseVin(input)).toThrow(ValidationError)
+  })
 })

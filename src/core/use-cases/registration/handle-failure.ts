@@ -1,4 +1,4 @@
-import { applyEvent, type Application } from "@/src/core/domain/application/application"
+import { applyEvent, filingDueSince, type Application } from "@/src/core/domain/application/application"
 import { decideOnFailure, isUnrecognised, type FailureDecision } from "@/src/core/domain/registration/error-algorithm"
 import type { Failure } from "@/src/core/domain/registration/failure"
 import { HOLD_CHECK_INTERVAL_MS } from "@/src/core/domain/payment/hold-policy"
@@ -28,10 +28,11 @@ export async function handleFailure(
   retry: (application: Application) => Promise<Application>,
 ): Promise<void> {
   const now = deps.clock.now()
-  // The patience for a submission that cannot be confirmed runs from the latest filing
+  // The patience for a submission that cannot be confirmed runs from when the order last became ready to be filed:
+  // paid, or verified for a service that verifies first, so days of waiting for the customer do not use it up
   // (a correction that files the order afresh starts it over); none recorded counts as just filed.
-  const filedAt = application.history.findLast(({ status }) => status === "submitted_and_paid")?.at ?? now
-  const attempt = { retryAttempts: application.retryAttempts, waitedMs: now.getTime() - filedAt.getTime() }
+  const readyAt = filingDueSince(application.history) ?? now
+  const attempt = { retryAttempts: application.retryAttempts, waitedMs: now.getTime() - readyAt.getTime() }
   await applyDecision(deps, application, failure, decideOnFailure(failure, attempt, deps.errorCatalogue), retry)
 }
 

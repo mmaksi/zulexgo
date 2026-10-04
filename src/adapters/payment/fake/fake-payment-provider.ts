@@ -1,13 +1,13 @@
 import { createHmac, timingSafeEqual } from "node:crypto"
 import type { ApplicationReference } from "@/src/core/domain/application/application-reference"
+import { CARD_HOLD_LIFETIME_MS } from "@/src/core/domain/payment/hold-policy"
 import { Money } from "@/src/core/domain/payment/money"
 import { HoldExpired } from "@/src/core/errors/payment/hold-expired"
 import { NotificationRejected } from "@/src/core/errors/mail/notification-rejected"
 import type { Clock } from "@/src/core/ports/clock/clock"
 import type { Payment, PaymentMethodKind, PaymentNotification, PaymentProvider } from "@/src/core/ports/payment/payment-provider"
 
-/** Stripe's validity for an online card authorisation (verified via the Stripe docs MCP, 2026-09-27). */
-const HOLD_VALIDITY_MS = 7 * 24 * 60 * 60 * 1000
+const HOLD_VALIDITY_MS = CARD_HOLD_LIFETIME_MS
 const NOTHING = Money.ofCents(0)
 /**
  * Public on purpose: it signs the fake's notifications (standing in for Stripe's webhook

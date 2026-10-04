@@ -1,7 +1,8 @@
 import { anApplication } from "@/tests/fixtures/applications"
 import { applyEvent, type Application } from "./application"
-import type { ApplicationEvent } from "./application-status"
+import type { ApplicationEvent, ApplicationStatus } from "./application-status"
 import { customerSteps } from "./customer-steps"
+import type { Service } from "./service"
 
 const T0 = new Date("2026-03-01T09:00:00.000Z")
 const minutes = (n: number) => new Date(T0.getTime() + n * 60_000)
@@ -56,5 +57,98 @@ describe("customerSteps: statuses 1 → 4 → 5 as the customer sees them", () =
     const resubmitted = reached("paymentConfirmed", "submittedToKba", "failedCorrectable", "correctionResubmitted")
 
     expect(states(resubmitted)).toEqual(["done", "current", "pending"])
+  })
+})
+
+/**
+ * Walks the real status machine for a service, one minute per event. A Neuzulassung order cannot be built as an
+ * `Application` yet (its request is not a `ServiceRequest` until it is stored), and the stepper and the machine read
+ * only the status, the history and the service.
+ */
+function reachedBy(service: Service, ...events: ApplicationEvent[]) {
+  const first = { status: "awaiting_payment" as ApplicationStatus, history: [{ status: "awaiting_payment" as ApplicationStatus, at: T0 }], request: { service } }
+  return events.reduce((order, event, index) => applyEvent(order, event, minutes(index + 1)), first)
+}
+
+const verified = (...events: ApplicationEvent[]) => reachedBy("newRegistration", ...events)
+const VERIFY = ["paymentConfirmed", "identityVerificationStarted"] as const
+const VERIFIED = [...VERIFY, "identityVerified"] as const
+const FILED = [...VERIFIED, "submittedToKba"] as const
+
+describe("customerSteps for a service that verifies identity: statuses 1 → 2 → 3 → 4 → 5", () => {
+  const stepStates = (order: ReturnType<typeof verified>) => customerSteps(order).map((step) => `${step.id}:${step.state}`)
+
+  it("has five steps, and a de-registration still has three", () => {
+    expect(customerSteps(verified()).map((step) => step.id)).toEqual(["paid", "verification", "verified", "kba", "outcome"])
+    expect(customerSteps(reached()).map((step) => step.id)).toEqual(["paid", "kba", "outcome"])
+  })
+
+  it("shows payment as the current step until it is confirmed", () => {
+    expect(stepStates(verified())).toEqual(["paid:current", "verification:pending", "verified:pending", "kba:pending", "outcome:pending"])
+  })
+
+  it("is between payment and verification the instant payment is confirmed", () => {
+    expect(stepStates(verified("paymentConfirmed"))).toEqual(["paid:done", "verification:pending", "verified:pending", "kba:pending", "outcome:pending"])
+  })
+
+  it("shows the verification as the current step while the customer has not verified", () => {
+    expect(stepStates(verified(...VERIFY))).toEqual(["paid:done", "verification:current", "verified:pending", "kba:pending", "outcome:pending"])
+  })
+
+  it("shows the verified identity as the current step, until the order is filed", () => {
+    expect(stepStates(verified(...VERIFIED))).toEqual(["paid:done", "verification:done", "verified:current", "kba:pending", "outcome:pending"])
+  })
+
+  it("shows the KBA as the current step once filed", () => {
+    expect(stepStates(verified(...FILED))).toEqual(["paid:done", "verification:done", "verified:done", "kba:current", "outcome:pending"])
+  })
+
+  it("dates each step by when the order reached it", () => {
+    const steps = customerSteps(verified(...FILED))
+
+    expect(steps.map((step) => step.at)).toEqual([minutes(1), minutes(2), minutes(3), minutes(4), undefined])
+  })
+
+  it("completes", () => {
+    const steps = customerSteps(verified(...FILED, "kbaCompleted"))
+
+    expect(steps.map((step) => step.state)).toEqual(["done", "done", "done", "done", "done"])
+    expect(steps[4]).toMatchObject({ outcome: "completed", at: minutes(5) })
+  })
+
+  describe("when the verification does not succeed, the outcome says why and the later steps stay pending", () => {
+    it.each([
+      ["failed_final", ["identityVerificationFailed"]],
+      ["cancelled", ["identityVerificationExpired"]],
+      ["failed_correctable", ["failedCorrectable"]],
+    ] as const)("ending at %s", (outcome, events) => {
+      const order = verified(...VERIFY, ...events)
+
+      expect(stepStates(order)).toEqual(["paid:done", "verification:pending", "verified:pending", "kba:pending", "outcome:failed"])
+      expect(customerSteps(order)[4]).toMatchObject({ outcome })
+    })
+  })
+
+  it("leaves the KBA step pending when the filing was refused before the KBA held it, the identity still verified", () => {
+    expect(stepStates(verified(...VERIFIED, "failedCorrectable"))).toEqual([
+      "paid:done",
+      "verification:done",
+      "verified:done",
+      "kba:pending",
+      "outcome:failed",
+    ])
+  })
+
+  it("returns to the verified identity, with the newer time, when a refused filing is corrected and filed afresh", () => {
+    const refiled = verified(...VERIFIED, "failedCorrectable", "correctionRefiled")
+
+    expect(stepStates(refiled)).toEqual(["paid:done", "verification:done", "verified:current", "kba:pending", "outcome:pending"])
+    expect(customerSteps(refiled)[2].at).toEqual(minutes(5))
+  })
+
+  it("keeps the KBA step current while a correction is back at the KBA", () => {
+    const resubmitted = verified(...FILED, "failedCorrectable", "correctionResubmitted")
+
+    expect(stepStates(resubmitted)).toEqual(["paid:done", "verification:done", "verified:done", "kba:current", "outcome:pending"])
   })
 })

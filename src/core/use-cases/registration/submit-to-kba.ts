@@ -1,4 +1,5 @@
 import { applyEvent, type Application } from "@/src/core/domain/application/application"
+import { filedFrom } from "@/src/core/domain/application/application-status"
 import type { Failure } from "@/src/core/domain/registration/failure"
 import { nextPollAt } from "@/src/core/domain/registration/poll-schedule"
 import { settledDecision } from "@/src/core/domain/payment/refund-policy"
@@ -17,7 +18,9 @@ import { captureHold } from "@/src/core/use-cases/payment/secure-hold"
  * Called by `confirmPayment` as soon as the payment is recorded, by the poller for an
  * order still at `submitted_and_paid` (a submission that died, a resubmission waiting
  * out an outage, a filed order whose follow-up failed), and by a correction that files
- * the order afresh. An order at any other status is left alone, so a repeat is harmless.
+ * the order afresh. An order at any other status is left alone, so a repeat is harmless:
+ * it is filed from the status of its service (`filedFrom`), which for a service that verifies
+ * the customer's identity first is the verified identity (3), never payment (1).
  *
  * In order: money that already went back means the order is never filed and its failure
  * is finished instead. Not yet filed: the service is asked, and a failure goes to the
@@ -26,7 +29,7 @@ import { captureHold } from "@/src/core/use-cases/payment/secure-hold"
  * moves the order to status 4 and sends email 4. A later tick can repeat any of it.
  */
 export async function submitToKba(deps: Dependencies, application: Application): Promise<void> {
-  if (application.status !== "submitted_and_paid") return
+  if (application.status !== filedFrom(application.request.service)) return
 
   // The silent retry of a submission: nothing exists at the service to ask to retry, so the
   // poller files the order again once the backoff (or the service's Retry-After) has passed.

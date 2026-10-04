@@ -28,8 +28,9 @@ export interface Attempt {
   /** Silent retries already used since the last submission succeeded. */
   readonly retryAttempts: number
   /**
-   * How long the application has waited to be filed, since payment was confirmed (or, after
-   * a correction that files the order afresh, since it was refiled).
+   * How long the application has waited to be filed, counted from when it became ready to be filed:
+   * payment was confirmed or, for a service that verifies the customer's identity first, the identity
+   * was verified. A correction that files the order afresh starts it over.
    */
   readonly waitedMs: number
 }
