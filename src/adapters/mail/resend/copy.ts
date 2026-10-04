@@ -32,6 +32,10 @@ type ServiceEmail = Extract<EmailTemplate, { service: OrderableService }>
 /** A service's wording for `ServiceEmail`. A service that is added has none until it is written here. */
 const SERVICE_COPY: Record<OrderableService, (template: ServiceEmail) => EmailCopy> = {
   deregistration: deregistrationCopy,
+  // Not written yet, and not on sale: no order for it is mailed, and one that were would fail here, never go out with another service's words.
+  newRegistration: () => {
+    throw new Error("The Neuzulassung emails have no wording yet")
+  },
 }
 
 /**

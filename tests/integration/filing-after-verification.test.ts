@@ -1,14 +1,15 @@
 import { anApplication } from "@/tests/fixtures/applications"
+import { FAKE_NEW_REGISTRATION, FAKE_NEW_REGISTRATION_NOW } from "@/tests/fixtures/new-registration"
 import type { Application } from "@/src/core/domain/application/application"
+import { parseNewRegistrationRequest } from "@/src/core/domain/application/new-registration-request"
 import { GatewayUnavailable } from "@/src/core/errors/registration/gateway-unavailable"
 import { submitToKba } from "@/src/core/use-cases/registration/submit-to-kba"
 import { HOUR, setupFlow as setup } from "./flow-harness"
 
 /**
  * A service that verifies the customer's identity files its application at status 3, days after payment, so what the
- * flow assumed about filing happening at status 1 has to hold for it too. A Neuzulassung order cannot be stored yet,
- * so these drive the same use cases with the data that differs: when the order became ready to be filed, and which
- * service it names.
+ * flow assumed about filing happening at status 1 has to hold for it too. These drive the same use cases with the data
+ * that differs: when the order became ready to be filed, and which service it names.
  */
 describe("filing an order whose identity was verified after payment", () => {
   beforeEach(() => {
@@ -58,9 +59,12 @@ describe("filing an order whose identity was verified after payment", () => {
   })
 
   describe("submitToKba, asked to file an order that has not been verified", () => {
-    // The request is not a `ServiceRequest` until Neuzulassung orders can be stored, so the one thing that differs, the service
-    // it names, is set on a stored de-registration order. What is asserted is that nothing is sent or taken.
-    const unverified = (application: Application): Application => ({ ...application, request: { ...application.request, service: "newRegistration" } as unknown as Application["request"] })
+    // The checkout in this harness only sells de-registrations, so the paid order it makes is given a Neuzulassung's request:
+    // the one thing that differs is the service it names. What is asserted is that nothing is sent or taken.
+    const unverified = (application: Application): Application => ({
+      ...application,
+      request: parseNewRegistrationRequest(FAKE_NEW_REGISTRATION, FAKE_NEW_REGISTRATION_NOW),
+    })
 
     it("files nothing, takes no money and leaves it as it was, since it may only be filed at status 3", async () => {
       const flow = setup()

@@ -12,11 +12,13 @@ import { DuplicateApplication } from "@/src/core/errors/application/duplicate-ap
 import { StaleApplication } from "@/src/core/errors/application/stale-application"
 import type { ApplicationRepository } from "@/src/core/ports/repository/application-repository"
 import { FieldCipher } from "./field-cipher"
+import { detailsOf, requestFrom } from "./new-registration-details"
 
 /**
  * One row of `SELECT_APPLICATION`, named as in db/migrations. `next_poll_at` is a timestamptz, which pg
  * returns as a Date; `history[].at` went through json_agg, so it is an ISO string until
- * `toApplication` parses it.
+ * `toApplication` parses it. The plate and the security codes are a de-registration's and the
+ * details a Neuzulassung's: a check in migration 0010 fills the one set and empties the other.
  */
 interface ApplicationRow {
   reference: string
@@ -24,12 +26,15 @@ interface ApplicationRow {
   status: ApplicationStatus
   email: string
   service: Service
-  plate_count: 1 | 2
-  plate_prefix: string
-  plate_letters: string
-  plate_numbers: string
+  plate_count: 1 | 2 | null
+  plate_prefix: string | null
+  plate_letters: string | null
+  plate_numbers: string | null
   vin: string
-  encrypted_security_codes: string
+  encrypted_security_codes: string | null
+  encrypted_details: string | null
+  identity_verification_id: string | null
+  identity_verification_deadline: Date | null
   authority_ikfz_status: IkfzStatus
   idempotency_key: string
   zulex_application_id: string | null
@@ -68,15 +73,16 @@ const DUPLICATES: Record<string, DuplicateApplication["field"]> = {
 
 /**
  * Server-side only, through the Supavisor transaction pooler: every query is
- * unnamed, so no prepared statement outlives its transaction. Security codes
- * and status tokens are encrypted here, before they reach the database.
+ * unnamed, so no prepared statement outlives its transaction. Security codes,
+ * a Neuzulassung's personal details and status tokens are encrypted here, before
+ * they reach the database.
  *
  * Wired when `REPOSITORY_DRIVER=postgres` (the staging and production Supabase projects; production
  * rejects the in-memory fake). Concurrency is optimistic: `update` is a compare-and-set on `version`
  * and reports a lost race as `StaleApplication`, so no row is locked between a read and a write.
  * The tables have row-level security on and no policy (migration 0001), so only this connection, as
- * the table owner, can read them. The database holds codes and tokens only as ciphertext (plus a
- * SHA-256 of each token for lookup); see `FieldCipher`.
+ * the table owner, can read them. The database holds codes, personal details and tokens only as
+ * ciphertext (plus a SHA-256 of each token for lookup); see `FieldCipher`.
  */
 export class PostgresApplicationRepository implements ApplicationRepository {
   private readonly pool: Pool
@@ -184,15 +190,25 @@ export class PostgresApplicationRepository implements ApplicationRepository {
     )
   }
 
-  /** Served by the `applications_by_vehicle` index (migration 0007); statuses are `OPEN_STATUSES`. */
-  async hasOpenApplication({ service, licencePlate, vin }: Parameters<ApplicationRepository["hasOpenApplication"]>[0]): Promise<boolean> {
-    const { rows } = await this.pool.query<{ open: boolean }>(
-      `SELECT EXISTS (
-         SELECT 1 FROM applications
-         WHERE service = $1 AND plate_prefix = $2 AND plate_letters = $3 AND plate_numbers = $4 AND vin = $5 AND status = ANY($6)
-       ) AS open`,
-      [service, licencePlate.prefix, licencePlate.letters, licencePlate.numbers, vin, OPEN_STATUSES],
-    )
+  /**
+   * A de-registration is looked up by plate and VIN (the `applications_by_vehicle` index, migration
+   * 0007), a Neuzulassung by its VIN within its service (`applications_by_service_vin`, migration
+   * 0010); statuses are `OPEN_STATUSES`.
+   */
+  async hasOpenApplication(vehicle: Parameters<ApplicationRepository["hasOpenApplication"]>[0]): Promise<boolean> {
+    const { rows } =
+      vehicle.service === "deregistration"
+        ? await this.pool.query<{ open: boolean }>(
+            `SELECT EXISTS (
+               SELECT 1 FROM applications
+               WHERE service = $1 AND plate_prefix = $2 AND plate_letters = $3 AND plate_numbers = $4 AND vin = $5 AND status = ANY($6)
+             ) AS open`,
+            [vehicle.service, vehicle.licencePlate.prefix, vehicle.licencePlate.letters, vehicle.licencePlate.numbers, vehicle.vin, OPEN_STATUSES],
+          )
+        : await this.pool.query<{ open: boolean }>(
+            "SELECT EXISTS (SELECT 1 FROM applications WHERE service = $1 AND vin = $2 AND status = ANY($3)) AS open",
+            [vehicle.service, vehicle.vin, OPEN_STATUSES],
+          )
     return rows[0].open
   }
 
@@ -212,34 +228,51 @@ export class PostgresApplicationRepository implements ApplicationRepository {
   /**
    * Every column an update may change; only the reference is fixed at creation.
    *
-   * The only place security codes are revealed in this adapter: the three go into one JSON blob and
-   * are encrypted straight away, bound to the reference. A missing front code is dropped by
-   * `JSON.stringify`. The ciphertext differs on every call (random IV), so it is rewritten on each
-   * update even when the codes are unchanged. Of a failure only its kind and the KBA's code are
+   * The only place security codes and a Neuzulassung's details are revealed in this adapter: a
+   * de-registration's three codes go into one JSON blob and a Neuzulassung's request (but for its VIN)
+   * into another, each encrypted straight away and bound to the reference. A missing front code is
+   * dropped by `JSON.stringify`. The ciphertext differs on every call (random IV), so it is rewritten on each
+   * update even when nothing changed. Of a failure only its kind and the KBA's code are
    * stored, never the vendor's description; the pair is held together by a CHECK in migration 0006.
    */
   private columns(application: Application) {
-    const { request } = application
-    const { rearPlate, frontPlate, certificate } = request.codes
-    const codes = { rearPlate: rearPlate.reveal(), frontPlate: frontPlate?.reveal(), certificate: certificate.reveal() }
     return {
       status: application.status,
       email: application.email,
-      service: request.service,
-      plate_count: request.plateCount,
-      plate_prefix: request.licencePlate.prefix,
-      plate_letters: request.licencePlate.letters,
-      plate_numbers: request.licencePlate.numbers,
-      vin: request.vin,
-      encrypted_security_codes: this.cipher.encrypt(JSON.stringify(codes), application.reference),
+      ...this.requestColumns(application),
       authority_ikfz_status: application.ikfzStatus,
       idempotency_key: application.idempotencyKey,
       zulex_application_id: application.zulexApplicationId ?? null,
       retry_attempts: application.retryAttempts,
       failure_kind: application.failure?.kind ?? null,
       failure_code: application.failure?.kind === "kbaError" ? application.failure.code : null,
+      identity_verification_id: application.identityVerification?.id ?? null,
+      identity_verification_deadline: application.identityVerification?.deadline ?? null,
       next_poll_at: application.polling.nextPollAt ?? null,
       poll_attempts: application.polling.attempts,
+    }
+  }
+
+  /** The columns of the order's own service, the other service's set emptied (migration 0010 requires both). */
+  private requestColumns({ request, reference }: Application) {
+    const none = { plate_count: null, plate_prefix: null, plate_letters: null, plate_numbers: null, encrypted_security_codes: null, encrypted_details: null }
+    switch (request.service) {
+      case "deregistration": {
+        const { rearPlate, frontPlate, certificate } = request.codes
+        const codes = { rearPlate: rearPlate.reveal(), frontPlate: frontPlate?.reveal(), certificate: certificate.reveal() }
+        return {
+          ...none,
+          service: request.service,
+          plate_count: request.plateCount,
+          plate_prefix: request.licencePlate.prefix,
+          plate_letters: request.licencePlate.letters,
+          plate_numbers: request.licencePlate.numbers,
+          vin: request.vin,
+          encrypted_security_codes: this.cipher.encrypt(JSON.stringify(codes), reference),
+        }
+      }
+      case "newRegistration":
+        return { ...none, service: request.service, vin: request.vin, encrypted_details: this.cipher.encrypt(detailsOf(request), reference) }
     }
   }
 
@@ -250,12 +283,13 @@ export class PostgresApplicationRepository implements ApplicationRepository {
    */
   private toApplication(row: ApplicationRow): Application {
     const reference = parseApplicationReference(row.reference)
+    const history = row.history.map(({ status, at }) => ({ status, at: new Date(at) }))
     return {
       reference,
       version: row.version,
       status: row.status,
-      history: row.history.map(({ status, at }) => ({ status, at: new Date(at) })),
-      request: this.toRequest(row, reference),
+      history,
+      request: this.toRequest(row, reference, history.at(-1)!.at),
       email: emailSchema.parse(row.email),
       ikfzStatus: row.authority_ikfz_status,
       idempotencyKey: row.idempotency_key,
@@ -263,22 +297,32 @@ export class PostgresApplicationRepository implements ApplicationRepository {
       zulexApplicationId: row.zulex_application_id ?? undefined,
       retryAttempts: row.retry_attempts,
       failure: toFailure(row),
+      identityVerification: toIdentityVerification(row),
       polling: { nextPollAt: row.next_poll_at ?? undefined, attempts: row.poll_attempts },
     }
   }
 
   /**
-   * The request of the row's service. Only de-registration has a request type, and it is the only
-   * service an order can be created for, so any other value is a row this release cannot read.
+   * The request of the row's service, from the columns migration 0010 fills for it (the `!`s hold
+   * by that check). `lastChangeAt` is when the order last moved, which a Neuzulassung's keeper's age
+   * is checked against again: never earlier than the day the details were entered, a correction
+   * included. A row of any other service is one this release cannot read (the check refuses to
+   * store one).
    */
-  private toRequest(row: ApplicationRow, reference: ApplicationReference): ServiceRequest {
-    if (row.service !== "deregistration") throw new Error(`Application ${reference} is for a service this release cannot read`)
-    return parseDeregistrationRequest({
-      plateCount: row.plate_count,
-      licencePlate: { prefix: row.plate_prefix, letters: row.plate_letters, numbers: row.plate_numbers },
-      vin: row.vin,
-      codes: JSON.parse(this.cipher.decrypt(row.encrypted_security_codes, reference)),
-    })
+  private toRequest(row: ApplicationRow, reference: ApplicationReference, lastChangeAt: Date): ServiceRequest {
+    switch (row.service) {
+      case "deregistration":
+        return parseDeregistrationRequest({
+          plateCount: row.plate_count,
+          licencePlate: { prefix: row.plate_prefix, letters: row.plate_letters, numbers: row.plate_numbers },
+          vin: row.vin,
+          codes: JSON.parse(this.cipher.decrypt(row.encrypted_security_codes!, reference)),
+        })
+      case "newRegistration":
+        return requestFrom(row.vin, this.cipher.decrypt(row.encrypted_details!, reference), lastChangeAt)
+      default:
+        throw new Error(`Application ${reference} is for a service this release cannot read`)
+    }
   }
 
   /** For the `SELECT_APPLICATION` queries that match at most one row. */
@@ -305,6 +349,11 @@ export class PostgresApplicationRepository implements ApplicationRepository {
       client.release()
     }
   }
+}
+
+/** Id and deadline are stored together or not at all (a CHECK in migration 0010), so `deadline!` holds. */
+function toIdentityVerification({ identity_verification_id, identity_verification_deadline }: ApplicationRow): Application["identityVerification"] {
+  return identity_verification_id === null ? undefined : { id: identity_verification_id, deadline: identity_verification_deadline! }
 }
 
 /** A code is stored exactly for `kbaError` (a CHECK in migration 0006), so `failure_code!` holds. */

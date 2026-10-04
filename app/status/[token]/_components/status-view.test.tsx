@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react"
 import { customerSteps } from "@/src/core/domain/application/customer-steps"
 import { Money } from "@/src/core/domain/payment/money"
 import type { StatusView as View } from "@/src/core/use-cases/status/get-status-by-token"
-import { anApplication } from "@/tests/fixtures/applications"
+import { aNewRegistrationApplication, anApplication } from "@/tests/fixtures/applications"
 import { StatusView } from "./status-view"
 
 jest.mock("next/navigation", () => ({ useRouter: () => ({ refresh: jest.fn() }) }))
@@ -38,5 +38,27 @@ describe("a 5b on the status page", () => {
     expect(screen.queryByRole("button", { name: "Erneut einreichen" })).not.toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Antrag stornieren" })).toBeInTheDocument()
     expect(screen.getByRole("status")).toHaveTextContent(/Stornierung/)
+  })
+})
+
+describe("a Neuzulassung 5b on the status page", () => {
+  const newRegistration = aNewRegistrationApplication({ status: "failed_correctable" })
+  const view: View = {
+    service: "newRegistration",
+    reference: newRegistration.reference,
+    status: newRegistration.status,
+    vinEnding: "0002",
+    steps: customerSteps(newRegistration),
+    documents: [],
+    cancellation: { returned: Money.ofCents(10901), retained: Money.ofCents(1999) },
+  }
+
+  // The de-registration form asks for plate codes a Neuzulassung does not have; its own form arrives with its status page.
+  it("offers the cancel, but not the de-registration's correction form", () => {
+    show(view)
+
+    expect(screen.queryByRole("button", { name: "Erneut einreichen" })).not.toBeInTheDocument()
+    expect(screen.queryByText("Angaben korrigieren")).not.toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Antrag stornieren" })).toBeInTheDocument()
   })
 })

@@ -42,9 +42,10 @@ function describe(step: CustomerStep, failureReason?: string): { title: string; 
 
 const TITLES: Record<View["service"], string> = {
   deregistration: "Ihre Abmeldung",
+  newRegistration: "Ihre Neuzulassung",
 }
 
-/** What the order is about, as the service sees it: for a de-registration, the plate and the end of the VIN. */
+/** What the order is about, as the service sees it: for a de-registration, the plate and the end of the VIN; for a Neuzulassung, which has no plate yet, the VIN. */
 function Summary({ view }: { view: View }) {
   switch (view.service) {
     case "deregistration":
@@ -62,15 +63,38 @@ function Summary({ view }: { view: View }) {
           <dd className="text-grau-dark">endet auf {view.vinEnding}</dd>
         </dl>
       )
+    case "newRegistration":
+      return (
+        <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-body">
+          <dt className="text-grau-bright">FIN</dt>
+          <dd className="text-grau-dark">endet auf {view.vinEnding}</dd>
+        </dl>
+      )
   }
 }
 
-/** The form that corrects what the customer entered, which fields it asks for being the service's. */
-function CorrectionForm({ view, action }: { view: View; action: CorrectOrderAction }) {
-  switch (view.service) {
-    case "deregistration":
-      return <CorrectOrder action={action} plateCount={view.plateCount} />
+/**
+ * What the customer may correct, which fields the form asks for being the service's. A Neuzulassung
+ * has none yet: its form is not built, so it shows nothing rather than a de-registration's.
+ */
+function Correction({ view, action }: { view: View; action: CorrectOrderAction }) {
+  if (view.service !== "deregistration") return null
+  // An order whose provider has begun a cancel is offered no form: part of its money has gone back.
+  if (view.correctable === false) {
+    return (
+      <Alert role="status" variant="warning">
+        Ihre Stornierung wurde begonnen, aber noch nicht abgeschlossen. Ein Teil Ihres Geldes ist schon unterwegs, deshalb lässt sich der
+        Antrag nicht mehr korrigieren. Bitte schließen Sie die Stornierung ab.
+      </Alert>
+    )
   }
+  return (
+    <div className="flex flex-col gap-4">
+      <h3 className="text-subtitle text-grau-dark">Angaben korrigieren</h3>
+      <p className="text-body text-grau">Korrigieren Sie Ihre Angaben und reichen Sie den Antrag erneut ein. Das kostet nichts extra.</p>
+      <CorrectOrder action={action} plateCount={view.plateCount} />
+    </div>
+  )
 }
 
 const DOCUMENT_LABELS: Record<DocumentKind, string> = {
@@ -172,18 +196,7 @@ function OutcomeBlock({
           <h2 id="status-options" className="text-h4 text-grau-dark">
             Wie möchten Sie fortfahren?
           </h2>
-          {view.correctable === false ? (
-            <Alert role="status" variant="warning">
-              Ihre Stornierung wurde begonnen, aber noch nicht abgeschlossen. Ein Teil Ihres Geldes ist schon unterwegs, deshalb lässt sich
-              der Antrag nicht mehr korrigieren. Bitte schließen Sie die Stornierung ab.
-            </Alert>
-          ) : (
-            <div className="flex flex-col gap-4">
-              <h3 className="text-subtitle text-grau-dark">Angaben korrigieren</h3>
-              <p className="text-body text-grau">Korrigieren Sie Ihre Angaben und reichen Sie den Antrag erneut ein. Das kostet nichts extra.</p>
-              <CorrectionForm view={view} action={correctAction} />
-            </div>
-          )}
+          <Correction view={view} action={correctAction} />
           {view.cancellation ? (
             <div className="flex flex-col gap-4">
               <h3 className="text-subtitle text-grau-dark">Oder stornieren</h3>

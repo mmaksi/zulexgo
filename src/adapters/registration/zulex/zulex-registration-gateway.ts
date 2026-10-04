@@ -21,9 +21,21 @@ const DOCUMENT_KINDS = new Map<string, DocumentKind>([
   ["FEE", "fee"],
 ])
 
-/** Where each service's applications live in the API: the create, read and patch calls share the path. */
-const APPLICATION_PATHS: Record<OrderableService, string> = {
+/**
+ * Where each service's applications live in the API: the create, read and patch calls share the path.
+ * A service has an entry once this adapter files it; an order of one without is refused, never sent
+ * to another service's endpoint.
+ */
+const APPLICATION_PATHS: Partial<Record<OrderableService, string>> = {
   deregistration: "/deregistration-applications",
+}
+
+const notFiledYet = (service: OrderableService) => new Error(`ZulexRegistrationGateway: ${service} is not filed through Zulex yet`)
+
+function applicationPath(service: OrderableService): string {
+  const path = APPLICATION_PATHS[service]
+  if (!path) throw notFiledYet(service)
+  return path
 }
 
 /**
@@ -59,6 +71,8 @@ export class ZulexRegistrationGateway implements RegistrationGateway {
    * plate code is sent only for a two-plate vehicle.
    */
   async submit(request: ServiceRequest, idempotencyKey: string) {
+    // The body below is a de-registration's, so no other service is built from it.
+    if (request.service !== "deregistration") throw notFiledYet(request.service)
     const { licencePlate, vin, codes } = request
     const body = {
       licencePlate,
@@ -69,13 +83,13 @@ export class ZulexRegistrationGateway implements RegistrationGateway {
       // Reserving the plate is out of scope for the MVP (founder decision).
       reserveLicencePlate: false,
     }
-    const response = await zulexRequest(this.config, "POST", APPLICATION_PATHS[request.service], { body, idempotencyKey })
+    const response = await zulexRequest(this.config, "POST", applicationPath(request.service), { body, idempotencyKey })
     return readJson(response, createApplicationResponse)
   }
 
   /** One GET per call; an id Zulex does not know answers 404, surfacing as `ZulexRequestFailed`. */
   async getStatus(service: OrderableService, applicationId: string): Promise<GatewayStatus> {
-    const response = await zulexRequest(this.config, "GET", `${APPLICATION_PATHS[service]}/${encodeURIComponent(applicationId)}`)
+    const response = await zulexRequest(this.config, "GET", `${applicationPath(service)}/${encodeURIComponent(applicationId)}`)
     return toGatewayStatus(await readJson(response, deregistrationApplicationResponse))
   }
 
@@ -102,7 +116,7 @@ export class ZulexRegistrationGateway implements RegistrationGateway {
       ...(codes?.frontPlate ? { frontLicencePlateSecurityCode: codes.frontPlate.reveal() } : {}),
       ...(codes?.certificate ? { securityCodeRegistrationCertificationPart1: codes.certificate.reveal() } : {}),
     }
-    await zulexRequest(this.config, "PATCH", `${APPLICATION_PATHS[service]}/${encodeURIComponent(applicationId)}`, { body })
+    await zulexRequest(this.config, "PATCH", `${applicationPath(service)}/${encodeURIComponent(applicationId)}`, { body })
   }
 
   /**

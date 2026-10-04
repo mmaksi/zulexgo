@@ -1,4 +1,4 @@
-import { FAKE_REQUEST } from "@/tests/fixtures/applications"
+import { aNewRegistrationApplication, FAKE_REQUEST, type DeregistrationApplication } from "@/tests/fixtures/applications"
 import { GatewayRejected } from "@/src/core/errors/registration/gateway-rejected"
 import { GatewayUnavailable } from "@/src/core/errors/registration/gateway-unavailable"
 import { InvalidTransition } from "@/src/core/errors/application/invalid-transition"
@@ -66,9 +66,10 @@ describe("correctApplication, an order the service holds", () => {
     await correctApplication(flow.deps, flow.token, newVin)
 
     const stored = await flow.stored(flow.reference)
-    expect(stored.request.vin).toBe(newVin.vin)
-    expect(stored.request.codes.certificate.reveal()).toBe(newVin.certificate)
-    expect(stored.request.codes.rearPlate.reveal()).toBe(FAKE_REQUEST.codes.rearPlate)
+    const { request } = stored as DeregistrationApplication
+    expect(request.vin).toBe(newVin.vin)
+    expect(request.codes.certificate.reveal()).toBe(newVin.certificate)
+    expect(request.codes.rearPlate.reveal()).toBe(FAKE_REQUEST.codes.rearPlate)
     expect(stored.failure).toBeUndefined()
     expect(stored.retryAttempts).toBe(0)
     expect(stored.polling.nextPollAt).toBeDefined()
@@ -209,6 +210,31 @@ describe("correctApplication, an order the service holds", () => {
     for (const code of [...CODES, newVin.certificate]) expect(everything).not.toContain(code)
     warn.mockRestore()
     error.mockRestore()
+  })
+})
+
+// A de-registration's correction reads plate codes a Neuzulassung does not have: the form for its own fields arrives with its status page.
+describe("correctApplication, a Neuzulassung order", () => {
+  it("is refused before anything is read or sent, since its correction is not built yet", async () => {
+    const flow = setupFlow()
+    const at = (minutes: number) => new Date(Date.UTC(2026, 0, 1, 0, minutes))
+    const order = await flow.deps.repository.create(
+      aNewRegistrationApplication({
+        status: "failed_correctable",
+        history: (["awaiting_payment", "submitted_and_paid", "awaiting_identity_verification", "identity_verified", "submitted_to_kba", "failed_correctable"] as const).map(
+          (status, minutes) => ({ status, at: at(minutes) }),
+        ),
+        zulexApplicationId: "fake-zulex-application-new-registration",
+      }),
+    )
+    await flow.deps.repository.setStatusToken(order.reference, "token-for-neuzulassung-correction-00000001")
+    const getPayment = jest.spyOn(flow.deps.payments, "getPayment")
+
+    await expect(correctApplication(flow.deps, "token-for-neuzulassung-correction-00000001", { vin: "FAKEVIN0000000009" })).rejects.toBeInstanceOf(InvalidTransition)
+
+    expect(getPayment).not.toHaveBeenCalled()
+    expect(flow.deps.registration.corrections).toEqual([])
+    expect((await flow.stored(order.reference)).status).toBe("failed_correctable")
   })
 })
 

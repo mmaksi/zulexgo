@@ -1,9 +1,11 @@
 import { http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
 import { FAKE_REQUEST } from "@/tests/fixtures/applications"
+import { FAKE_NEW_REGISTRATION, FAKE_NEW_REGISTRATION_NOW } from "@/tests/fixtures/new-registration"
 import { ZULEX_BASE_URL } from "@/tests/fixtures/zulex"
 import { ZULEX_TEST_API_KEY, ZulexDouble } from "@/tests/msw/zulex"
 import { parseDeregistrationRequest } from "@/src/core/domain/application/deregistration-request"
+import { parseNewRegistrationRequest } from "@/src/core/domain/application/new-registration-request"
 import { parseVin } from "@/src/core/domain/vehicle/vin"
 import { SecurityCode } from "@/src/core/domain/vehicle/security-code"
 import { GatewayRejected } from "@/src/core/errors/registration/gateway-rejected"
@@ -36,6 +38,21 @@ const onePlate = parseDeregistrationRequest({
 const submitted = async () => (await gateway().submit(twoPlates, "key-1")).applicationId
 
 describe("ZulexRegistrationGateway", () => {
+  // The adapter files de-registrations only; a Neuzulassung sent to its endpoint would be refused by Zulex at best.
+  describe("a Neuzulassung, which this adapter does not file yet", () => {
+    const newRegistration = parseNewRegistrationRequest(FAKE_NEW_REGISTRATION, FAKE_NEW_REGISTRATION_NOW)
+
+    it.each([
+      ["submit", () => gateway().submit(newRegistration, "key-1")],
+      ["getStatus", () => gateway().getStatus("newRegistration", "1")],
+      ["correct", () => gateway().correct("newRegistration", "1", { vin: parseVin("FAKEVIN0000000002") })],
+    ])("refuses %s without sending anything", async (_, call) => {
+      await expect(call()).rejects.toThrow(/newRegistration is not filed through Zulex yet/)
+
+      expect(zulex.requests).toHaveLength(0)
+    })
+  })
+
   describe("submit", () => {
     it("sends the spec's body with the API key and the idempotency key", async () => {
       await gateway().submit(twoPlates, "key-1")

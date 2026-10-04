@@ -1,4 +1,5 @@
-import { anApplication, FAKE_REQUEST } from "@/tests/fixtures/applications"
+import { aNewRegistrationApplication, anApplication, FAKE_REQUEST } from "@/tests/fixtures/applications"
+import { FAKE_NEW_REGISTRATION } from "@/tests/fixtures/new-registration"
 import type { Application } from "@/src/core/domain/application/application"
 import type { ApplicationReference } from "@/src/core/domain/application/application-reference"
 import type { DocumentRef } from "@/src/core/domain/registration/document"
@@ -40,7 +41,7 @@ describe("getStatusByToken", () => {
   })
 
   it("says how many plates the vehicle has, so a correction asks for the right codes", async () => {
-    expect((await getStatusByToken(deps, TOKEN)).plateCount).toBe(2)
+    expect(await getStatusByToken(deps, TOKEN)).toMatchObject({ plateCount: 2 })
   })
 
   it("carries no security code and no full VIN, so the page cannot render one", async () => {
@@ -48,6 +49,35 @@ describe("getStatusByToken", () => {
 
     for (const code of Object.values(FAKE_REQUEST.codes)) expect(serialised).not.toContain(code)
     expect(serialised).not.toContain(FAKE_REQUEST.vin)
+  })
+
+  describe("a Neuzulassung order", () => {
+    const newRegistration = aNewRegistrationApplication({ status: "failed_correctable" })
+    const newRegistrationDeps = { ...deps, repository: { findByStatusToken: async () => newRegistration } }
+
+    it("says it is a Neuzulassung and shows the end of its VIN, with no plate it does not have", async () => {
+      const view = await getStatusByToken(newRegistrationDeps, TOKEN)
+
+      expect(view).toMatchObject({ service: "newRegistration", reference: newRegistration.reference, vinEnding: "0002" })
+      expect(view).not.toHaveProperty("licencePlate")
+      expect(view.steps.map((step) => step.id)).toEqual(["paid", "verification", "verified", "kba", "outcome"])
+    })
+
+    it("carries nothing the customer typed but the end of the VIN, so the page cannot render it", async () => {
+      const serialised = JSON.stringify(await getStatusByToken(newRegistrationDeps, TOKEN))
+      const { owner, bankAccount, registrationCertificate, evbNumber, vin } = FAKE_NEW_REGISTRATION
+
+      for (const typed of [vin, evbNumber, registrationCertificate.number, registrationCertificate.securityCode, ...Object.values(bankAccount), owner.firstName, owner.lastName, owner.birthDate, owner.birthPlace, owner.phone, owner.email, owner.address.street]) {
+        expect(serialised).not.toContain(typed)
+      }
+    })
+
+    it("offers no correction, since its form is not built yet, but still the cancellation", async () => {
+      const view = await getStatusByToken(newRegistrationDeps, TOKEN)
+
+      expect(view.correctable).toBeUndefined()
+      expect(view.cancellation).toBeDefined()
+    })
   })
 
   it.each(["faketoken-unknown", ""])("refuses a link no application answers to (%p)", async (token) => {
