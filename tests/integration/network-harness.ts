@@ -49,6 +49,7 @@ export function withVendorsAtTheNetwork() {
       clock: world.clock,
       tokens: new FakeTokenGenerator(),
       statusLink: (token) => `https://zulexgo.example.test/status/${token}`,
+      servicesOnSale: ["deregistration"],
     }
   })
   afterAll(() => server.close())

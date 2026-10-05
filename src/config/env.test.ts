@@ -1,4 +1,4 @@
-import { fakeIdentityProblem, parseEnv, ZULEX_BASE_URLS } from "./env"
+import { fakeIdentityProblem, parseEnv, parseSales, ZULEX_BASE_URLS } from "./env"
 
 const dev = { APP_ENV: "dev" }
 
@@ -156,6 +156,39 @@ describe("production may not run on a fake", () => {
     ["STORAGE_DRIVER", "fake"],
   ])("rejects %s=%s", (key, value) => {
     expect(() => parseEnv({ ...production, [key]: value })).toThrow(new RegExp(key))
+  })
+})
+
+describe("services on sale", () => {
+  it("is de-registration alone until the deployment says otherwise, on every stage", () => {
+    expect(parseEnv(dev).SERVICES_ON_SALE).toEqual(["deregistration"])
+    expect(parseEnv(staging).SERVICES_ON_SALE).toEqual(["deregistration"])
+    expect(parseEnv(production).SERVICES_ON_SALE).toEqual(["deregistration"])
+  })
+
+  it("is read from a comma-separated list", () => {
+    expect(parseEnv({ ...staging, SERVICES_ON_SALE: " deregistration, newRegistration " }).SERVICES_ON_SALE).toEqual([
+      "deregistration",
+      "newRegistration",
+    ])
+  })
+
+  it.each(["addressChange", "registration", "deregistration,nonsense"])("rejects %s, which is no service an order can be made for", (list) => {
+    expect(() => parseEnv({ ...staging, SERVICES_ON_SALE: list })).toThrow(/SERVICES_ON_SALE/)
+  })
+
+  it("lets staging sell Neuzulassung on the fake identity check, where nobody's identity matters", () => {
+    expect(parseEnv({ ...staging, SERVICES_ON_SALE: "deregistration,newRegistration" }).SERVICES_ON_SALE).toContain("newRegistration")
+  })
+
+  it("keeps production from selling Neuzulassung on the fake identity check", () => {
+    expect(() => parseEnv({ ...production, SERVICES_ON_SALE: "deregistration,newRegistration" })).toThrow(/IDENTITY_DRIVER/)
+  })
+
+  it("is readable without the rest of the environment, for the pages that are built ahead of any request", () => {
+    expect(parseSales({ SERVICES_ON_SALE: "newRegistration" }).servicesOnSale).toEqual(["newRegistration"])
+    expect(parseSales({}).servicesOnSale).toEqual(["deregistration"])
+    expect(() => parseSales({ SERVICES_ON_SALE: "nonsense" })).toThrow(/SERVICES_ON_SALE/)
   })
 })
 

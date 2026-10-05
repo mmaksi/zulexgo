@@ -1,8 +1,7 @@
 import type { Metadata } from "next"
 import Link from "next/link"
-import { notFound } from "next/navigation"
 import { applicationReferenceSchema } from "@/src/core/domain/application/application-reference"
-import { isOnSale } from "@/src/core/domain/application/service"
+import { requireOnSale } from "@/app/(funnel)/on-sale"
 import { buttonLink } from "@/src/ui/button"
 import { Confirmation } from "@/app/(funnel)/register/_components/confirmation"
 
@@ -14,7 +13,7 @@ export const metadata: Metadata = { title: "Antrag eingegangen — ZulexGO", rob
  * starts the application.
  */
 export default async function ConfirmationPage({ searchParams }: PageProps<"/register/bestaetigung">) {
-  if (!isOnSale("newRegistration")) notFound()
+  await requireOnSale("newRegistration")
 
   const { auftrag, redirect_status: status } = await searchParams
   const reference = applicationReferenceSchema.safeParse(auftrag)

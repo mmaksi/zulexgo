@@ -30,7 +30,7 @@ describe("the rendered status page", () => {
     "shows no security code, token or full VIN at %s",
     async (_, application, token) => {
       const view = await getStatusByToken({ repository, documents, payments }, token)
-      const html = renderToStaticMarkup(createElement(StatusView, { view, documentHref: (id: string) => `/status/${token}/documents/${id}`, cancelAction, correctAction }))
+      const html = renderToStaticMarkup(createElement(StatusView, { view, servicesOnSale: ["deregistration"], documentHref: (id: string) => `/status/${token}/documents/${id}`, cancelAction, correctAction }))
       const { request } = application
 
       expect(html).toContain(application.reference)
@@ -44,7 +44,7 @@ describe("the rendered status page", () => {
   it("offers the seeded confirmation for download on the completed order, and no download anywhere else", async () => {
     for (const { application, statusToken } of seeded) {
       const view = await getStatusByToken({ repository, documents, payments }, statusToken)
-      const html = renderToStaticMarkup(createElement(StatusView, { view, documentHref: (id: string) => `/status/${statusToken}/documents/${id}`, cancelAction, correctAction }))
+      const html = renderToStaticMarkup(createElement(StatusView, { view, servicesOnSale: ["deregistration"], documentHref: (id: string) => `/status/${statusToken}/documents/${id}`, cancelAction, correctAction }))
 
       expect(html.includes("/documents/")).toBe(application.status === "completed")
     }
@@ -63,7 +63,7 @@ describe("the rendered status page", () => {
     const repository = new InMemoryApplicationRepository([{ application: order, statusToken: "faketoken-correction" }])
     const view = await getStatusByToken({ repository, documents, payments }, "faketoken-correction")
 
-    const html = renderToStaticMarkup(createElement(StatusView, { view, documentHref: () => "#", cancelAction, correctAction }))
+    const html = renderToStaticMarkup(createElement(StatusView, { view, servicesOnSale: ["deregistration"], documentHref: () => "#", cancelAction, correctAction }))
 
     expect(html).toContain('id="correct-evbNumber"')
     for (const secret of secretsOf(order.request)) expect(html).not.toContain(secret)

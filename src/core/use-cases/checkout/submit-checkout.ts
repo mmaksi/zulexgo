@@ -1,7 +1,7 @@
 import type { Application } from "@/src/core/domain/application/application"
 import { referenceFromToken } from "@/src/core/domain/application/application-reference"
 import { recordConsent } from "@/src/core/domain/application/consent"
-import { isOrderable, parseServiceRequest, SERVICES_ON_SALE, type ServiceRequest } from "@/src/core/domain/application/service"
+import { isOrderable, parseServiceRequest, type ServiceRequest } from "@/src/core/domain/application/service"
 import { emailSchema } from "@/src/core/domain/customer/email"
 import { SERVICE_PRICES } from "@/src/core/domain/payment/pricing"
 import { combinedIkfzStatus } from "@/src/core/domain/registration/registration-authority"
@@ -52,7 +52,7 @@ export async function submitCheckout(
   deps: Dependencies,
   input: { service: unknown; request: unknown; email: unknown; consents: unknown; acknowledgedDuplicate?: boolean },
 ): Promise<{ reference: Application["reference"]; clientSecret: string }> {
-  const onSale: readonly unknown[] = deps.servicesOnSale ?? SERVICES_ON_SALE
+  const onSale: readonly unknown[] = deps.servicesOnSale
   if (!isOrderable(input.service) || !onSale.includes(input.service)) throw new ServiceNotOnSale()
   const takenAt = deps.clock.now()
   const consent = recordConsent(input.service, input.consents, takenAt)

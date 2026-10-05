@@ -1,7 +1,7 @@
 import "server-only"
 import { z } from "zod"
 import { requiresIdentityVerification } from "@/src/core/domain/application/application-status"
-import { SERVICES_ON_SALE, type Service } from "@/src/core/domain/application/service"
+import { isOrderable, type OrderableService, type Service } from "@/src/core/domain/application/service"
 
 /**
  * The single place this application interprets `process.env`; the container
@@ -32,6 +32,23 @@ const CODES_KEY_BYTES = 32
 /** Never defaulted: an unset secret stays unset, and the guardrails require it where it is used. */
 const secret = z.string().min(1).optional()
 
+/** A comma-separated list in the environment, an array of trimmed entries here. */
+const commaList = (list: string) => list.split(",").map((entry) => entry.trim()).filter(Boolean)
+
+const orderableService = z.custom<OrderableService>(isOrderable, { message: "is not a service an order can be made for." })
+
+/**
+ * What the deployment sells. These are read by pages built ahead of any request as well as by the
+ * container, so they are a schema of their own (`parseSales`).
+ */
+const salesFields = {
+  // The services checkout takes an order for. De-registration alone until a stage says otherwise, so
+  // a deploy that sets nothing sells what it always sold; the card on the landing page and the funnel's
+  // route follow this list, and `submitCheckout` refuses anything else.
+  SERVICES_ON_SALE: z.string().default("deregistration").transform(commaList).pipe(z.array(orderableService).min(1)),
+}
+const salesSchema = z.object(salesFields)
+
 /**
  * Every variable the application reads. Most are optional in the type and
  * required by the guardrails only when the feature that uses them is switched
@@ -41,6 +58,8 @@ const secret = z.string().min(1).optional()
 const schema = z
   .object({
     APP_ENV: z.enum(STAGES),
+
+    ...salesFields,
 
     // Public origin the status links are built on; defaulted in dev, https-only elsewhere.
     APP_BASE_URL: z.url().optional(),
@@ -69,10 +88,7 @@ const schema = z
     RESEND_API_KEY: secret,
     MAIL_FROM: z.string().min(1).optional(),
     // A comma-separated list in the environment, an array of trimmed addresses here.
-    MAIL_ALLOWLIST: z
-      .string()
-      .default("")
-      .transform((list) => list.split(",").map((entry) => entry.trim()).filter(Boolean)),
+    MAIL_ALLOWLIST: z.string().default("").transform(commaList),
 
     // The app connects through the transaction pooler (DATABASE_URL); the db commands
     // (migrate, seed) use the session connection (DIRECT_DATABASE_URL).
@@ -261,7 +277,7 @@ export function fakeIdentityProblem(stage: Stage, servicesOnSale: readonly Servi
 }
 
 function checkIdentity(env: Parsed, ctx: Ctx) {
-  const problem = env.IDENTITY_DRIVER === "fake" ? fakeIdentityProblem(env.APP_ENV, SERVICES_ON_SALE) : undefined
+  const problem = env.IDENTITY_DRIVER === "fake" ? fakeIdentityProblem(env.APP_ENV, env.SERVICES_ON_SALE) : undefined
   if (problem) reject(ctx, "IDENTITY_DRIVER", problem)
 }
 
@@ -280,15 +296,30 @@ const withoutBlanks = (source: EnvSource): EnvSource =>
 
 const DEV_DEFAULTS = { APP_BASE_URL: "http://localhost:3000" } as const
 
+/** Every problem is reported against its variable; the value itself never appears. */
+const environmentError = (error: z.ZodError) =>
+  new EnvironmentError(error.issues.map((issue) => `${issue.path.join(".") || "(root)"}: ${issue.message}`))
+
 export function parseEnv(source: EnvSource): Env {
   const provided = withoutBlanks(source)
   const candidate = provided.APP_ENV === "dev" ? { ...DEV_DEFAULTS, ...provided } : provided
   const result = schema.safeParse(candidate)
 
   if (result.success) return result.data
-
-  // Every problem is reported against its variable; the value itself never appears.
-  throw new EnvironmentError(
-    result.error.issues.map((issue) => `${issue.path.join(".") || "(root)"}: ${issue.message}`)
-  )
+  throw environmentError(result.error)
 }
+
+/**
+ * What the deployment sells, without the rest of the environment: for a page that is built before any
+ * request (the landing page's cards), where building the container would open adapters for nothing. It
+ * is the same setting `parseEnv` validates, so the two cannot disagree.
+ */
+export function parseSales(source: EnvSource): { servicesOnSale: OrderableService[] } {
+  const result = salesSchema.safeParse(withoutBlanks(source))
+
+  if (!result.success) throw environmentError(result.error)
+  return { servicesOnSale: result.data.SERVICES_ON_SALE }
+}
+
+/** What this deployment sells, read from the process's environment. */
+export const salesOfDeployment = () => parseSales(process.env)

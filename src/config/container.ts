@@ -104,6 +104,7 @@ export function createContainer(source: EnvSource = process.env): Container {
             serviceKey: env.SUPABASE_STORAGE_SERVICE_KEY!,
           }),
     identity: createIdentity(env),
+    servicesOnSale: env.SERVICES_ON_SALE,
     statusLink: (token) => new URL(`/status/${token}`, env.APP_BASE_URL).toString(),
   }
 }

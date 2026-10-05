@@ -3,7 +3,7 @@ import Link from "next/link"
 import { FUNNELS } from "@/app/_components/funnels"
 import { SUPPORT_EMAIL } from "@/src/core/domain/customer/contact"
 import type { CustomerStep } from "@/src/core/domain/application/customer-steps"
-import { isOnSale } from "@/src/core/domain/application/service"
+import type { OrderableService } from "@/src/core/domain/application/service"
 import type { DocumentKind } from "@/src/core/domain/registration/document"
 import { NEW_REGISTRATION_NEXT_STEPS } from "@/src/core/domain/registration/new-registration-next-steps"
 import { formatEuros } from "@/src/core/domain/payment/money"
@@ -166,11 +166,14 @@ const documentLabel = (service: View["service"], kind: DocumentKind) => (service
  */
 export function StatusView({
   view,
+  servicesOnSale,
   documentHref,
   cancelAction,
   correctAction,
 }: {
   view: View
+  /** What checkout sells now: a failed order links to its service's funnel only if that service is still on sale. */
+  servicesOnSale: readonly OrderableService[]
   documentHref: (documentId: string) => string
   cancelAction: CancelOrderAction
   correctAction: CorrectAction
@@ -194,7 +197,7 @@ export function StatusView({
         </ol>
       </section>
 
-      <OutcomeBlock view={view} documentHref={documentHref} cancelAction={cancelAction} correctAction={correctAction} />
+      <OutcomeBlock view={view} servicesOnSale={servicesOnSale} documentHref={documentHref} cancelAction={cancelAction} correctAction={correctAction} />
 
       <section aria-labelledby="status-help" className="measure flex flex-col gap-2">
         <h2 id="status-help" className="text-h4 text-grau-dark">
@@ -226,11 +229,13 @@ function MailLink() {
 /** site-contract §2.6: what to do next, by outcome. */
 function OutcomeBlock({
   view,
+  servicesOnSale,
   documentHref,
   cancelAction,
   correctAction,
 }: {
   view: View
+  servicesOnSale: readonly OrderableService[]
   documentHref: (documentId: string) => string
   cancelAction: CancelOrderAction
   correctAction: CorrectAction
@@ -238,7 +243,7 @@ function OutcomeBlock({
   const outcome = view.steps.find((step) => step.id === "outcome")?.outcome
   if (!outcome) return null
   // Another try goes to the service's own funnel, once it is on sale; until then, to the start page.
-  const funnel = isOnSale(view.service) ? FUNNELS[view.service] : undefined
+  const funnel = servicesOnSale.includes(view.service) ? FUNNELS[view.service] : undefined
 
   switch (outcome) {
     case "completed":
