@@ -36,6 +36,9 @@ function describe(step: CustomerStep, view: View): { title: string; line?: strin
   }
   // Their explanations are about waiting, so a finished step keeps only its status line.
   if (step.id === "verification") {
+    if (step.rechecking) {
+      return { title: "Identität prüfen", line: "Angaben werden geprüft", text: "Wir gleichen Ihre korrigierten Angaben mit Ihrer Identitätsprüfung ab. Das dauert nur einen Moment." }
+    }
     const deadline = view.service === "newRegistration" ? view.verificationDeadline : undefined
     return {
       title: "Identität prüfen",

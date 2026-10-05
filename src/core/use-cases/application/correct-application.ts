@@ -153,7 +153,9 @@ async function refile(deps: Dependencies, application: Application): Promise<"re
  * Sends an order whose identity was never confirmed back to be checked, status 2, due at once, and reads the
  * provider's answer again now: the verification the customer already completed is compared with the corrected
  * name. Whatever goes wrong in that read, the poller repeats it: the correction itself is done. The answer is
- * `refused` only if the person still does not match, which puts the order back at 5b with email 5b again.
+ * `refused` only if the person still does not match, which puts the order back at 5b with email 5b again and the
+ * same form to try again. Any other end (filed, or filed and refused by the service for other data) means the
+ * correction was taken and the order is no longer the one the form was for, so the page is shown as it now stands.
  */
 async function recheck(deps: Dependencies, application: Application): Promise<"resubmitted" | "refused"> {
   const now = deps.clock.now()
@@ -165,5 +167,6 @@ async function recheck(deps: Dependencies, application: Application): Promise<"r
   await checkIdentityVerification(deps, rechecking).catch((error) => {
     console.error(`[correction] ${rechecking.reference}: the identity check will be repeated: ${error instanceof Error ? error.name : "unknown error"}`)
   })
-  return (await deps.repository.get(rechecking.reference))?.status === "failed_correctable" ? "refused" : "resubmitted"
+  const after = await deps.repository.get(rechecking.reference)
+  return after?.status === "failed_correctable" && after.failure?.kind === "identityMismatch" ? "refused" : "resubmitted"
 }

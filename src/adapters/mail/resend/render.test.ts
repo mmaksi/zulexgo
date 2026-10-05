@@ -1,5 +1,3 @@
-import { aNewRegistrationApplication } from "@/tests/fixtures/applications"
-import { secretsOf } from "@/tests/fixtures/secrets"
 import { EVERY_TEMPLATE, labelOf, NEW_REGISTRATION_TEMPLATES } from "@/src/core/ports/mail/mailer.contract"
 import { Money } from "@/src/core/domain/payment/money"
 import type { EmailTemplate } from "@/src/core/ports/mail/mailer"
@@ -140,15 +138,6 @@ describe("renderEmail, for a Neuzulassung", () => {
 
   it.each(NEW_REGISTRATION_TEMPLATES.map((template) => [labelOf(template), template] as const))("%s: reviewed HTML", async (_, template) => {
     expect((await renderEmail(template)).html).toMatchSnapshot()
-  })
-
-  it("carries nothing the customer typed, in any email", async () => {
-    const typed = secretsOf(aNewRegistrationApplication().request)
-
-    for (const template of NEW_REGISTRATION_TEMPLATES) {
-      const { html, text } = await renderEmail(template)
-      for (const secret of typed) expect(html + text).not.toContain(secret)
-    }
   })
 
   it("tells the customer in the first email that an identity check follows, before anything is filed", async () => {

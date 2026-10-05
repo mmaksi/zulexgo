@@ -26,6 +26,11 @@ export interface CustomerStep {
   readonly outcome?: Outcome
   /** On the outcome step of an order cancelled because the customer did not verify in time, not because they gave up. */
   readonly verificationExpired?: true
+  /**
+   * On the verification step of an order sent back to be checked again after a correction: the customer already
+   * verified, so nothing is theirs to do and the wait is ours, which the page says in place of the deadline.
+   */
+  readonly rechecking?: true
 }
 
 /** What the stepper reads of an order: where it is, how it got there, and which service it is for. */
@@ -69,9 +74,11 @@ export function customerSteps({ status, history, request }: SteppedOrder): Custo
 
   const verifiedAt = reachedAt("identity_verified")
 
+  // Only a correction sends an order from 5b back to status 2.
+  const rechecking = status === "awaiting_identity_verification" && history.at(-2)?.status === "failed_correctable"
   const verification: CustomerStep =
     status === "awaiting_identity_verification"
-      ? { id: "verification", state: "current", at: reachedAt("awaiting_identity_verification") }
+      ? { id: "verification", state: "current", at: reachedAt("awaiting_identity_verification"), ...(rechecking ? { rechecking: true } : {}) }
       : verifiedAt
         ? { id: "verification", state: "done", at: reachedAt("awaiting_identity_verification") }
         : { id: "verification", state: "pending" }

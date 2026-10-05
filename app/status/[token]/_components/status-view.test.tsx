@@ -119,6 +119,16 @@ describe("a Neuzulassung waiting for the customer's identity check", () => {
     expect(screen.queryByText(/Link dazu haben wir Ihnen per E-Mail geschickt/)).not.toBeInTheDocument()
   })
 
+  it("says it is checking the corrected details, and names no deadline, once the customer has already verified", () => {
+    const history = [...STEPS.mismatch, "awaiting_identity_verification"].map((status, index) => ({ status: status as Application["status"], at: new Date(T0.getTime() + index * 60_000) }))
+    const order = aNewRegistrationApplication({ status: "awaiting_identity_verification", history })
+    show({ ...newRegistrationView("waiting", { verificationDeadline: new Date("2026-03-05T09:00:00.000Z") }), steps: customerSteps(order) })
+
+    expect(screen.getByText(/korrigierten Angaben/)).toBeInTheDocument()
+    expect(screen.queryByText(/05\.03\.2026/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/stornieren wir den Auftrag/)).not.toBeInTheDocument()
+  })
+
   it("offers neither a correction nor a cancel: nothing can be done here but verify", () => {
     show(newRegistrationView("waiting", { verificationDeadline: new Date("2026-03-05T09:00:00.000Z") }))
 

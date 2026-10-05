@@ -195,6 +195,15 @@ describe("correctOrder, for a Neuzulassung", () => {
     expect((await stored(reference)).status).toBe("failed_correctable")
   })
 
+  it("tells the customer the correction was taken, so the page refreshes, when the name matched and Zulex then refused the order", async () => {
+    const { deps, stored, reference, token } = await mismatchedNewRegistration()
+    deps.registration.failNext("submit", new GatewayRejected())
+
+    expect(await correctOrder(deps, headers, token, { firstName: "Erik" })).toEqual({ status: "done" })
+
+    expect((await stored(reference)).failure).toEqual({ kind: "rejected" })
+  })
+
   it("names each wrong field in the funnel's own words, and never echoes a value", async () => {
     const { deps, token } = await mismatchedNewRegistration()
 

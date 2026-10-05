@@ -3,7 +3,9 @@ import { FAKE_NEW_REGISTRATION } from "@/tests/fixtures/new-registration"
 import type { NewRegistrationApplication } from "@/tests/fixtures/applications"
 import { secretsOf } from "@/tests/fixtures/secrets"
 import { Secret } from "@/src/core/domain/secret"
+import { GatewayRejected } from "@/src/core/errors/registration/gateway-rejected"
 import { InvalidTransition } from "@/src/core/errors/application/invalid-transition"
+import { StaleApplication } from "@/src/core/errors/application/stale-application"
 import { PaymentNoLongerWhole } from "@/src/core/errors/payment/payment-no-longer-whole"
 import { ValidationError } from "@/src/core/errors/validation-error"
 import type { RejectionCatalogue } from "@/src/core/domain/registration/rejection-catalogue"
@@ -250,6 +252,33 @@ describe("a Neuzulassung the identity check sent back because the person verifie
     expect(await flow.payment(flow.reference)).toMatchObject({ status: "held" })
   })
 
+  it("reports the correction as taken, not refused, when the name now matches and Zulex then refuses the order: the order is no longer one whose name can be corrected", async () => {
+    const flow = await mismatched()
+    flow.deps.registration.failNext("submit", new GatewayRejected())
+
+    expect(await correctApplication(flow.deps, flow.token, { firstName: "Erik" })).toBe("resubmitted")
+
+    const order = await flow.stored(flow.reference)
+    expect(order.status).toBe("failed_correctable")
+    expect(order.failure).toEqual({ kind: "rejected" })
+    expect(order.history.map(({ status }) => status)).toContain("identity_verified")
+    // From here the owner's name is the one the identity was checked against, so only the eVB and the Teil II can change.
+    await expect(correctApplication(flow.deps, flow.token, { firstName: "Erika" })).rejects.toBeInstanceOf(ValidationError)
+  })
+
+  it("lets one of two corrections sent together through, and files the order once", async () => {
+    const flow = await mismatched()
+
+    const results = await Promise.allSettled([
+      correctApplication(flow.deps, flow.token, { firstName: "Erik" }),
+      correctApplication(flow.deps, flow.token, { firstName: "Erik" }),
+    ])
+
+    expect(results.filter(({ status }) => status === "fulfilled")).toHaveLength(1)
+    expect(results.filter(({ status }) => status === "rejected").map((result) => (result as PromiseRejectedResult).reason)).toEqual([expect.any(StaleApplication)])
+    expect(flow.deps.registration.submissions).toHaveLength(1)
+  })
+
   it("can be corrected again after a second mismatch", async () => {
     const flow = await mismatched()
     await correctApplication(flow.deps, flow.token, { lastName: "Mustermann-Beispiel" })
@@ -338,14 +367,16 @@ describe("a Neuzulassung the identity check sent back because the person verifie
     expect(flow.deps.registration.submissions).toEqual([])
   })
 
-  it("puts neither the typed name nor the verified one in an email or a log", async () => {
+  it("puts neither the name the customer typed nor the corrected one in an email or a log", async () => {
     const flow = await mismatched()
-    const error = jest.spyOn(console, "error")
+    const logs = [jest.spyOn(console, "error"), jest.spyOn(console, "warn"), jest.spyOn(console, "info"), jest.spyOn(console, "log")]
+    // Read before the correction, so the name that was typed wrong is among them as well as the one that replaces it.
+    const before = secretsOf((await flow.stored(flow.reference)).request)
 
     await correctApplication(flow.deps, flow.token, { firstName: "Erik" })
 
-    const everything = JSON.stringify(flow.deps.mailer.sent) + error.mock.calls.flat().join(" ")
-    for (const secret of secretsOf((await flow.stored(flow.reference)).request)) expect(everything).not.toContain(secret)
+    const everything = JSON.stringify(flow.deps.mailer.sent) + logs.flatMap((log) => log.mock.calls.flat()).join(" ")
+    for (const secret of [...before, ...secretsOf((await flow.stored(flow.reference)).request)]) expect(everything).not.toContain(secret)
   })
 
   it("is not polled into filing while at 5b: the customer's correction is the only way on", async () => {
