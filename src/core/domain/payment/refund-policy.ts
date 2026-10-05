@@ -4,14 +4,16 @@ import { PROCESSING_FEE } from "./pricing"
 /**
  * How an order ended, as far as its money goes (business logic §3). `completed` is 5a;
  * `cancelled` is the customer giving up at 5b; `failedFinal` is 5c; `ourTechnicalError` is a
- * fault of ours, so everything goes back; `corrected` is a 5b the customer fixed, and
- * `newTotal` is what the corrected order costs.
+ * fault of ours, so everything goes back; `verificationExpired` is a customer who never verified their
+ * identity in time (launch plan Q48, provisional): nothing was filed, so everything goes back too;
+ * `corrected` is a 5b the customer fixed, and `newTotal` is what the corrected order costs.
  */
 export type PaymentOutcome =
   | { type: "completed" }
   | { type: "cancelled" }
   | { type: "failedFinal" }
   | { type: "ourTechnicalError" }
+  | { type: "verificationExpired" }
   | { type: "corrected"; newTotal: Money }
 
 /**
@@ -75,8 +77,8 @@ export const isWhole = (payment: PaymentRecord): boolean =>
  * expired one. Undefined while the money has not reached the outcome's end.
  *
  * Apart from a lapsed hold, which settles every outcome but `corrected`, only `cancelled`,
- * `failedFinal` and `ourTechnicalError` can be found settled: `refundPolicy` itself leaves a
- * completed order's captured payment alone, and a correction has no end state to find.
+ * `failedFinal`, `ourTechnicalError` and `verificationExpired` can be found settled: `refundPolicy`
+ * itself leaves a completed order's captured payment alone, and a correction has no end state to find.
  */
 export function settledDecision(outcome: PaymentOutcome, payment: PaymentRecord): PaymentDecision | undefined {
   const kept = retainedOf(payment)
@@ -92,6 +94,7 @@ export function settledDecision(outcome: PaymentOutcome, payment: PaymentRecord)
       // refund that already went beyond it. The last is reported as it stands; no money is taken back.
       return payment.status === "captured" && !kept.isGreaterThan(PROCESSING_FEE) ? decide(none, payment.total, kept) : undefined
     case "ourTechnicalError":
+    case "verificationExpired":
       // Everything gone back: a hold released, or a captured payment refunded in full.
       return payment.status === "released" || (payment.status === "captured" && kept.equals(NOTHING))
         ? decide(none, payment.total, NOTHING)
@@ -110,7 +113,7 @@ export function settledDecision(outcome: PaymentOutcome, payment: PaymentRecord)
  * - `completed`: capture the whole hold; a captured payment is already paid.
  * - `cancelled`, `failedFinal`: keep the processing fee and return the rest (what already went
  *   back counts; an earlier refund beyond the fee is left as it is, never taken back).
- * - `ourTechnicalError`: return everything (release the hold, or refund in full).
+ * - `ourTechnicalError`, `verificationExpired`: return everything (release the hold, or refund in full).
  * - `corrected`: charge only what the corrected order costs beyond what was paid; a cheaper
  *   one does not refund the difference.
  *
@@ -128,6 +131,7 @@ export function refundPolicy(outcome: PaymentOutcome, payment: PaymentState): Pa
     case "failedFinal":
       return retainFee(payment)
     case "ourTechnicalError":
+    case "verificationExpired":
       return decide(state === "held" ? { kind: "release" } : { kind: "refund", amount: total }, total, NOTHING)
     case "corrected":
       return chargeDifference(total, outcome.newTotal)

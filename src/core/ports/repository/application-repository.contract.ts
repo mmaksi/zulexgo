@@ -230,7 +230,7 @@ export function applicationRepositoryContract(name: string, makeSubject: () => A
             { status: "awaiting_identity_verification", at: minutes(-10) },
           ],
           request: request({ engineType: "electric", plate: { electric: true, seasonal: { from: 4, until: 10 } } }),
-          identityVerification: { id: "verification-1", deadline: minutes(4 * 24 * 60) },
+          identityVerification: { id: "verification-1", deadline: minutes(4 * 24 * 60), reminderSent: false },
           polling: { nextPollAt: minutes(5), attempts: 0 },
         })
 
@@ -239,7 +239,7 @@ export function applicationRepositoryContract(name: string, makeSubject: () => A
 
         expect(stored).toEqual({ ...order, version: 1 })
         expect(stored.request.plate).toEqual({ electric: true, seasonal: { from: 4, until: 10 } })
-        expect(stored.identityVerification).toEqual({ id: "verification-1", deadline: minutes(4 * 24 * 60) })
+        expect(stored.identityVerification).toEqual({ id: "verification-1", deadline: minutes(4 * 24 * 60), reminderSent: false })
       })
 
       it("returns the secrets as they were entered, and nothing where there was none", async () => {
@@ -275,13 +275,26 @@ export function applicationRepositoryContract(name: string, makeSubject: () => A
         const paid = await repository.create(aNewRegistrationApplication({ status: "submitted_and_paid" }))
         const waiting = await repository.update({
           ...applyEvent(paid, "identityVerificationStarted", minutes(1)),
-          identityVerification: { id: "verification-2", deadline: minutes(100) },
+          identityVerification: { id: "verification-2", deadline: minutes(100), reminderSent: false },
         })
 
         const verified = await repository.update(applyEvent(waiting, "identityVerified", minutes(2)))
 
         expect(verified.status).toBe("identity_verified")
-        expect(verified.identityVerification).toEqual({ id: "verification-2", deadline: minutes(100) })
+        expect(verified.identityVerification).toEqual({ id: "verification-2", deadline: minutes(100), reminderSent: false })
+      })
+
+      it("remembers that the reminder was sent, so the customer is reminded once however often the order is polled", async () => {
+        const paid = await repository.create(aNewRegistrationApplication({ status: "submitted_and_paid" }))
+        const waiting = await repository.update({
+          ...applyEvent(paid, "identityVerificationStarted", minutes(1)),
+          identityVerification: { id: "verification-3", deadline: minutes(100), reminderSent: false },
+        })
+
+        const reminded = await repository.update({ ...waiting, identityVerification: { ...waiting.identityVerification!, reminderSent: true } })
+
+        expect(waiting.identityVerification?.reminderSent).toBe(false)
+        expect((await repository.get(reminded.reference))?.identityVerification).toEqual({ id: "verification-3", deadline: minutes(100), reminderSent: true })
       })
 
       it("hands out copies, so mutating one never changes the store", async () => {

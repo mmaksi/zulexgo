@@ -4,6 +4,7 @@ import { ZULEX_BASE_URL } from "@/tests/fixtures/zulex"
 import { STRIPE_TEST_SECRET_KEY, STRIPE_TEST_WEBHOOK_SECRET, StripeDouble } from "@/tests/msw/stripe"
 import { ZULEX_TEST_API_KEY, ZulexDouble } from "@/tests/msw/zulex"
 import { FakeClock } from "@/src/adapters/clock/fake/fake-clock"
+import { FakeIdentityVerification } from "@/src/adapters/identity/fake/fake-identity-verification"
 import { FakeMailer } from "@/src/adapters/mail/fake/fake-mailer"
 import { StripePaymentProvider } from "@/src/adapters/payment/stripe/stripe-payment-provider"
 import { ZulexRegistrationGateway } from "@/src/adapters/registration/zulex/zulex-registration-gateway"
@@ -41,6 +42,7 @@ export function withVendorsAtTheNetwork() {
       repository: new InMemoryApplicationRepository(),
       registration: new ZulexRegistrationGateway({ baseUrl: ZULEX_BASE_URL, apiKey: ZULEX_TEST_API_KEY }),
       payments: new StripePaymentProvider({ secretKey: STRIPE_TEST_SECRET_KEY, webhookSecret: STRIPE_TEST_WEBHOOK_SECRET }),
+      identity: new FakeIdentityVerification(),
       mailer: world.mailer,
       documents: new InMemoryDocumentStore(),
       rateLimiter: new InMemoryRateLimiter(world.clock),
@@ -52,8 +54,9 @@ export function withVendorsAtTheNetwork() {
   afterAll(() => server.close())
 
   /**
-   * A Neuzulassung as the identity step (N5) will leave it: paid, the card held at Stripe, the identity
-   * verified and nothing filed yet, with the status link the filing email carries.
+   * A Neuzulassung as the identity step leaves it: paid, the card held at Stripe, the identity
+   * verified and nothing filed yet, with the status link the filing email carries. Made directly
+   * rather than through the step (`identity-verification.test.ts` runs that), so a test can file it itself.
    */
   async function verifiedNewRegistration() {
     const order = aNewRegistrationApplication({ status: "identity_verified", ikfzStatus: "online" })

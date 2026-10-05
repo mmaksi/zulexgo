@@ -37,6 +37,7 @@ src/
                         and its `*.contract.ts`. See `external-services`.
     use-cases/          One file per business operation, grouped by the part of the order's life it
                         belongs to: checkout/, payment/, registration/ (filing, polling, failures),
+                        identity/ (starting and checking a customer's identity verification),
                         application/ (cancel, correct), status/ (what the customer reads), mail/.
                         `dependencies.ts` stays at the root.
     errors/             Domain error types the whole app throws and maps, in the same folders as the

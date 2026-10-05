@@ -106,10 +106,10 @@ Use cases receive their ports as constructor arguments or function parameters. T
 |---|---|---|---|
 | `PaymentProvider` | Stripe (manual capture for cards; SEPA Direct Debit captured at checkout) | Hold expiry is a documented port guarantee; partial refunds for the 19.99 € processing fee | Stripe MCP (docs search, API details, sandbox reads) |
 | `RegistrationGateway` | Zulex API | Also the KBA status source; see `docs/launch-plan.md` | `docs/api-1.yaml`, local only (confidential, gitignored); no MCP |
-| `Mailer` | Resend | The six status and refund emails (eight once Verimi is added), status link delivery | The `resend`, `react-email` and `email-best-practices` skills; no MCP connected |
+| `Mailer` | Resend | The status and refund emails (including Verimi's two and the verification reminder), status link delivery | The `resend`, `react-email` and `email-best-practices` skills; no MCP connected |
 | `ApplicationRepository` | Postgres | Owns our status machine, not the vendor's | `supabase` and `supabase-postgres-best-practices` skills, Supabase MCP |
 | `DocumentStore` | Zulex `/documents/{id}` + Supabase Storage cache | Returns bytes + a domain document type | as above, per vendor |
-| `IdentityVerification` | Verimi — added later (launch plan Q1–Q4); port and fake exist | Status 2 → 3; a failed verification leads to 5c | none yet |
+| `IdentityVerification` | Verimi — added later (launch plan Q1–Q3); the port, its contract and the fake exist and run the Neuzulassung flow | Status 2 → 3; reports who was verified, so a mismatch with the owner is caught; a failed verification leads to 5c; a signed callback names the order and nothing else | none yet: tell Mark before writing the adapter |
 | `Clock` | System clock | Injected so polling/expiry tests are deterministic | — |
 | `TokenGenerator` | Crypto RNG | Injected so status link tests are seeded | — |
 

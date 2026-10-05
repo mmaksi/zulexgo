@@ -30,4 +30,28 @@ describe("FakeMailer", () => {
 
     expect(mailer.sent).toHaveLength(1)
   })
+
+  // Resend answers 409 to a key it already holds with other content, so a retry that rebuilds its email must rebuild it identically.
+  it("refuses a key that was already sent with other content, as the real mailer does, and delivers nothing", async () => {
+    const mailer = new FakeMailer()
+    const { reference, email } = anApplication()
+    const link = (statusLink: string) => ({ to: email, template: { name: "completed", service: "deregistration", reference, statusLink }, idempotencyKey: "same" }) as const
+
+    await mailer.send(link("https://zulexgo.example.test/status/first"))
+
+    await expect(mailer.send(link("https://zulexgo.example.test/status/second"))).rejects.toThrow(/other content/)
+    expect(mailer.sent).toHaveLength(1)
+  })
+
+  it("accepts the same key and the same content again, which is a retry", async () => {
+    const mailer = new FakeMailer()
+    const { reference, email } = anApplication()
+    const deadline = new Date("2026-03-05T09:00:00.000Z")
+    const message = { to: email, template: { name: "identityVerificationRequested", reference, verificationLink: "https://verification.example.test/v", deadline }, idempotencyKey: "k" } as const
+
+    await mailer.send(message)
+    await mailer.send({ ...message, template: { ...message.template, deadline: new Date(deadline) } })
+
+    expect(mailer.sent).toHaveLength(1)
+  })
 })

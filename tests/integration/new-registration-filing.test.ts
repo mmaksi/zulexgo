@@ -7,7 +7,8 @@ import { withVendorsAtTheNetwork } from "./network-harness"
 /**
  * N4: a Neuzulassung whose identity is verified is filed through the real Zulex adapter and its
  * documents come back through it, with Zulex and Stripe stubbed at the network. The verification
- * itself (N5) is not in the flow yet, so the order is made as it will be left: paid, held, verified.
+ * itself is proven in `identity-verification.test.ts`; here the order is made as the step leaves it
+ * (paid, held, verified), so the test files it and watches the filing alone.
  */
 const { world, stored, emails, verifiedNewRegistration: verifiedOrder } = withVendorsAtTheNetwork()
 

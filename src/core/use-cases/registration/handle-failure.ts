@@ -47,6 +47,8 @@ export async function handleFailure(
  *   customer can still correct or cancel.
  * - `failFinal` (5c, or a full refund when the failure was ours): the payment is settled,
  *   then email 5c with what comes back, then email 6 if anything does, then the status.
+ *   An identity verification that failed ends the order with its own event: the status
+ *   machine does not let a failure of the KBA end an order that is still being verified.
  */
 export async function applyDecision(
   deps: Dependencies,
@@ -85,7 +87,7 @@ export async function applyDecision(
   }
   const outcome = decision.refund === "full" ? ({ type: "ourTechnicalError" } as const) : ({ type: "failedFinal" } as const)
   const settled = await settlePayment(deps, application, outcome)
-  const failed = applyEvent(stopped, "failedFinal", now)
+  const failed = applyEvent(stopped, failure.kind === "identityFailed" ? "identityVerificationFailed" : "failedFinal", now)
   // Email 5c names what comes back and what is kept; email 6 follows only if something comes back.
   await mailCustomer(deps, failed, "rejected", { refund: settled.returned, retained: settled.retained })
   if (settled.returned.cents > 0) await mailRefund(deps, failed, settled.returned)

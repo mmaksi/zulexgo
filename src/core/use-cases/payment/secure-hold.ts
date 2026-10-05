@@ -21,6 +21,17 @@ export const guardHold = (deps: Pick<Dependencies, "payments" | "clock">, applic
   secure(deps, application, (payment) => shouldCaptureAhead(payment, deps.clock.now()))
 
 /**
+ * `guardHold` for a visit whose real business is something else (a status check, a verification): a
+ * failed look is only logged, by order and kind of error (the message could hold personal data), so
+ * it never stops the visit. The next visit looks again.
+ */
+export const guardHoldQuietly = (deps: Pick<Dependencies, "payments" | "clock">, application: Application): Promise<void> =>
+  guardHold(deps, application).then(
+    () => undefined,
+    (error) => console.error(`[payments] ${application.reference}: hold not checked: ${error instanceof Error ? error.name : "unknown error"}`),
+  )
+
+/**
  * Reads the payment first and captures only a hold that `mustCapture` says to take; a payment
  * in any other state (a SEPA debit is taken at checkout) is returned as it is.
  */

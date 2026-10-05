@@ -69,11 +69,11 @@ export interface Application {
   readonly failure?: Failure
   /**
    * The identity verification a service that verifies (Neuzulassung) waits on: the provider's id, which
-   * `getResult` is asked about, and the moment the wait ends. The deadline is fixed when the verification
-   * starts, so the one in the customer's email is the one enforced if the policy later changes. Absent
-   * until the verification starts, and kept once the order moves on.
+   * `getResult` is asked about, the moment the wait ends, and whether the reminder was sent. The deadline
+   * is fixed when the verification starts, so the one in the customer's email is the one enforced if the
+   * policy later changes. Absent until the verification starts, and kept once the order moves on.
    */
-  readonly identityVerification?: { readonly id: string; readonly deadline: Date }
+  readonly identityVerification?: { readonly id: string; readonly deadline: Date; readonly reminderSent: boolean }
   /**
    * When the poller next visits, and how many checks it has made, which indexes the delay
    * before the next one (`nextPollAt` in poll-schedule.ts). Without `nextPollAt` nothing is
@@ -89,6 +89,10 @@ export interface Application {
  */
 export const filingDueSince = (history: readonly StatusChange[]): Date | undefined =>
   history.findLast(({ status }) => status === "submitted_and_paid" || status === "identity_verified")?.at
+
+/** When the order last began waiting for the customer to verify: the reminder counts from here. A correction that sends it back to be checked again starts it over. */
+export const verificationStartedAt = (history: readonly StatusChange[]): Date | undefined =>
+  history.findLast(({ status }) => status === "awaiting_identity_verification")?.at
 
 /** What the status machine reads of an order: where it is, how it got there, and which service it is for. */
 type Moving = Pick<Application, "status" | "history"> & { readonly request: { readonly service: Service } }

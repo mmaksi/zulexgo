@@ -1,5 +1,7 @@
 import "server-only"
 import { z } from "zod"
+import { requiresIdentityVerification } from "@/src/core/domain/application/application-status"
+import { SERVICES_ON_SALE, type Service } from "@/src/core/domain/application/service"
 
 /**
  * The single place this application interprets `process.env`; the container
@@ -52,6 +54,8 @@ const schema = z
     MAIL_DRIVER: z.enum(["console", "resend"]).default("console"),
     REPOSITORY_DRIVER: z.enum(["fake", "postgres"]).default("fake"),
     STORAGE_DRIVER: z.enum(["fake", "supabase"]).default("fake"),
+    // The Verimi adapter is not built yet (launch plan Q1–Q3), so the fake is the only value.
+    IDENTITY_DRIVER: z.enum(["fake"]).default("fake"),
 
     STRIPE_SECRET_KEY: secret,
     STRIPE_WEBHOOK_SECRET: secret,
@@ -120,6 +124,7 @@ function applyGuardrails(env: Parsed, ctx: Ctx) {
   checkMail(env, ctx, isProduction)
   checkRepository(env, ctx)
   checkStorage(env, ctx)
+  checkIdentity(env, ctx)
 }
 
 function requireDeployedStageVariables(env: Parsed, ctx: Ctx) {
@@ -241,6 +246,23 @@ function checkStorage(env: Parsed, ctx: Ctx) {
     ["SUPABASE_STORAGE_URL", "SUPABASE_STORAGE_BUCKET", "SUPABASE_STORAGE_SERVICE_KEY"],
     "when STORAGE_DRIVER is supabase"
   )
+}
+
+/**
+ * Launch plan Q45, provisional: the KBA registers a car in the name the order gives, so production may run the
+ * fake identity check only while every service on sale goes straight to the KBA. De-registration can launch
+ * without Verimi; a service that verifies the customer cannot go on sale on a fake, which proves nobody's identity.
+ * Takes the services on sale so a test can ask about one that is not on sale yet. Returns the problem, if any.
+ */
+export function fakeIdentityProblem(stage: Stage, servicesOnSale: readonly Service[]): string | undefined {
+  const verifying = servicesOnSale.filter(requiresIdentityVerification)
+  if (stage !== "production" || verifying.length === 0) return undefined
+  return `may not be "fake" in production while ${verifying.join(", ")} is on sale: a fake check proves nobody's identity.`
+}
+
+function checkIdentity(env: Parsed, ctx: Ctx) {
+  const problem = env.IDENTITY_DRIVER === "fake" ? fakeIdentityProblem(env.APP_ENV, SERVICES_ON_SALE) : undefined
+  if (problem) reject(ctx, "IDENTITY_DRIVER", problem)
 }
 
 export class EnvironmentError extends Error {

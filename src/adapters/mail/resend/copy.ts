@@ -26,6 +26,14 @@ export interface EmailCopy {
 
 const REFUND_TIMEFRAME = "Je nach Bank ist der Betrag in 3 bis 5 Werktagen auf Ihrem Konto."
 
+/** In Berlin time, spelled out by hand: the default `Intl` pattern for a date with a time differs between Node versions. */
+function formatDeadline(deadline: Date): string {
+  const berlin = { timeZone: "Europe/Berlin" } as const
+  const day = new Intl.DateTimeFormat("de-DE", { ...berlin, day: "numeric", month: "long", year: "numeric" }).format(deadline)
+  const time = new Intl.DateTimeFormat("de-DE", { ...berlin, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(deadline)
+  return `${day}, ${time} Uhr`
+}
+
 /** The emails whose wording says what was ordered or what the KBA did, so it differs per service. */
 type ServiceEmail = Extract<EmailTemplate, { service: OrderableService }>
 
@@ -48,6 +56,8 @@ const SERVICE_COPY: Record<OrderableService, (template: ServiceEmail) => EmailCo
  * - `correctionRequired` and `rejected` open with `reason`; `correctionRequired` also warns that
  *   cancelling keeps the processing fee, while `rejected` names the refund and, when
  *   `retained` is above zero, the fee kept, and promises a further email (`refundIssued`).
+ * - `identityVerificationRequested` and `identityVerificationReminder` name the deadline in Berlin time and
+ *   say that missing it cancels the order with the whole amount back; their button is the verification link.
  * - `statusLinkResent` tells the customer the previous link no longer works.
  * - `refundIssued` is the only email without a status link, hence without a button.
  */
@@ -60,6 +70,39 @@ export function copyFor(template: EmailTemplate): EmailCopy {
     case "completed":
     case "rejected":
       return SERVICE_COPY[template.service](template)
+    case "identityVerificationRequested":
+      return {
+        subject: `Bitte bestätigen Sie Ihre Identität: Antrag ${reference}`,
+        preview: "Ohne Bestätigung reichen wir Ihren Antrag nicht ein.",
+        heading: "Bitte bestätigen Sie Ihre Identität",
+        paragraphs: [
+          "Ihre Zahlung ist eingegangen. Bevor wir Ihren Antrag einreichen, müssen Sie Ihre Identität bestätigen. Das dauert wenige Minuten. Halten Sie Ihren Ausweis bereit.",
+          `Bitte schließen Sie die Prüfung bis ${formatDeadline(template.deadline)} ab. Danach stornieren wir den Auftrag und Sie erhalten den vollen Betrag zurück.`,
+        ],
+        action: { label: "Identität bestätigen", href: template.verificationLink },
+      }
+    case "identityVerificationReminder":
+      return {
+        subject: `Erinnerung: Identität bestätigen, Antrag ${reference}`,
+        preview: "Wir reichen Ihren Antrag erst nach der Bestätigung ein.",
+        heading: "Bitte bestätigen Sie Ihre Identität",
+        paragraphs: [
+          "Wir haben noch keine Bestätigung Ihrer Identität erhalten. Ohne sie können wir Ihren Antrag nicht einreichen.",
+          `Bitte schließen Sie die Prüfung bis ${formatDeadline(template.deadline)} ab, sonst stornieren wir den Auftrag und Sie erhalten den vollen Betrag zurück.`,
+        ],
+        action: { label: "Identität bestätigen", href: template.verificationLink },
+      }
+    case "identityVerified":
+      return {
+        subject: `Ihre Identität ist bestätigt: Antrag ${reference}`,
+        preview: "Wir reichen Ihren Antrag jetzt ein.",
+        heading: "Ihre Identität ist bestätigt",
+        paragraphs: [
+          "Vielen Dank, die Prüfung war erfolgreich. Wir reichen Ihren Antrag jetzt beim Kraftfahrt-Bundesamt (KBA) ein.",
+          "Sobald es Neuigkeiten gibt, schreiben wir Ihnen.",
+        ],
+        action: { label: "Status ansehen", href: template.statusLink },
+      }
     case "correctionRequired":
       return {
         subject: `Ihr Antrag ${reference} braucht eine Korrektur`,

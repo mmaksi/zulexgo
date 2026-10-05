@@ -3,7 +3,10 @@ import { FAKE_REQUEST } from "@/tests/fixtures/applications"
 import { FAKE_NEW_REGISTRATION } from "@/tests/fixtures/new-registration"
 import { secretsOf } from "@/tests/fixtures/secrets"
 import { ZULEX_TEST_API_KEY } from "@/tests/msw/zulex"
+import { Secret } from "@/src/core/domain/secret"
 import { FakeClock } from "@/src/adapters/clock/fake/fake-clock"
+import { setupFlow } from "./flow-harness"
+import { FakeIdentityVerification } from "@/src/adapters/identity/fake/fake-identity-verification"
 import { ConsoleMailer } from "@/src/adapters/mail/console/console-mailer"
 import { FakePaymentProvider } from "@/src/adapters/payment/fake/fake-payment-provider"
 import { FakeRegistrationGateway } from "@/src/adapters/registration/fake/fake-registration-gateway"
@@ -46,6 +49,7 @@ async function runEveryPath(revealStatusLinks: boolean): Promise<string[]> {
     repository: new InMemoryApplicationRepository(),
     registration: new FakeRegistrationGateway(),
     payments: new FakePaymentProvider(clock),
+    identity: new FakeIdentityVerification(),
     mailer: new ConsoleMailer({ revealStatusLinks }),
     documents: new InMemoryDocumentStore(),
     rateLimiter: new InMemoryRateLimiter(clock),
@@ -132,10 +136,10 @@ describe("a Neuzulassung's secrets in logs", () => {
     const order = await verifiedNewRegistration()
     const secrets = secretsOf(order.request)
 
-    // The poller does not file an order at status 3 yet (N5): the retry after the outage is made as it will be.
+    // The outage leaves the order at status 3 and due again: the poller files it on a later tick.
     world.zulex.failNext("create", new Response(null, { status: 503 }))
     await submitToKba(world.deps, order)
-    await submitToKba(world.deps, await stored(order.reference))
+    await poll()
     const id = (await stored(order.reference)).zulexApplicationId!
 
     world.zulex.failNext("get", HttpResponse.json({ ...(world.zulex.applications.get(id)!.body as object), applicationId: id, status: 42 }))
@@ -166,6 +170,61 @@ describe("a Neuzulassung's secrets in logs", () => {
     expect(console.output()).toContain("[error-algorithm]")
     for (const secret of secrets) expect(console.output()).not.toContain(secret)
     expect(console.output()).not.toContain(ZULEX_TEST_API_KEY)
+  })
+})
+
+/**
+ * What the identity step handles: the owner it compares against, the person the provider reports (name and birth date),
+ * the provider's verification id and the link that starts someone's check. Every way the wait can end logs something.
+ */
+describe("an identity verification's secrets in logs", () => {
+  const verifiedAs = (firstName: string, lastName: string, birthDate: string) => ({ firstName, lastName, birthDate: new Secret(birthDate, "birth date") })
+
+  /** Every path that logs: filed, failed, a person who is not the owner, a deadline that passes, a provider that is down. */
+  async function runEveryPath() {
+    const flow = setupFlow()
+    const deps = { ...flow.deps, mailer: new ConsoleMailer({ revealStatusLinks: false }) }
+    const tick = (minutes: number) => {
+      flow.clock.advance(minutes * 60_000)
+      return pollDueApplications(deps, 50)
+    }
+    const order = async () => {
+      const reference = await flow.payForNewRegistration()
+      await confirmPayment(deps, reference)
+      return reference
+    }
+
+    const filed = await order()
+    await flow.customerVerifies(filed)
+    await tick(1)
+
+    const failed = await order()
+    await flow.customerFailsVerification(failed)
+    await tick(1)
+
+    const mismatched = await order()
+    await flow.customerVerifies(mismatched, verifiedAs("Erik", "Beispiel", "1991-01-01"))
+    await tick(1)
+
+    await order()
+    await tick(5 * 24 * 60)
+
+    jest.spyOn(deps.identity, "start").mockRejectedValue(new Error(`Verimi refused ${FAKE_NEW_REGISTRATION.owner.email}`))
+    await order()
+    await tick(60)
+
+    const ids = await Promise.all([filed, failed, mismatched].map((reference) => flow.verificationId(reference)))
+    return { secrets: secretsOf((await flow.stored(filed)).request), ids }
+  }
+
+  it("never logs what the customer entered, what the provider reported, the verification id or the link that starts the check", async () => {
+    const console = captureConsole()
+    const { secrets, ids } = await runEveryPath()
+    console.restore()
+
+    expect(console.output()).toContain("[mail] identityVerificationRequested")
+    expect(console.output()).toContain("[identity]")
+    for (const secret of [...secrets, ...ids, "Beispiel", "1991-01-01", "verification.example.test"]) expect(console.output()).not.toContain(secret)
   })
 })
 
