@@ -1,3 +1,4 @@
+import { FILLED_REGISTRATION_FORM as FILLED } from "@/tests/fixtures/registration-form"
 import { parseNewRegistrationRequest } from "@/src/core/domain/application/new-registration-request"
 import {
   EMPTY_REGISTRATION,
@@ -10,33 +11,6 @@ import {
 } from "./registration-data"
 
 const NOW = new Date("2026-03-01T09:00:00.000Z")
-
-/** What a customer types for the fake car: obviously fake values that pass the same validation as production input. */
-const FILLED: RegistrationData = {
-  vin: "fakevin0000000002",
-  engineType: "combustion",
-  evbNumber: "fakeevb",
-  part2Number: "FAKE0001",
-  part2SecurityCode: "FAKECODE",
-  firstName: "Erika",
-  lastName: "Mustermann",
-  gender: "female",
-  birthDate: "1990-05-17",
-  birthPlace: "Musterstadt",
-  street: "Beispielstraße",
-  houseNumber: "12a",
-  postcode: "10115",
-  city: "Berlin",
-  phone: "+49 30 23125000",
-  email: "erika.mustermann@example.test",
-  electric: false,
-  seasonal: false,
-  seasonFrom: "",
-  seasonUntil: "",
-  iban: "DE89 3704 0044 0532 0130 00",
-  bic: "cobadeffxxx",
-  bankName: "Beispielbank",
-}
 
 const withData = (changes: Partial<RegistrationData>): RegistrationData => ({ ...FILLED, ...changes })
 const everyField = Object.keys(FILLED) as RegistrationField[]

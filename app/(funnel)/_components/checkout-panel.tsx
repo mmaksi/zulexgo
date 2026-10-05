@@ -5,6 +5,7 @@ import { useRef, useState, type FormEvent, type ReactNode } from "react"
 import type { ConsentKind } from "@/src/core/domain/application/consent"
 import { formatEuros, type Money } from "@/src/core/domain/payment/money"
 import { PROCESSING_FEE } from "@/src/core/domain/payment/pricing"
+import { tooManyAttempts } from "@/app/(funnel)/too-many-attempts"
 import { Alert } from "@/src/ui/alert"
 import { Button } from "@/src/ui/button"
 import { Checkbox } from "@/src/ui/checkbox"
@@ -15,6 +16,8 @@ import { StripePaymentFields } from "./stripe/stripe-payment-fields"
 export type StartCheckoutResult =
   | { ok: true; reference: string; clientSecret: string }
   | { ok: false; reason: "invalid" | "consent" | "duplicate" | "unavailable" }
+  /** The address opened too many checkouts: it may try again after `retryAfterMinutes`. */
+  | { ok: false; reason: "limited"; retryAfterMinutes: number }
 
 /** How many boxes the pay button's hint names, in words. */
 const COUNT_WORDS: Record<number, string> = { 2: "die beiden", 3: "alle drei" }
@@ -94,6 +97,7 @@ export function CheckoutPanel({
           setDuplicate(true)
           return undefined
         }
+        if (started.reason === "limited") return tooManyAttempts(started.retryAfterMinutes)
         return started.reason === "invalid"
           ? "Einige Angaben sind nicht gültig. Bitte gehen Sie einen Schritt zurück und prüfen Sie sie."
           : "Das hat gerade nicht geklappt. Bitte versuchen Sie es in ein paar Minuten noch einmal."

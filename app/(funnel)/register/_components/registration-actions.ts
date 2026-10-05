@@ -7,7 +7,12 @@ import type { RegistrationData } from "./registration-data"
 export interface RegistrationActions {
   checkEligibility(
     postcode: string,
-  ): Promise<{ ok: true; postcode: string; ikfzStatus: IkfzStatus } | { ok: false; reason: "invalidPostcode" | "unavailable" }>
+  ): Promise<
+    | { ok: true; postcode: string; ikfzStatus: IkfzStatus }
+    | { ok: false; reason: "invalidPostcode" | "unavailable" }
+    /** The address asked too often: it may try again after `retryAfterMinutes`. */
+    | { ok: false; reason: "limited"; retryAfterMinutes: number }
+  >
   startCheckout(input: {
     data: RegistrationData
     consents: Partial<Record<ConsentKind, boolean>>

@@ -1,5 +1,5 @@
 import { parseDeregistrationRequest, type DeregistrationRequest } from "./deregistration-request"
-import { parseNewRegistrationRequest, type NewRegistrationRequest } from "./new-registration-request"
+import { parseNewRegistrationRequest, type StoredNewRegistrationRequest } from "./new-registration-request"
 
 /** The services on the price list, sold or not. */
 export const SERVICES = ["newRegistration", "reRegistration", "changeOfKeeper", "deregistration", "addressChange"] as const
@@ -7,9 +7,10 @@ export type Service = (typeof SERVICES)[number]
 
 /**
  * What an order for each service carries. Every member names its service, so code that handles
- * one narrows to its own fields and the compiler finds the places that assumed another.
+ * one narrows to its own fields and the compiler finds the places that assumed another. A
+ * Neuzulassung's request has its bank account until the order ends.
  */
-export type ServiceRequest = DeregistrationRequest | NewRegistrationRequest
+export type ServiceRequest = DeregistrationRequest | StoredNewRegistrationRequest
 
 /** The services an order exists for: those with a request type. Not all of them are sold yet. */
 export type OrderableService = ServiceRequest["service"]

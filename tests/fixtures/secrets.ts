@@ -11,14 +11,13 @@ export function secretsOf(request: ServiceRequest): string[] {
     return [rearPlate, frontPlate, certificate].flatMap((code) => (code ? [code.reveal()] : []))
   }
   const { owner, bankAccount, registrationCertificate, evbNumber } = request
-  const { iban, bic, bankName } = bankAccount.reveal()
+  // An order that has ended no longer holds its account.
+  const { iban, bic, bankName } = bankAccount?.reveal() ?? {}
   return [
     evbNumber.reveal(),
     registrationCertificate.number,
     registrationCertificate.securityCode.reveal(),
-    iban,
-    bic,
-    bankName,
+    ...(iban && bic && bankName ? [iban, bic, bankName] : []),
     owner.firstName,
     owner.lastName,
     owner.birthDate.reveal(),

@@ -131,7 +131,7 @@ Eight emails (trigger, subject, content): table in `launch-plan.md` § M5, plus 
 
 Built on the shared funnel frame and payment panel (`app/(funnel)/_components/`), so §3's navigation, scroll, mobile and transition rules apply unchanged. **Not on sale:** while `newRegistration` is not in `SERVICES_ON_SALE` (`registration-plan.md` N9) the route and its confirmation page are not found, because the funnel collects an IBAN and a birth date for an order checkout would refuse. Business rules: `registration-plan.md` and [launch-plan.md](launch-plan.md); the provisional answers it builds are Q46, Q49, Q51, Q54 and Q56.
 
-**Form state** lives in memory only, never in the URL or browser storage; leaving through a link asks first, closing the tab gets the browser's warning, going back keeps what was entered. The form is checked against the server's own request schema (`newRegistrationRequestSchema`), so it says no exactly where checkout would. Error wording follows §2.3 (≤120 chars, human, action-oriented).
+**Form state** lives in memory only, never in the URL or browser storage; leaving through a link asks first, closing the tab gets the browser's warning, going back keeps what was entered. The form is checked against the server's own request schema (`newRegistrationRequestSchema`), so it says no exactly where checkout would. Error wording follows §2.3 (≤120 chars, human, action-oriented). A caller who asks too often (the postcode check 30 an hour, the checkout 10 an hour, per address) is told how long to wait and stays on the step; the order is not lost, and the pay button works again once the time has passed.
 
 ### 4.1 Steps
 
@@ -141,7 +141,7 @@ Seven labels ≤20 chars: Voraussetzungen, Fahrzeug, Halter, Kennzeichen, Kfz-St
 2. **Fahrzeug** — VIN, drive (electric, hybrid, petrol or diesel), Teil II number and security code, eVB number.
 3. **Halter** — name, sex, birth date and place, address, phone, email. The postcode starts as entered in step 1; changing it asks the authority again before the customer goes on. The email is the order's: status link, verification link and every status email go there.
 4. **Kennzeichen** — the authority assigns the plate (no wish plate, Q51). An E-plate is offered only for an electric car; a seasonal plate asks for its first and last month.
-5. **Kfz-Steuer** — IBAN, BIC, bank name. The tax is collected from this account by direct debit; it cannot be changed once the application is filed.
+5. **Kfz-Steuer** — IBAN, BIC, bank name. The tax is collected from this account by direct debit; it cannot be changed once the application is filed. We keep it only until the order ends (Q54).
 6. **Prüfen & bezahlen** — everything entered, grouped (codes masked), price, processing-fee notice, payment, three consents, as §2.4. The consents are the AGB with the withdrawal notice, the early-start waiver (Q13) and the power of attorney with the direct-debit mandate (Q46); each is a required checkbox, and checkout refuses the order without all three.
 7. **Bestätigung** — order ID, where the status link went, and that an identity-verification email follows, with its deadline (`VERIFICATION_DEADLINE_AFTER_MS`). Where Stripe redirects a payment, `/register/bestaetigung` shows it.
 

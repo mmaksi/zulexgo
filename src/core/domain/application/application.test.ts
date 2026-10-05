@@ -1,4 +1,4 @@
-import { anApplication } from "@/tests/fixtures/applications"
+import { aNewRegistrationApplication, anApplication } from "@/tests/fixtures/applications"
 import { InvalidTransition } from "@/src/core/errors/application/invalid-transition"
 import { applyEvent, filingDueSince, type StatusChange } from "./application"
 import type { ApplicationEvent, ApplicationStatus } from "./application-status"
@@ -111,6 +111,58 @@ describe("applyEvent, for a service that verifies the customer's identity", () =
     it("is patched once the KBA holds it", () => {
       expect(orderOf("newRegistration", ...VERIFIED, "submittedToKba", "failedCorrectable", "correctionResubmitted").status).toBe("submitted_to_kba")
     })
+  })
+})
+
+// Launch plan Q54, provisional: the account is held for the vehicle tax and nothing else, so it goes with the order that held it.
+describe("applyEvent, once a Neuzulassung's order has ended", () => {
+  const PAID = ["paymentConfirmed", "identityVerificationStarted"] as const
+  const AT_THE_KBA = [...PAID, "identityVerified", "submittedToKba"] as const
+  const walk = (...events: ApplicationEvent[]) =>
+    events.reduce((order, event, index) => applyEvent(order, event, new Date(NOW.getTime() + (index + 1) * 60_000)), aNewRegistrationApplication())
+
+  it.each([
+    ["completed (5a)", [...AT_THE_KBA, "kbaCompleted"]],
+    ["failed for good (5c)", [...AT_THE_KBA, "failedFinal"]],
+    ["failed its identity verification (5c)", [...PAID, "identityVerificationFailed"]],
+    ["was cancelled at 5b", [...AT_THE_KBA, "failedCorrectable", "cancelledByCustomer"]],
+    ["ran out of time to verify", [...PAID, "identityVerificationExpired"]],
+  ] as const)("holds no bank account once it %s", (_, events) => {
+    const ended = walk(...events)
+
+    expect(ended.request).not.toHaveProperty("bankAccount")
+  })
+
+  it.each([
+    ["is paid", ["paymentConfirmed"]],
+    ["waits to be verified", PAID],
+    ["is at the KBA", AT_THE_KBA],
+    ["is at 5b, where a refiled order is sent again with it", [...AT_THE_KBA, "failedCorrectable"]],
+  ] as const)("holds it while it %s", (_, events) => {
+    expect(walk(...events).request.bankAccount.reveal().iban).toBe("DE89370400440532013000")
+  })
+
+  it("keeps the rest of what was entered, and the order's own history", () => {
+    const open = walk(...AT_THE_KBA)
+    const ended = applyEvent(open, "kbaCompleted", NOW)
+
+    expect(ended.request).toEqual({ ...open.request, bankAccount: undefined })
+    expect(ended.request.owner.address.reveal().postcode).toBe("10115")
+    expect(ended.history.at(-1)).toEqual({ status: "completed", at: NOW })
+  })
+
+  it("leaves a de-registration's request as it was: it holds no account", () => {
+    const ended = applyEvent(anApplication({ status: "submitted_to_kba" }), "kbaCompleted", NOW)
+
+    expect(ended.request.codes.rearPlate.reveal()).toBe("AA1")
+  })
+
+  it("leaves the order it was given untouched", () => {
+    const open = walk(...AT_THE_KBA)
+
+    applyEvent(open, "kbaCompleted", NOW)
+
+    expect(open.request.bankAccount.reveal().iban).toBe("DE89370400440532013000")
   })
 })
 
