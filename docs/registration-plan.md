@@ -8,7 +8,7 @@ The second service after de-registration: **Neuzulassung**, registering a brand-
 
 **What already works for both services** (no change needed): the status machine's core transitions, the error algorithm and its one silent retry, the refund and hold policies, the poll schedule, `retry`, document fetching and storage, status tokens and the resend-link flow, rate limits, cancel at 5b, the mail port, the Postgres migrator.
 
-**What assumes de-registration today** (no part of the code knows which service an order is for):
+**What assumed de-registration when this plan was written** (no part of the code knew which service an order is for; N1 to N7 resolved each of these):
 - `Application.request` is a `DeregistrationRequest`; there is no service field on the entity, no `service` column, and the `applications` table requires plate and security-code columns.
 - `RegistrationGateway.submitDeregistration`, and `getStatus` and `correct`, which the Zulex adapter sends to `/deregistration-applications/{id}`; `Correction` carries de-registration fields only; `findAuthorities` asks by plate prefix only.
 - `DEREGISTRATION_TOTAL` in checkout, review step, FAQ and seed; `service_type: "deregistration"` hard-coded in the Stripe adapter.
@@ -16,6 +16,36 @@ The second service after de-registration: **Neuzulassung**, registering a brand-
 - The Stripe browser SDK is allowed only in `app/(funnel)/deregister/_components/stripe/` (lint rule `STRIPE_UI_FOLDER`).
 - The Zulex adapter maps `REGISTRATION_CONFIRMATION` and `TEMPORARY_REGISTRATION_CERTIFICATE` to `unknown`.
 - `IdentityVerification` has a port and a fake, but no use case calls it and no `IDENTITY_DRIVER` exists.
+
+---
+
+## Status (2026-10-05)
+
+N1 to N7 are built and merged into `staging`; N0, N8, N9 and N10 are not. **Neuzulassung is not on sale**: `newRegistration` is not in `SERVICES_ON_SALE`, so `/register` is not found, the landing card says "Bald verfügbar" and `submitCheckout` refuses the service. It runs end to end on the fakes and the msw doubles; no real order has gone through it.
+
+| Milestone | State | Pull requests | What was built, and where it differs from the text below |
+|---|---|---|---|
+| N0 | Skipped by the founder | none | Verimi is down as a service and no identity vendor is chosen; the lawyer texts, the AGB and the power of attorney come later. Q45–Q56 are unanswered. |
+| N1 | Merged 2026-10-03 | #70, #71 | Migration `0008_add_application_service`. The service lives in `request.service`; there is no `Application.service` field. The Stripe Payment Element moved to `app/(funnel)/_components/stripe/`. |
+| N2 | Merged 2026-10-04 | #72 | Value objects, the request schema, `new-registration-correction.ts` (then part of `correction.ts`), the verification deadline and reminder, the glossary. The status machine takes the service: `DIRECT_SERVICES` names the services that skip the identity check. Migration `0009_add_identity_verification_statuses` holds the two statuses only. |
+| N3 | Merged 2026-10-04 | #73 | Migration `0010_add_new_registration_details` (the plan called it `0009`): `encrypted_details`, the verification id and deadline, a check that each service fills its own columns, an index on `(service, vin)`. `ServiceRequest` is a union. |
+| N4 | Merged 2026-10-04 | #74 | The Zulex adapter and the fake file, check, patch and fetch documents per service (`Corrections` per service on the gateway); document kind `temporaryCertificate`. **The spike is not done**: it needs a `ZULEX_API_KEY` for the integration environment, and `docs/registration-user-journeys.md` does not exist yet. |
+| N5 | Merged 2026-10-05 | #75 | `confirmPayment` starts the verification; `checkIdentityVerification` runs from the poller and from `/api/webhooks/identity`; emails 2, 3 and the reminder; migration `0011`. **Only a fake identity adapter exists**; there is no Verimi adapter. |
+| N6 | Merged 2026-10-05 | #76 | The funnel `/register` and the parts both funnels share (`app/(funnel)/_components/`); consent stored with the order (D9) with a third checkbox for the power of attorney; migration `0012_record_consent`; `docs/site-contract.md` §4. |
+| N7 | Merged 2026-10-05 | #77 | The status page, the correction form, cancel and emails 1, 4, 5a, 5b and 5c for a Neuzulassung; `docs/site-contract.md` §5. `new-registration-correction.ts` became its own module. |
+| N8 | Not started | none | Lawyer texts, retention (nothing erases the IBAN when an order ends), rate limits on the eligibility lookup and checkout, the threat-model addendum. |
+| N9 | Not started | none | Needs the production stack (launch-plan M8), the Zulex API with Neuzulassung enabled and a real identity adapter; production already refuses the fake identity check while a service that verifies is on sale. |
+| N10 | Not started | none | Plates, sticker and shipping (Q41, Q50). |
+
+Where the built code departs from the text of this plan:
+
+- **A correction of the owner's name and birth date** is possible only while the order's identity was never verified (a verification found someone other than the owner, Q47), not "before anything is filed": once the person was verified they were checked against that name. A refused filing after verification can change only the eVB number and the Teil II.
+- **The assigned plate is not read from the API** (the response does not carry it): the status page and email 5a say it is printed in the temporary certificate, an assumption until the N4 spike shows where it appears.
+- **The verification deadline counts from the payment**, the reminder from reaching status 2, so a retried email 2 repeats the deadline the customer was given (Q48).
+- **Consent** has three checkboxes for a Neuzulassung (AGB with the withdrawal notice, the early-start waiver, and a power of attorney that also carries the direct-debit mandate), their text versions stored with the order (Q46, D9).
+- **Seeded orders**: one Neuzulassung per status (`ZG-SEED11` to `ZG-SEED19`). There is none for "5b after an identity mismatch" or "cancelled because the verification ran out", which the status page also shows.
+
+Every answer the code gives to Q45–Q56 is a provisional one, listed with its "if the founder answers differently" pointers in [launch-plan.md](launch-plan.md).
 
 ---
 
@@ -73,10 +103,10 @@ Postcode of the owner's address also picks the authority: `GET /registration-aut
 |---|---|---|
 | Service key | `newRegistration`, the key `pricing.ts` already uses; also the Stripe `service_type` value | One name in every layer. `registration/` in `src/core` already means "filing with the KBA" (error algorithm, poll schedule), so the service is never called just "registration" in code. |
 | Route | `app/(funnel)/register/`, confirmation at `/register/bestaetigung` | Mirrors `/deregister`. There are no accounts, so "register" cannot be misread as sign-up. |
-| Order shape | `Application` gains `service`; `request` becomes a union discriminated by `service` | The use cases that are already generic stay untouched; the compiler finds every place that assumed de-registration. |
+| Order shape | `request` becomes a union discriminated by `service` (built as `ServiceRequest`; the service is `request.service`, there is no `Application.service`) | The use cases that are already generic stay untouched; the compiler finds every place that assumed de-registration. |
 | Storing owner data | One AES-GCM blob `encrypted_details` (JSON of owner, address, phone, bank account, Teil II, eVB, plate choice), the order reference as associated data, through the existing `FieldCipher`; only `service` and `vin` in plain columns | Same scheme as the security codes since migration `0001`; the VIN stays plain for the duplicate warning. The GET response echoes all of this back, so the adapter never logs a response body. |
 | Authority lookup | `findAuthorities` takes `{ prefix }` or `{ postcode }`; the slowest status of several still wins (`combinedIkfzStatus`) | A postcode can span districts as a prefix can. |
-| Identity verification | The existing `IdentityVerification` port; `IDENTITY_DRIVER=fake|verimi` added; production refuses `fake` only while `newRegistration` is on sale | De-registration can launch in production without Verimi; Neuzulassung cannot go on sale on a fake. |
+| Identity verification | The existing `IdentityVerification` port; `IDENTITY_DRIVER=fake\|verimi` added; production refuses `fake` only while `newRegistration` is on sale | De-registration can launch in production without Verimi; Neuzulassung cannot go on sale on a fake. |
 | Which services are sold | A domain list (`SERVICES_ON_SALE`) read by the landing page **and** checked by `submitCheckout` | Today `available: false` only hides a card; nothing on the server stops a crafted checkout for an unsold service. |
 | Form state | In memory only, never in the URL or browser storage; a leave-page confirmation once the form has data | The form holds an IBAN and a birth date; keeping them out of storage outweighs losing a half-filled form on reload. |
 | Stripe Payment Element | Moves to `app/(funnel)/_components/stripe/`; lint and the `project-structure` and `external-services` skills follow | Both funnels pay the same way; the lint rule names one folder. |
@@ -137,7 +167,7 @@ N1 can start today: it needs neither the Zulex API nor the founder. Neuzulassung
 - `StatusView` carries the service; the status page picks its summary and correction form by service.
 - Stripe Payment Element folder moved, `STRIPE_UI_FOLDER` and the two skills updated.
 - Migration `0008_add_application_service`: `service text NOT NULL DEFAULT 'deregistration'` with a check against the known services; `down.sql` drops it.
-- Seed: journeys keyed by service and status; the seven existing references and tokens (`ZG-SEED01`–`07`) do not move.
+- Seed: journeys keyed by service and status; the seven existing references and tokens (`ZG-SEED01`–`07`) do not move (built: the Neuzulassung orders are `ZG-SEED11`–`19`).
 
 **Tested:** checkout refuses a service that is not on sale (a security boundary, not a UI detail); Stripe metadata carries the order's service; the Postgres adapter round-trips `service`; the migration rehearsal includes `0008`. Everything else is proven by the existing suites passing with only renamed calls.
 
@@ -173,7 +203,7 @@ N1 can start today: it needs neither the Zulex API nor the founder. Neuzulassung
 **Goal:** A Neuzulassung order survives between checkout, verification, filing and every poll, with its personal data encrypted.
 
 **How:**
-- Migration `0009_add_new_registration_details`: `encrypted_details`; the de-registration plate columns and `encrypted_security_codes` become nullable, with a check that each service has its own columns filled; the `application_status` domain gains the two Verimi statuses; columns for the verification id and deadline. `up.sql`, `down.sql`, `README.md` each.
+- Migration `0010_add_new_registration_details` (built as `0010`: the two statuses went into `0009_add_identity_verification_statuses` with N2): `encrypted_details`; the de-registration plate columns and `encrypted_security_codes` become nullable, with a check that each service has its own columns filled; the `application_status` domain gains the two Verimi statuses; columns for the verification id and deadline. `up.sql`, `down.sql`, `README.md` each.
 - Postgres adapter and fake both pass the repository contract, which gains a Neuzulassung case per status, a correction, and a test that reads the raw row and finds no IBAN, birth date, eVB or Teil II code in plain text.
 - Duplicate warning (J8, Q38) by VIN for an open Neuzulassung order; index on `(service, vin)`.
 - Seed: one Neuzulassung order per status, with obviously fake data (a checksum-valid example IBAN, `example.test` addresses), openable by its own seed token; the coverage test iterates service × status.
@@ -335,8 +365,8 @@ From `docs/api-1.yaml`; confirm or correct in the N4 spike.
 ## Critical files
 
 - `src/core/domain/application/{service,application,application-status,customer-steps,correction}.ts`, `src/core/domain/payment/pricing.ts`, `src/core/ports/registration/registration-gateway.ts` + contract, `src/core/ports/repository/application-repository.ts` + contract, `src/core/ports/payment/payment-provider.ts`, `src/core/use-cases/checkout/submit-checkout.ts`, `src/core/use-cases/status/get-status-by-token.ts`, `src/adapters/registration/{zulex,fake}/`, `src/adapters/payment/stripe/stripe-payment-provider.ts`, `src/adapters/mail/resend/copy.ts`, `app/_components/service-selection.tsx`, `app/status/[token]/`, `eslint.config.mjs`, `db/migrations/0008_add_application_service/`, `db/seed/` — N1
-- `src/core/domain/application/new-registration-request.ts`, `src/core/domain/vehicle/{evb-number,registration-certificate-part2,engine-type}.ts`, `src/core/domain/customer/{owner,postal-address,bank-account}.ts`, `src/core/domain/registration/rejection-catalogue.ts`, `docs/domain-glossary.md` — N2
-- `db/migrations/0009_add_new_registration_details/`, `src/adapters/repository/{postgres,fake}/`, `db/seed/data/` — N3
+- `src/core/domain/application/{new-registration-request,new-registration-correction}.ts`, `src/core/domain/vehicle/{evb-number,registration-certificate-part2,engine-type}.ts`, `src/core/domain/customer/{owner,postal-address,bank-account}.ts`, `src/core/domain/registration/rejection-catalogue.ts`, `docs/domain-glossary.md` — N2
+- `db/migrations/0010_add_new_registration_details/`, `src/adapters/repository/{postgres,fake}/`, `db/seed/data/` — N3
 - `src/adapters/registration/zulex/{zulex-registration-gateway,schemas}.ts`, `tests/msw/zulex.ts`, `tests/fixtures/zulex.ts`, `docs/registration-user-journeys.md` — N4
 - `src/core/use-cases/payment/confirm-payment.ts`, a verification use case under `src/core/use-cases/identity/`, `src/adapters/identity/verimi/`, `src/config/{env,container}.ts`, `app/api/webhooks/` — N5
 - `app/(funnel)/register/`, `app/(funnel)/_components/stripe/`, `docs/site-contract.md` — N6

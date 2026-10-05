@@ -4,6 +4,15 @@ What a customer actually meets today, read from the code on `staging` @ `71409d8
 
 [deregistration-user-journeys.md](deregistration-user-journeys.md) says what *should* happen (J1–J12, API findings). This file says what *does*. Intent still follows [launch-plan.md](launch-plan.md), which wins when documents disagree; differences are listed in §14.
 
+**Changes since this snapshot** (checked against `staging` @ `775c613`, 2026-10-05; the rest of this file has not been re-audited):
+
+- **Consent is stored** (launch plan D9, migration `0012_record_consent`): `Application.consent` keeps the AGB version and the time, and checkout refuses an order without both consents. §1 #5, B10 and the "not built" list in §15 still say it is not stored.
+- **The price is no longer a stand-in.** `SERVICE_PRICES.deregistration` is 49.00 € (the founder's price list, D7 fixed). The fee is still 19.99 €, so a cancel at 5b returns 29.01 €, and the 50.00 € and 69.99 € figures in §1 #4, §9, §12, §14 and §15 are out of date.
+- **Seeded orders:** sixteen, not seven: the seven de-registrations and nine Neuzulassungen (`/status/seed-status-link-new-registration-<status>`).
+- **Migrations `0008` to `0012`** also apply on a deploy (the service, two statuses, a Neuzulassung's details, its identity follow-up, consent). §16 names only `0006` and `0007`.
+- **Checkout refuses a service that is not in `SERVICES_ON_SALE`**; `/deregister` now shares its frame, review and payment parts with the Neuzulassung funnel. A de-registration customer sees no difference.
+- **Statuses 2 and 3, emails 2 and 3 and a reminder exist for a Neuzulassung only**, on a fake identity adapter. A de-registration still goes 1 → 4, so §1 #6 and §3 hold for it.
+
 **Not verified against:** the live Zulex API (down; the adapter has only run against a mock built from `docs/api-1.yaml`), live Stripe, a real inbox, production (does not exist yet). What only those can confirm is in §15.
 
 | Tag | Meaning |

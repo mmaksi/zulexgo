@@ -17,7 +17,7 @@ Nothing here belongs in code; no value from here belongs in git.
 | Zulex | integration host (from M4) | integration host (from M4) | production host |
 | Stripe | sandbox `dev` (from M4) | sandbox `staging` (from M4) | live account (business verification pending) |
 | Mail | console | Resend, allowlisted recipients | Resend |
-| Identity (Verimi, added later) | fake | fake until Verimi is added | Verimi |
+| Identity (Verimi, added later) | fake | fake (`IDENTITY_DRIVER=fake`, the only value until a Verimi adapter exists) | the fake is refused while a service that verifies the customer is on sale, and Neuzulassung is one, so it cannot go on sale before Verimi |
 | Database | in-memory, seeded at boot | Supabase project (Frankfurt), seeded on deploy | separate Supabase project (Frankfurt), never seeded |
 | Document storage | in-memory, seeded at boot | Supabase Storage in the staging project, bucket `kba-documents` (§9) | Storage in the production Supabase project |
 | Money | none | none | real |
@@ -85,7 +85,7 @@ No Supabase Auth (no accounts by design), no client-side Supabase SDK, no RLS-ba
 
 4. **Generate the encryption key**: `openssl rand -base64 32` → `CODES_ENCRYPTION_KEY`. Store a copy in your password manager: without it, every stored security code and status link is unreadable. A new key per stage.
 5. **Set them in the stage's Vercel project** (Production scope), together with `REPOSITORY_DRIVER=postgres`, **before** merging the change that should run on Postgres. The next deploy runs `scripts/vercel-build`, which migrates the database, seeds it on staging, and then builds; a failed migration fails the deploy and the previous one keeps serving.
-6. **Check it**: the build log lists `Applied 0001_create_applications` … on the first deploy, `Nothing to apply.` afterwards. On staging it then shows `Seeded 7 applications.` the first time and `Seed already loaded.` after. The database's Table Editor shows `applications`, `payments`, `status_history`, `status_tokens` and `schema_migrations`: seven seeded applications on staging, empty on production, which is never seeded.
+6. **Check it**: the build log lists `Applied 0001_create_applications` … on the first deploy, `Nothing to apply.` afterwards. On a fresh staging database it then shows `Seeded 16 applications.` the first time and `Seed already loaded.` after (a database that holds fewer gets only the missing ones). The database's Table Editor shows `applications`, `payments`, `status_history`, `status_tokens` and `schema_migrations`: sixteen seeded applications on staging (seven de-registrations and nine Neuzulassungen, one per status), empty on production, which is never seeded.
 
 Migrations only move forward on staging and production: `db:migrate:down` refuses to run outside dev. A bad migration is fixed with a new one.
 
