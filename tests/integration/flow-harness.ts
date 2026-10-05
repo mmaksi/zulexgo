@@ -1,4 +1,4 @@
-import { FAKE_REQUEST, aNewRegistrationApplication } from "@/tests/fixtures/applications"
+import { FAKE_CONSENTS, FAKE_REQUEST, aNewRegistrationApplication } from "@/tests/fixtures/applications"
 import { FakeClock } from "@/src/adapters/clock/fake/fake-clock"
 import { FakeIdentityVerification } from "@/src/adapters/identity/fake/fake-identity-verification"
 import { FakeMailer } from "@/src/adapters/mail/fake/fake-mailer"
@@ -65,7 +65,7 @@ export function setupFlow() {
   /** Checks out and pays, but leaves the payment notification unhandled. */
   async function payForCheckout(method: PaymentMethodKind = "card") {
     // Tests that run several orders at once put them all on one fake vehicle, so each customer here has confirmed the duplicate warning.
-    const { reference } = await submitCheckout(deps, { service: "deregistration", request: FAKE_REQUEST, email: "customer@example.test", acknowledgedDuplicate: true })
+    const { reference } = await submitCheckout(deps, { service: "deregistration", request: FAKE_REQUEST, email: "customer@example.test", consents: FAKE_CONSENTS, acknowledgedDuplicate: true })
     await deps.payments.customerPays((await stored(reference)).payment.id, method)
     return reference
   }

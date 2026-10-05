@@ -2,6 +2,7 @@ import { applyEvent, type Application } from "@/src/core/domain/application/appl
 import type { Failure } from "@/src/core/domain/registration/failure"
 import { parseApplicationReference } from "@/src/core/domain/application/application-reference"
 import type { ApplicationEvent, ApplicationStatus } from "@/src/core/domain/application/application-status"
+import { recordConsent } from "@/src/core/domain/application/consent"
 import { parseDeregistrationRequest } from "@/src/core/domain/application/deregistration-request"
 import { parseNewRegistrationRequest } from "@/src/core/domain/application/new-registration-request"
 import type { OrderableService, ServiceRequest } from "@/src/core/domain/application/service"
@@ -121,6 +122,8 @@ function seeded(service: OrderableService, status: ApplicationStatus, { number, 
     history: [{ status: "awaiting_payment", at: CREATED_AT }],
     request: service === "deregistration" ? deregistrationRequestOf(number, digits) : newRegistrationRequestOf(digits),
     email: emailSchema.parse(`seed-${slug}@example.test`),
+    // As checkout leaves every order: each seeded customer ticked what their service asks.
+    consent: recordConsent(service, { terms: true, earlyStart: true, powerOfAttorney: true }, CREATED_AT),
     ikfzStatus: status === "failed_final" ? "unavailable" : "online",
     idempotencyKey: `seed-idempotency-${slug}`,
     payment: { id: `seed-payment-${slug}`, total: SERVICE_PRICES[service] },

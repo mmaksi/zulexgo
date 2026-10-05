@@ -1,4 +1,4 @@
-import { FAKE_REQUEST } from "@/tests/fixtures/applications"
+import { FAKE_CONSENTS, FAKE_REQUEST } from "@/tests/fixtures/applications"
 import { ServiceNotOnSale } from "@/src/core/errors/application/service-not-on-sale"
 import { submitCheckout } from "@/src/core/use-cases/checkout/submit-checkout"
 import { setupFlow } from "./flow-harness"
@@ -14,7 +14,7 @@ describe("checkout of a service that is not on sale", () => {
       const { deps } = setupFlow()
       const createPayment = jest.spyOn(deps.payments, "createPayment")
 
-      await expect(submitCheckout(deps, { service, request: FAKE_REQUEST, email: "customer@example.test" })).rejects.toBeInstanceOf(ServiceNotOnSale)
+      await expect(submitCheckout(deps, { service, request: FAKE_REQUEST, email: "customer@example.test", consents: FAKE_CONSENTS })).rejects.toBeInstanceOf(ServiceNotOnSale)
 
       expect(createPayment).not.toHaveBeenCalled()
     },
@@ -23,7 +23,7 @@ describe("checkout of a service that is not on sale", () => {
   it("takes an order for a service that is on sale", async () => {
     const { deps } = setupFlow()
 
-    const { reference } = await submitCheckout(deps, { service: "deregistration", request: FAKE_REQUEST, email: "customer@example.test" })
+    const { reference } = await submitCheckout(deps, { service: "deregistration", request: FAKE_REQUEST, email: "customer@example.test", consents: FAKE_CONSENTS })
 
     expect((await deps.repository.get(reference))?.request.service).toBe("deregistration")
   })

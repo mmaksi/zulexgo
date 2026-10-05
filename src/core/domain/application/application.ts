@@ -1,5 +1,6 @@
 import { advance, type ApplicationEvent, type ApplicationStatus } from "./application-status"
 import type { ApplicationReference } from "./application-reference"
+import type { Consent } from "./consent"
 import type { Service, ServiceRequest } from "./service"
 import type { Email } from "@/src/core/domain/customer/email"
 import type { Failure } from "@/src/core/domain/registration/failure"
@@ -37,6 +38,11 @@ export interface Application {
   readonly request: ServiceRequest
   /** The only address the status link and the status emails go to. */
   readonly email: Email
+  /**
+   * What the customer agreed to at checkout and when (launch plan D9). Absent only on an order made
+   * before it was recorded, such as dev's and staging's seeded ones; every order checkout makes has it.
+   */
+  readonly consent?: Consent
   /**
    * Of the authority behind the plate prefix, taken at checkout. It sets the poll
    * schedule and whether the card is captured once Zulex accepts the application.

@@ -32,10 +32,13 @@ const APPEARANCE: Appearance = {
 export function StripePaymentFields({
   publishableKey,
   amountCents,
+  returnPath,
   driverRef,
 }: {
   publishableKey: string
   amountCents: number
+  /** Where Stripe returns a customer whose payment needs a redirect, as a path on this site. */
+  returnPath: string
   driverRef: RefObject<PaymentDriver | null>
 }) {
   const stripe = useMemo(() => loadStripe(publishableKey), [publishableKey])
@@ -52,12 +55,12 @@ export function StripePaymentFields({
         appearance: APPEARANCE,
       }}
     >
-      <Fields driverRef={driverRef} />
+      <Fields returnPath={returnPath} driverRef={driverRef} />
     </Elements>
   )
 }
 
-function Fields({ driverRef }: { driverRef: RefObject<PaymentDriver | null> }) {
+function Fields({ returnPath, driverRef }: { returnPath: string; driverRef: RefObject<PaymentDriver | null> }) {
   const stripe = useStripe()
   const elements = useElements()
 
@@ -66,7 +69,7 @@ function Fields({ driverRef }: { driverRef: RefObject<PaymentDriver | null> }) {
     driverRef.current = {
       prepare: async () => (await elements.submit()).error?.message,
       confirm: async ({ reference, clientSecret }) => {
-        const returnUrl = new URL("/deregister/bestaetigung", window.location.origin)
+        const returnUrl = new URL(returnPath, window.location.origin)
         returnUrl.searchParams.set("auftrag", reference)
         const { error } = await stripe.confirmPayment({
           elements,
@@ -80,7 +83,7 @@ function Fields({ driverRef }: { driverRef: RefObject<PaymentDriver | null> }) {
     return () => {
       driverRef.current = null
     }
-  }, [stripe, elements, driverRef])
+  }, [stripe, elements, returnPath, driverRef])
 
   return <PaymentElement options={{ layout: "tabs", wallets: { link: "never" } }} />
 }

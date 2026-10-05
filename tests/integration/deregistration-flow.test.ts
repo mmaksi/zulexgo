@@ -1,4 +1,4 @@
-import { FAKE_REQUEST } from "@/tests/fixtures/applications"
+import { FAKE_CONSENTS, FAKE_REQUEST } from "@/tests/fixtures/applications"
 import { Money } from "@/src/core/domain/payment/money"
 import { PROCESSING_FEE, SERVICE_PRICES } from "@/src/core/domain/payment/pricing"
 import { GatewayRejected } from "@/src/core/errors/registration/gateway-rejected"
@@ -69,7 +69,7 @@ describe("de-registration flow on fakes", () => {
 
     it("resumes on the provider's retry when email 1 failed, keeping the status link it already issued", async () => {
       const { deps, emails, stored } = setup()
-      const { reference } = await submitCheckout(deps, { service: "deregistration", request: FAKE_REQUEST, email: "customer@example.test" })
+      const { reference } = await submitCheckout(deps, { service: "deregistration", request: FAKE_REQUEST, email: "customer@example.test", consents: FAKE_CONSENTS })
       await deps.payments.customerPays((await stored(reference)).payment.id, "card")
       jest.spyOn(deps.mailer, "send").mockRejectedValueOnce(new Error("Resend refused the message"))
 
@@ -85,7 +85,7 @@ describe("de-registration flow on fakes", () => {
 
     it("leaves a submission that died after payment was recorded for the poller to resume", async () => {
       const { deps, emails, stored, poll } = setup()
-      const { reference } = await submitCheckout(deps, { service: "deregistration", request: FAKE_REQUEST, email: "customer@example.test" })
+      const { reference } = await submitCheckout(deps, { service: "deregistration", request: FAKE_REQUEST, email: "customer@example.test", consents: FAKE_CONSENTS })
       await deps.payments.customerPays((await stored(reference)).payment.id, "card")
       deps.registration.failNext("submit", new Error("the process died"))
 
@@ -98,7 +98,7 @@ describe("de-registration flow on fakes", () => {
 
     it("does nothing until the customer has actually paid", async () => {
       const { deps, emails, stored } = setup()
-      const { reference } = await submitCheckout(deps, { service: "deregistration", request: FAKE_REQUEST, email: "customer@example.test" })
+      const { reference } = await submitCheckout(deps, { service: "deregistration", request: FAKE_REQUEST, email: "customer@example.test", consents: FAKE_CONSENTS })
 
       await confirmPayment(deps, reference)
 
@@ -113,6 +113,7 @@ describe("de-registration flow on fakes", () => {
         service: "deregistration",
         request: { ...FAKE_REQUEST, vin: options.vin ?? FAKE_REQUEST.vin },
         email: "customer@example.test",
+        consents: FAKE_CONSENTS,
         acknowledgedDuplicate: options.acknowledgedDuplicate,
       })
 

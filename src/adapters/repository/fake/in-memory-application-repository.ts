@@ -134,6 +134,7 @@ const copy = (application: Application): Application => ({
   ...application,
   history: application.history.map((change) => ({ ...change, at: new Date(change.at) })),
   request: copyRequest(application.request),
+  consent: application.consent && { ...application.consent, givenAt: new Date(application.consent.givenAt) },
   payment: { ...application.payment },
   identityVerification: application.identityVerification && {
     ...application.identityVerification,

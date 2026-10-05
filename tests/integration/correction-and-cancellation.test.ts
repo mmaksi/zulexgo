@@ -1,5 +1,5 @@
 import { handlePaymentNotification } from "@/app/api/webhooks/stripe/handle"
-import { FAKE_REQUEST } from "@/tests/fixtures/applications"
+import { FAKE_CONSENTS, FAKE_REQUEST } from "@/tests/fixtures/applications"
 import { submitCheckout } from "@/src/core/use-cases/checkout/submit-checkout"
 import { cancelApplication } from "@/src/core/use-cases/application/cancel-application"
 import { correctApplication } from "@/src/core/use-cases/application/correct-application"
@@ -14,7 +14,7 @@ const { world, stored, emails } = withVendorsAtTheNetwork()
 const MINUTE = 60_000
 
 async function payAndFile() {
-  const { reference } = await submitCheckout(world.deps, { service: "deregistration", request: FAKE_REQUEST, email: "customer@example.test" })
+  const { reference } = await submitCheckout(world.deps, { service: "deregistration", request: FAKE_REQUEST, email: "customer@example.test", consents: FAKE_CONSENTS })
   const { payment } = await stored(reference)
   world.stripe.customerPays(payment.id, "card")
   await handlePaymentNotification(world.deps, webhookRequest(world.stripe.event("payment_intent.amount_capturable_updated", payment.id)))

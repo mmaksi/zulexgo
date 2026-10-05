@@ -15,6 +15,10 @@ export const FAKE_REQUEST = {
   codes: { rearPlate: "AA1", frontPlate: "AA2", certificate: "AAAAAA1" },
 } as const
 
+/** What the funnel sends once the customer has ticked every box its service shows. */
+export const FAKE_CONSENTS = { terms: true, earlyStart: true } as const
+export const FAKE_NEW_REGISTRATION_CONSENTS = { ...FAKE_CONSENTS, powerOfAttorney: true } as const
+
 const CREATED_AT = new Date("2026-01-01T00:00:00.000Z")
 
 let sequence = 0

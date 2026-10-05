@@ -103,12 +103,35 @@ describeWithPostgres("migration rehearsal", () => {
     const kept = seed.filter(({ application }) => application.request.service === "deregistration").length
     await loadSeed(repository, seed)
 
-    // 0009 to 0011 are the Neuzulassung migrations.
+    // The newest three (0010 to 0012): the last of them to be reverted, 0010, is the one that deletes the Neuzulassung orders.
     await migrator.down(3)
 
     expect(await database.query("SELECT service, count(*)::int AS n FROM applications GROUP BY service")).toEqual([{ service: "deregistration", n: kept }])
     await migrator.up()
     expect(await loadSeed(repository, seed)).toBe(seed.length - kept)
+    await migrator.down(migrations.length)
+    await migrator.up()
+  })
+
+  // The reversal the CI rehearsal makes with the seed in place: only the newest migration, over orders that hold a consent.
+  it("reverts and reapplies the consent migration over orders that hold a consent, keeping them and every de-registration's consent", async () => {
+    const migrations = await readMigrations(join(process.cwd(), "db", "migrations"))
+    const migrator = new Migrator(database.url, migrations)
+    await migrator.down(migrations.length)
+    await migrator.up()
+    const repository = new PostgresApplicationRepository({ connectionString: database.url, encryptionKey: randomBytes(32).toString("base64") })
+    const seed = seedFor("dev")
+    await loadSeed(repository, seed)
+
+    await migrator.down(1)
+    await migrator.up()
+
+    expect(await database.query("SELECT count(*)::int AS n FROM applications")).toEqual([{ n: seed.length }])
+    // A Neuzulassung's consent is incomplete without its power of attorney, which the reverted column held: it is forgotten with it.
+    expect(await database.query("SELECT service, count(agb_version)::int AS with_consent FROM applications GROUP BY service ORDER BY service")).toEqual([
+      { service: "deregistration", with_consent: seed.filter(({ application }) => application.request.service === "deregistration").length },
+      { service: "newRegistration", with_consent: 0 },
+    ])
     await migrator.down(migrations.length)
     await migrator.up()
   })

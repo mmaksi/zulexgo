@@ -20,6 +20,8 @@ Page structure, section content, site behaviour. Business rules: [launch-plan.md
 4. Review & payment — confirm data, full price, 19.99 € processing-fee notice, consent, payment.
 5. Confirmation — order ID, status link; announces the identity-verification email once Verimi is added.
 
+The Neuzulassung funnel (`/register`) has seven steps; its contract is §4.
+
 **Status dashboard (`/status/{token}`)**
 1. Vehicle summary — which application this is.
 2. Status stepper — customer statuses 1 → 4 → 5a | 5b | 5c, current position; 2 and 3 slot in when Verimi is added.
@@ -124,3 +126,51 @@ Six emails now, eight once Verimi is added (trigger, subject, content): table in
 - Stepper: current step pulses subtly while polling; on status change, completed steps get one-time 200 ms check-draw (page revalidates on focus/interval — no manual refresh).
 - Payment/submit: CTA → inline spinner, locked (idempotency guard); no full-page loaders.
 - Errors: 100 ms fade, layout shift ≤ message height; no validation toasts — errors live at the field.
+
+## 4. Neuzulassung Funnel (`/register`)
+
+Built on the shared funnel frame and payment panel (`app/(funnel)/_components/`), so §3's navigation, scroll, mobile and transition rules apply unchanged. **Not on sale:** while `newRegistration` is not in `SERVICES_ON_SALE` (launch plan N9) the route and its confirmation page are not found, because the funnel collects an IBAN and a birth date for an order checkout would refuse. Business rules: `registration-plan.md` and [launch-plan.md](launch-plan.md); the provisional answers it builds are Q46, Q49, Q51, Q54 and Q56.
+
+**Form state** lives in memory only, never in the URL or browser storage; leaving through a link asks first, closing the tab gets the browser's warning, going back keeps what was entered. The form is checked against the server's own request schema (`newRegistrationRequestSchema`), so it says no exactly where checkout would. Error wording follows §2.3 (≤120 chars, human, action-oriented).
+
+### 4.1 Steps
+
+Seven labels ≤20 chars: Voraussetzungen, Fahrzeug, Halter, Kennzeichen, Kfz-Steuer, Prüfen & bezahlen, Bestätigung. Shown as "Schritt 2 von 7" until 1024 px, as a row above.
+
+1. **Voraussetzungen** — five yes/no questions (a brand-new car never registered; Teil II with its concealed code; the eVB number; a private keeper of 18 or over who lives in Germany; a German bank account) and the keeper's postcode, which picks the authority (`GET /registration-authorities?postcode=`). Every "no" shows its reason and the offline alternative (≤300 chars) and keeps "Weiter" disabled. The authority notice (online, unavailable, offline; ≤200 chars) is shown on the next step.
+2. **Fahrzeug** — VIN, drive (electric, hybrid, petrol or diesel), Teil II number and security code, eVB number.
+3. **Halter** — name, sex, birth date and place, address, phone, email. The postcode starts as entered in step 1; changing it asks the authority again before the customer goes on. The email is the order's: status link, verification link and every status email go there.
+4. **Kennzeichen** — the authority assigns the plate (no wish plate, Q51). An E-plate is offered only for an electric car; a seasonal plate asks for its first and last month.
+5. **Kfz-Steuer** — IBAN, BIC, bank name. The tax is collected from this account by direct debit; it cannot be changed once the application is filed.
+6. **Prüfen & bezahlen** — everything entered, grouped (codes masked), price, processing-fee notice, payment, three consents, as §2.4. The consents are the AGB with the withdrawal notice, the early-start waiver (Q13) and the power of attorney with the direct-debit mandate (Q46); each is a required checkbox, and checkout refuses the order without all three.
+7. **Bestätigung** — order ID, where the status link went, and that an identity-verification email follows, with its deadline (`VERIFICATION_DEADLINE_AFTER_MS`). Where Stripe redirects a payment, `/register/bestaetigung` shows it.
+
+### 4.2 Fields
+
+Label ≤40 chars, helper ≤150. A field is exactly as the domain parses it.
+
+| Field | Constraint | Input |
+|---|---|---|
+| FIN | exactly 17 `[A-Z0-9]`, upper-cased as typed | text |
+| Antrieb | electric, hybrid or combustion | radio |
+| Teil II number | 1–20 characters (Q56) | text |
+| Teil II security code | at least 1 character (Q56); masked | password |
+| eVB number | 7 characters `[A-HJ-NP-Z0-9]`, no I or O; masked | password |
+| First and last name | not empty | text |
+| Sex | female, male, diverse, unspecified | radio |
+| Birth date | a real date, the keeper at least 18 on the day it is entered | date |
+| Birth place | not empty | text |
+| Street, city | not empty | text |
+| House number | one to four digits, then anything | text |
+| Postcode | 5 digits | numeric text |
+| Phone | digits, spaces and `+ ( ) / . -`, 6 to 15 digits | tel |
+| Email | RFC-valid | email |
+| E-plate | only with an electric drive | checkbox |
+| Season | first and last month, January to December | select |
+| IBAN | German, 22 characters, checksum; spaces and lower case accepted. A wrong checksum is called a probable typo; a wrong country or length says a German IBAN starts with DE and has 22 characters | text |
+| BIC | 8 or 11 characters | text |
+| Bank name | not empty | text |
+
+### 4.3 Not tested, checked in the browser
+
+Copy, the progress indicator, the locator photos (placeholders until M7) and every layout at phone, tablet and laptop width.

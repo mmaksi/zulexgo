@@ -3,8 +3,9 @@
 import { useState, type FormEvent } from "react"
 import type { IkfzStatus } from "@/src/core/domain/registration/registration-authority"
 import { Button } from "@/src/ui/button"
-import { RadioGroup, RadioGroupItem } from "@/src/ui/radio-group"
+import { RadioGroup } from "@/src/ui/radio-group"
 import type { CheckoutActions } from "./checkout-actions"
+import { Choice } from "@/app/(funnel)/_components/choice"
 import { TextField } from "@/app/_components/text-field"
 import type { PlateCount } from "@/app/_components/vehicle-data"
 import { Alert } from "@/src/ui/alert"
@@ -125,14 +126,5 @@ export function EligibilityStep({
         </Button>
       </div>
     </form>
-  )
-}
-
-function Choice<Value>({ value, label }: { value: Value; label: string }) {
-  return (
-    <label className="flex min-h-12 cursor-pointer items-center gap-3 text-body text-grau-dark">
-      <RadioGroupItem value={value} />
-      {label}
-    </label>
   )
 }
