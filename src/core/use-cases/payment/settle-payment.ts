@@ -10,7 +10,7 @@ import type { Dependencies } from "@/src/core/use-cases/dependencies"
  *
  * Called with the order's outcome before its status and emails are written: 5a (a card
  * still held is captured in full), a cancel or 5c (the processing fee is kept, the rest
- * goes back), or our own failure (everything goes back). Returns what was kept and what
+ * goes back), or our own failure or an expired verification (everything goes back). Returns what was kept and what
  * went back, which is what the customer's emails state. Throws `HoldExpired` if the payment
  * is neither held nor captured, which leaves nothing to settle.
  *
@@ -30,9 +30,9 @@ export async function settlePayment(
   // The money already shows this outcome (a rerun after a later step failed): report it only.
   const settled = settledDecision(outcome, { ...payment, total })
   if (settled) {
-    // A released hold is the expected end of our own failure. For any other outcome it lapsed
-    // before we took it (launch plan Q20): the order ends as the KBA decided with nothing kept.
-    if (payment.status === "released" && outcome.type !== "ourTechnicalError") {
+    // A released hold is the expected end of our own failure and of an expired verification. For any other
+    // outcome it lapsed before we took it (launch plan Q20): the order ends as the KBA decided with nothing kept.
+    if (payment.status === "released" && outcome.type !== "ourTechnicalError" && outcome.type !== "verificationExpired") {
       console.warn(`[payments] ${application.reference}: the hold lapsed before it was taken; the order ends as ${outcome.type} with nothing kept`)
     }
     return settled

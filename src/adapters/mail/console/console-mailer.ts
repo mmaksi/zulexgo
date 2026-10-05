@@ -1,13 +1,14 @@
 import type { Mailer, MailMessage } from "@/src/core/ports/mail/mailer"
 
 const MASKED_TOKEN = "[status token hidden outside dev]"
+const MASKED_VERIFICATION_LINK = "[verification link hidden outside dev]"
 
 /**
  * `MAIL_DRIVER=console`: prints instead of sending. In dev it prints the status
  * link on purpose, since that is the only way to open the status page locally.
  * Any other stage masks the token: its logs are kept by the platform, and a
- * status token there is a live key to a customer's order. Templates carry no
- * security code to print.
+ * status token there is a live key to a customer's order. The same goes for the link that
+ * starts an identity verification. Templates carry no security code to print.
  *
  * Only the token is masked: the recipient address and the rest of the template data
  * (order reference, reason, amounts) are printed in every stage. The environment check
@@ -32,6 +33,7 @@ export class ConsoleMailer implements Mailer {
     const { name, ...data } = template
     // The token is the last path segment of the link the container builds (/status/<token>).
     if ("statusLink" in data && !this.revealStatusLinks) data.statusLink = data.statusLink.replace(/[^/]+$/, MASKED_TOKEN)
+    if ("verificationLink" in data && !this.revealStatusLinks) data.verificationLink = MASKED_VERIFICATION_LINK
     this.log(`[mail] ${name} → ${to} ${JSON.stringify(data)}`)
   }
 }

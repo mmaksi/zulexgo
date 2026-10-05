@@ -23,4 +23,15 @@ describe("reasonFor", () => {
   it("owns up when the fault was ours: a submission that never got through", () => {
     expect(reasonFor({ kind: "unavailable" }, CATALOGUE)).toMatch(/technisch/i)
   })
+
+  it("tells a customer whose verified identity is not the owner on the order to check name and birth date, naming neither", () => {
+    const reason = reasonFor({ kind: "identityMismatch" }, CATALOGUE)
+
+    expect(reason).toMatch(/Name/)
+    expect(reason).toMatch(/Geburtsdatum/)
+  })
+
+  it("tells a customer whose identity could not be verified so, without a vendor's reason", () => {
+    expect(reasonFor({ kind: "identityFailed" }, CATALOGUE)).toMatch(/Identität/)
+  })
 })

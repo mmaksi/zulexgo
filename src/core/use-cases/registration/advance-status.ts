@@ -1,14 +1,17 @@
 import { applyEvent, type Application } from "@/src/core/domain/application/application"
+import { requiresIdentityVerification } from "@/src/core/domain/application/application-status"
 import type { DocumentRef } from "@/src/core/domain/registration/document"
 import type { Failure } from "@/src/core/domain/registration/failure"
 import { HOLD_CHECK_INTERVAL_MS, HOLD_RETRY_MS } from "@/src/core/domain/payment/hold-policy"
 import { nextPollAt } from "@/src/core/domain/registration/poll-schedule"
 import { GatewayUnavailable } from "@/src/core/errors/registration/gateway-unavailable"
+import { checkIdentityVerification } from "@/src/core/use-cases/identity/check-identity-verification"
+import { startIdentityVerification } from "@/src/core/use-cases/identity/start-identity-verification"
 import type { GatewayStatus } from "@/src/core/ports/registration/registration-gateway"
 import type { Dependencies } from "@/src/core/use-cases/dependencies"
 import { handleFailure } from "./handle-failure"
 import { mailCustomer } from "@/src/core/use-cases/mail/mail-customer"
-import { guardHold } from "@/src/core/use-cases/payment/secure-hold"
+import { guardHold, guardHoldQuietly } from "@/src/core/use-cases/payment/secure-hold"
 import { settlePayment } from "@/src/core/use-cases/payment/settle-payment"
 import { afterFailure, submitToKba } from "./submit-to-kba"
 
@@ -18,28 +21,34 @@ import { afterFailure, submitToKba } from "./submit-to-kba"
  * `nextPollAt` has passed; what the step is depends on where the order stands:
  *
  * - `submitted_and_paid`: not filed yet, or filed but its follow-up failed (an outage
- *   being waited out, a failed email 4), so `submitToKba` runs again.
+ *   being waited out, a failed email 4), so `submitToKba` runs again. For a service that verifies
+ *   the customer first it is the verification that did not start yet (an outage of the provider, a
+ *   failed email 2), so `startIdentityVerification` runs again.
+ * - `awaiting_identity_verification` (2): `checkIdentityVerification` reads the provider's answer, then the
+ *   deadline, the reminder and the card hold.
+ * - `identity_verified` (3): verified but not yet filed (the filing died), so `submitToKba` runs again.
  * - `failed_correctable` (5b): waiting for the customer; only the money is looked at.
  * - `submitted_to_kba`: ask the registration service how the KBA is doing. Still working:
  *   back off. Finished with a confirmation: 5a. Failed, or finished with only a rejection
  *   document: the error algorithm decides (`handleFailure`).
- * - Any other status is not polled, and nothing happens. That includes `awaiting_identity_verification`
- *   and `identity_verified`, which are in `POLLED_STATUSES` but have no step yet: nothing moves an
- *   order into them until the identity step exists, and one that got there due would stay first in the queue.
+ * - Any other status is not polled, and nothing happens.
  *
  * Every step is safe to repeat. One that fails part-way leaves the order at its old status
  * and backs it off (`backOffOnFailure`), so a later tick redoes it without hammering the
  * service, the provider or the mailer.
  */
 export async function advanceStatus(deps: Dependencies, application: Application): Promise<void> {
-  if (application.status === "submitted_and_paid") return backOffOnFailure(deps, application, () => submitToKba(deps, application))
+  if (application.status === "submitted_and_paid") {
+    const proceed = requiresIdentityVerification(application.request.service) ? startIdentityVerification : submitToKba
+    return backOffOnFailure(deps, application, () => proceed(deps, application))
+  }
+  if (application.status === "awaiting_identity_verification") return backOffOnFailure(deps, application, () => checkIdentityVerification(deps, application))
+  if (application.status === "identity_verified") return backOffOnFailure(deps, application, () => submitToKba(deps, application))
   if (application.status === "failed_correctable") return watchHold(deps, application)
   if (application.status !== "submitted_to_kba") return
 
   // A hand-processed order's card is held for days; the status check must not wait on the provider, so a failed look is only logged.
-  if (application.ikfzStatus !== "online") {
-    await guardHold(deps, application).catch((error) => logHoldCheckFailed(application, error))
-  }
+  if (application.ikfzStatus !== "online") await guardHoldQuietly(deps, application)
 
   let status: GatewayStatus
   try {
@@ -114,11 +123,6 @@ async function watchHold(deps: Dependencies, application: Application): Promise<
     throw error
   }
   await deps.repository.update(reschedule(held ? HOLD_CHECK_INTERVAL_MS : undefined))
-}
-
-/** By order and kind of error only: the message could hold personal data. */
-function logHoldCheckFailed({ reference }: Application, error: unknown) {
-  console.error(`[payments] ${reference}: hold not checked: ${error instanceof Error ? error.name : "unknown error"}`)
 }
 
 /**

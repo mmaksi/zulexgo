@@ -122,6 +122,33 @@ describeWithPostgres("PostgresApplicationRepository", () => {
     await expect(repository.get(other.reference)).rejects.toThrow()
   })
 
+  // The provider's id is part of the customer's start link at some providers, so it is held like a token: encrypted, bound to its order.
+  it("keeps the identity provider's verification id out of every stored row, and bound to its order", async () => {
+    const waiting = await repository.create(
+      aNewRegistrationApplication({
+        status: "awaiting_identity_verification",
+        history: [
+          { status: "awaiting_payment", at: new Date("2026-03-01T09:00:00.000Z") },
+          { status: "submitted_and_paid", at: new Date("2026-03-01T09:01:00.000Z") },
+          { status: "awaiting_identity_verification", at: new Date("2026-03-01T09:02:00.000Z") },
+        ],
+        identityVerification: { id: "provider-verification-4711", deadline: new Date("2026-03-05T09:02:00.000Z"), reminderSent: false },
+      }),
+    )
+    const other = await repository.create(aNewRegistrationApplication())
+
+    const everything = JSON.stringify(await database.query("SELECT (SELECT json_agg(a) FROM applications a) AS a"))
+    expect(everything).not.toContain("provider-verification-4711")
+    expect((await repository.get(waiting.reference))?.identityVerification?.id).toBe("provider-verification-4711")
+
+    // Copied onto another order, it does not decrypt.
+    await database.query(
+      `UPDATE applications SET identity_verification_id = (SELECT identity_verification_id FROM applications WHERE reference = '${waiting.reference}'),
+         identity_verification_deadline = now() WHERE reference = '${other.reference}'`,
+    )
+    await expect(repository.get(other.reference)).rejects.toThrow()
+  })
+
   // A keeper's age is checked when the details are entered, and a correction can enter them again after the order was placed.
   it("reads back an order whose keeper came of age after it was placed, as a correction made then leaves it", async () => {
     const placed = new Date("2026-03-01T09:00:00.000Z")

@@ -33,4 +33,29 @@ describe("ConsoleMailer", () => {
     expect(output).toContain("orderConfirmation")
     expect(output).not.toContain(token)
   })
+
+  describe("the verification link, which starts someone's identity check", () => {
+    const verificationLink = "https://verification.example.test/fake-verification-console-test"
+
+    const printedVerification = async (revealStatusLinks: boolean) => {
+      const lines: string[] = []
+      await new ConsoleMailer({ revealStatusLinks, log: (line) => lines.push(line) }).send({
+        to: email,
+        template: { name: "identityVerificationRequested", reference, verificationLink, deadline: new Date("2026-03-05T09:00:00.000Z") },
+        idempotencyKey: "k",
+      })
+      return lines.join("\n")
+    }
+
+    it("is printed in dev, where nobody else can see the log and the fake link is the only way to try the step", async () => {
+      expect(await printedVerification(true)).toContain(verificationLink)
+    })
+
+    it("is kept out of the log everywhere else", async () => {
+      const output = await printedVerification(false)
+
+      expect(output).toContain("identityVerificationRequested")
+      expect(output).not.toContain("fake-verification-console-test")
+    })
+  })
 })

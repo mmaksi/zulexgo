@@ -4,6 +4,8 @@ import type { EmailTemplate, Mailer } from "./mailer"
 
 const { reference, email } = anApplication()
 const statusLink = "https://zulexgo.example.test/status/faketoken-contract"
+const verificationLink = "https://verification.example.test/fake-verification-contract"
+const deadline = new Date("2026-03-05T09:00:00.000Z")
 
 /**
  * One of each EmailTemplate, with fixed fake values. Also the input of the
@@ -11,6 +13,9 @@ const statusLink = "https://zulexgo.example.test/status/faketoken-contract"
  */
 export const EVERY_TEMPLATE: EmailTemplate[] = [
   { name: "orderConfirmation", service: "deregistration", reference, statusLink },
+  { name: "identityVerificationRequested", reference, verificationLink, deadline },
+  { name: "identityVerificationReminder", reference, verificationLink, deadline },
+  { name: "identityVerified", reference, statusLink },
   { name: "submittedToKba", service: "deregistration", reference, statusLink, manualProcessing: false },
   { name: "completed", service: "deregistration", reference, statusLink },
   { name: "correctionRequired", reference, statusLink, reason: "Die Zulassungsstelle konnte den Antrag nicht bearbeiten." },

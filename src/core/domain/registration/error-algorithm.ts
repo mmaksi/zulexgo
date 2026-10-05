@@ -36,7 +36,9 @@ export interface Attempt {
 }
 
 /**
- * Business logic §2 in order: retry a technical error silently; then classify.
+ * Business logic §2 in order: retry a technical error silently; then classify. An identity
+ * verification that ended without success is never retried: a failed one is final, a mismatch is
+ * the customer's to correct.
  * A KBA technical error gets one retry. A submission that cannot be confirmed
  * is resubmitted until `SUBMISSION_PATIENCE_MS` is used up, since no
  * application exists yet to ask the service to retry. A code the catalogue does
@@ -55,7 +57,10 @@ export function decideOnFailure(
       return waitedMs < SUBMISSION_PATIENCE_MS ? { action: "retrySilently" } : { action: "failFinal", refund: "full" }
     case "rejected":
     case "rejectionDocument":
+    case "identityMismatch":
       return { action: "failCorrectable" }
+    case "identityFailed":
+      return { action: "failFinal", refund: "fee" }
     case "kbaError":
       return decideOnKbaError(catalogue[failure.code]?.class ?? "technical", canRetry)
   }

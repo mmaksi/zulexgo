@@ -52,4 +52,15 @@ describe("decideOnFailure (business logic §2, one silent retry)", () => {
   it("makes a finished application with only a rejection document correctable, as it carries no error to retry", () => {
     expect(decideOnFailure({ kind: "rejectionDocument" }, attempt(0), CATALOGUE)).toEqual({ action: "failCorrectable" })
   })
+
+  describe("an identity verification that ended without success (business logic §2, launch plan Q47, provisional)", () => {
+    it("makes a failed verification final, keeping the processing fee, and never retries it", () => {
+      expect(decideOnFailure({ kind: "identityFailed" }, attempt(0), CATALOGUE)).toEqual({ action: "failFinal", refund: "fee" })
+      expect(decideOnFailure({ kind: "identityFailed" }, attempt(5), CATALOGUE)).toEqual({ action: "failFinal", refund: "fee" })
+    })
+
+    it("makes a verified person who is not the owner on the order correctable, since nothing was filed", () => {
+      expect(decideOnFailure({ kind: "identityMismatch" }, attempt(0), CATALOGUE)).toEqual({ action: "failCorrectable" })
+    })
+  })
 })

@@ -4,6 +4,7 @@ import { loadSeed, seedFor } from "@/db/seed/seed"
 import { PostgresApplicationRepository } from "@/src/adapters/repository/postgres/postgres-application-repository"
 import { Migrator, readMigrations } from "@/src/adapters/repository/postgres/migrator"
 import { APPLICATION_STATUSES } from "@/src/core/domain/application/application-status"
+import { FAILURE_KINDS } from "@/src/core/domain/registration/failure"
 import { SERVICES } from "@/src/core/domain/application/service"
 import { createTestDatabase, describeWithPostgres, type TestDatabase } from "@/src/adapters/repository/postgres/test-database"
 
@@ -21,6 +22,10 @@ const TABLES_WITHOUT_RLS = `
 const STATUS_DOMAIN_CHECK = `
   SELECT pg_get_constraintdef(oid) AS definition FROM pg_constraint
    WHERE contypid = 'application_status'::regtype`
+
+const FAILURE_KIND_CHECK = `
+  SELECT pg_get_constraintdef(oid) AS definition FROM pg_constraint
+   WHERE conrelid = 'applications'::regclass AND conname = 'applications_failure_kind_check'`
 
 const SERVICE_CHECK = `
   SELECT pg_get_constraintdef(oid) AS definition FROM pg_constraint
@@ -71,6 +76,23 @@ describeWithPostgres("migration rehearsal", () => {
     await new Migrator(database.url, migrations).down(migrations.length)
   })
 
+  // 0011 encrypts the provider's verification id, and a plaintext one could not be read back: a deploy must not leave one behind.
+  it("clears a verification id stored in plaintext before 0011, which could not be read as ciphertext, and keeps the order", async () => {
+    const migrations = await readMigrations(join(process.cwd(), "db", "migrations"))
+    await new Migrator(database.url, migrations).down(migrations.length)
+    await new Migrator(database.url, migrations.filter(({ name }) => name < "0011")).up()
+    await database.query(`
+      INSERT INTO applications (reference, version, status, email, service, vin, encrypted_details, authority_ikfz_status, idempotency_key, identity_verification_id, identity_verification_deadline)
+      VALUES ('ZG-ABC124', 1, 'awaiting_identity_verification', 'old@example.test', 'newRegistration', 'FAKEVIN0000000002', 'ciphertext', 'online', 'old-idempotency-key-2', 'seed-verification-13', now())`)
+
+    await new Migrator(database.url, migrations).up()
+
+    expect(await database.query("SELECT status, encrypted_details, identity_verification_id, identity_verification_deadline, identity_verification_reminder_sent FROM applications")).toEqual([
+      { status: "awaiting_identity_verification", encrypted_details: "ciphertext", identity_verification_id: null, identity_verification_deadline: null, identity_verification_reminder_sent: false },
+    ])
+    await new Migrator(database.url, migrations).down(migrations.length)
+  })
+
   // The rehearsal that matters on a real table: the dev seed holds orders of both services when someone reverts.
   it("reverts the Neuzulassung migrations with orders stored, keeping the de-registrations, and loads the seed again afterwards", async () => {
     const migrations = await readMigrations(join(process.cwd(), "db", "migrations"))
@@ -81,7 +103,8 @@ describeWithPostgres("migration rehearsal", () => {
     const kept = seed.filter(({ application }) => application.request.service === "deregistration").length
     await loadSeed(repository, seed)
 
-    await migrator.down(2)
+    // 0009 to 0011 are the Neuzulassung migrations.
+    await migrator.down(3)
 
     expect(await database.query("SELECT service, count(*)::int AS n FROM applications GROUP BY service")).toEqual([{ service: "deregistration", n: kept }])
     await migrator.up()
@@ -104,6 +127,13 @@ describeWithPostgres("migration rehearsal", () => {
       const allowed = [...String(definition).matchAll(/'([a-z_]+)'/g)].map(([, status]) => status)
 
       expect(allowed.sort()).toEqual([...APPLICATION_STATUSES].sort())
+    })
+
+    it("allows exactly the kinds of failure the domain has, no more and no fewer", async () => {
+      const [{ definition }] = await database.query(FAILURE_KIND_CHECK)
+      const allowed = [...String(definition).matchAll(/'([A-Za-z]+)'/g)].map(([, kind]) => kind)
+
+      expect(allowed.sort()).toEqual([...FAILURE_KINDS].sort())
     })
 
     it("allows exactly the services on the price list, no more and no fewer", async () => {

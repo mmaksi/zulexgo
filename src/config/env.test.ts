@@ -1,4 +1,4 @@
-import { parseEnv, ZULEX_BASE_URLS } from "./env"
+import { fakeIdentityProblem, parseEnv, ZULEX_BASE_URLS } from "./env"
 
 const dev = { APP_ENV: "dev" }
 
@@ -55,6 +55,7 @@ describe("dev", () => {
       MAIL_DRIVER: "console",
       REPOSITORY_DRIVER: "fake",
       STORAGE_DRIVER: "fake",
+      IDENTITY_DRIVER: "fake",
     })
   })
 
@@ -155,6 +156,27 @@ describe("production may not run on a fake", () => {
     ["STORAGE_DRIVER", "fake"],
   ])("rejects %s=%s", (key, value) => {
     expect(() => parseEnv({ ...production, [key]: value })).toThrow(new RegExp(key))
+  })
+})
+
+// Launch plan Q45, provisional: the KBA registers a car in the name of whoever the order says, so a service that does
+// that must not go on sale on a check that proves nobody's identity.
+describe("the identity check", () => {
+  it("may be the fake in production while no service on sale verifies the customer, as today", () => {
+    expect(parseEnv({ ...production, IDENTITY_DRIVER: "fake" }).IDENTITY_DRIVER).toBe("fake")
+    expect(fakeIdentityProblem("production", ["deregistration"])).toBeUndefined()
+  })
+
+  it("may not be the fake in production once a service that verifies the customer is on sale", () => {
+    expect(fakeIdentityProblem("production", ["deregistration", "newRegistration"])).toMatch(/newRegistration/)
+  })
+
+  it.each(["dev", "staging"] as const)("may be the fake in %s whatever is on sale, where nobody's identity matters", (stage) => {
+    expect(fakeIdentityProblem(stage, ["deregistration", "newRegistration"])).toBeUndefined()
+  })
+
+  it("has no other driver yet: the Verimi adapter is not built", () => {
+    expect(() => parseEnv({ ...dev, IDENTITY_DRIVER: "verimi" })).toThrow(/IDENTITY_DRIVER/)
   })
 })
 

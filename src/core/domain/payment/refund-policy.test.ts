@@ -61,6 +61,20 @@ describe("refundPolicy (business logic §3)", () => {
     })
   })
 
+  describe("the customer never verified their identity before the deadline: 100 % back, nothing was filed", () => {
+    it("releases a held payment", () => {
+      expect(summary(refundPolicy({ type: "verificationExpired" }, held))).toEqual({
+        action: "release", amount: undefined, retained: 0, returned: 6999,
+      })
+    })
+
+    it("refunds a captured payment in full, the fee included", () => {
+      expect(summary(refundPolicy({ type: "verificationExpired" }, captured))).toEqual({
+        action: "refund", amount: 6999, retained: 0, returned: 6999,
+      })
+    })
+  })
+
   describe("customer corrects: charge the difference only, if any", () => {
     it("charges the extra amount when the corrected order costs more", () => {
       expect(summary(refundPolicy({ type: "corrected", newTotal: euros(79.99) }, captured))).toEqual({
@@ -128,10 +142,22 @@ describe("settledDecision: what a rerun finds already done", () => {
     )
   })
 
-  it("finds nothing done on a hold or a payment that still holds money when it should all go back", () => {
-    expect(settledDecision({ type: "ourTechnicalError" }, paid("held", 0))).toBeUndefined()
-    expect(settledDecision({ type: "ourTechnicalError" }, paid("captured", 6999))).toBeUndefined()
-    expect(settledDecision({ type: "ourTechnicalError" }, paid("captured", PROCESSING_FEE.cents))).toBeUndefined()
+  it.each(["ourTechnicalError", "verificationExpired"] as const)(
+    "finds nothing done on a hold or a payment that still holds money when %s should all go back",
+    (type) => {
+      expect(settledDecision({ type }, paid("held", 0))).toBeUndefined()
+      expect(settledDecision({ type }, paid("captured", 6999))).toBeUndefined()
+      expect(settledDecision({ type }, paid("captured", PROCESSING_FEE.cents))).toBeUndefined()
+    },
+  )
+
+  it.each([
+    ["a hold that was released", paid("released", 0)],
+    ["a captured payment refunded in full", paid("captured", 6999, 6999)],
+  ])("finds an expired verification already settled after %s", (_, payment) => {
+    expect(summary(settledDecision({ type: "verificationExpired" }, payment)!)).toEqual({
+      action: "none", amount: undefined, retained: 0, returned: 6999,
+    })
   })
 
   it("leaves a completed order to the policy itself, which already skips a captured payment", () => {

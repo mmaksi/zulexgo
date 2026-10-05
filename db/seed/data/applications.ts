@@ -140,8 +140,9 @@ function seeded(service: OrderableService, status: ApplicationStatus, { number, 
       ...application,
       failure,
       zulexApplicationId: atKba ? `seed-zulex-${slug}` : undefined,
-      identityVerification: verificationStartedAt && { id: `seed-verification-${slug}`, deadline: verificationDeadlineAt(verificationStartedAt) },
-      // Only a de-registration is polled: nothing files or checks a Neuzulassung order yet.
+      identityVerification: verificationStartedAt && { id: `seed-verification-${slug}`, deadline: verificationDeadlineAt(verificationStartedAt), reminderSent: false },
+      // Only a de-registration is polled: a seeded Neuzulassung's verification id was never issued by the identity provider,
+      // so asking for its result would fail every tick.
       polling: service === "deregistration" && status === "submitted_to_kba" ? { nextPollAt: CREATED_AT, attempts: 1 } : application.polling,
     },
     statusToken: `seed-status-link-${slug}`,

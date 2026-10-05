@@ -39,7 +39,7 @@ Selected in the composition root (see `external-services`).
 | `PaymentProvider` | Stripe test mode of the `G&M Gastro Event GmbH` account (from M4) | Stripe sandbox `staging` | Stripe **live** account |
 | `Mailer` | Console or local mail catcher — never sends | Resend, recipients restricted to an allowlist | Resend |
 | `DocumentStore` | In-memory fake | Supabase Storage, staging project (from M5) | Supabase Storage, production project |
-| `IdentityVerification` | Fake | Fake; Verimi is added later (launch plan Q1–Q4) | Verimi |
+| `IdentityVerification` (`IDENTITY_DRIVER`) | Fake | Fake | Fake while no service on sale verifies the customer (de-registration); Verimi, added later (launch plan Q1–Q4), is required before one does |
 | `ApplicationRepository` (database) | In-memory fake, seeded at boot | Supabase Postgres, staging project: migrated and seeded by every deploy | Supabase Postgres, production project: migrated, backed up |
 | `Clock` / `TokenGenerator` | Real — tests inject the fakes directly | Real | Real |
 
@@ -55,8 +55,9 @@ These are code, not policy — each one is a startup assertion or a runtime chec
 - A **live** Stripe key throws at boot unless `APP_ENV=production`; a **test** key throws in production.
 - `ZULEX_BASE_URL` must be the production host when `APP_ENV=production` and the integration host otherwise.
 - Destructive scripts (reset, truncate, drop) refuse to run when `APP_ENV` is not `dev`.
+- Production refuses the fake identity check (`IDENTITY_DRIVER=fake`) once a service that verifies the customer (`requiresIdentityVerification`) is on `SERVICES_ON_SALE`: a fake proves nobody's identity, and the KBA registers a car in the name the order gives. De-registration alone needs none.
 - Outbound email is hard-blocked in dev (`MAIL_DRIVER` must be `console`) and allowlisted in staging, so a seeded address can never be mailed for real.
-- Debug output, verbose error bodies, and any dump of a request payload are `dev`-only. Security codes are never logged in any stage. Status tokens are logged only in dev, where the console mailer prints the status link; everywhere else it masks them (see CLAUDE.md non-negotiables).
+- Debug output, verbose error bodies, and any dump of a request payload are `dev`-only. Security codes are never logged in any stage. Status tokens are logged only in dev, where the console mailer prints the status link; everywhere else it masks them (see CLAUDE.md non-negotiables). The same goes for the link that starts an identity verification.
 
 ## Secrets
 

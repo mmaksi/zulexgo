@@ -1,6 +1,7 @@
 import type { RejectionCatalogue } from "@/src/core/domain/registration/rejection-catalogue"
 import type { ApplicationRepository } from "@/src/core/ports/repository/application-repository"
 import type { Clock } from "@/src/core/ports/clock/clock"
+import type { IdentityVerification } from "@/src/core/ports/identity/identity-verification"
 import type { DocumentStore } from "@/src/core/ports/storage/document-store"
 import type { Mailer } from "@/src/core/ports/mail/mailer"
 import type { PaymentProvider } from "@/src/core/ports/payment/payment-provider"
@@ -18,6 +19,8 @@ export interface Dependencies {
   readonly repository: ApplicationRepository
   readonly registration: RegistrationGateway
   readonly payments: PaymentProvider
+  /** Proves who a customer is, for the services that verify before anything is filed. */
+  readonly identity: IdentityVerification
   readonly mailer: Mailer
   readonly documents: DocumentStore
   /**

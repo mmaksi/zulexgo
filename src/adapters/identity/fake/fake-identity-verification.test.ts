@@ -3,5 +3,9 @@ import { FakeIdentityVerification } from "./fake-identity-verification"
 
 identityVerificationContract("FakeIdentityVerification", () => {
   const verification = new FakeIdentityVerification()
-  return { verification, customerFinishes: (id, outcome) => verification.customerFinishes(id, outcome) }
+  return {
+    verification,
+    customerFinishes: (id, finish) => verification.customerFinishes(id, finish),
+    notificationOf: (id) => verification.notificationOf(id),
+  }
 })

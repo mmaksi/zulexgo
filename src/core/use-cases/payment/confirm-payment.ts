@@ -1,7 +1,9 @@
 import type { ApplicationReference } from "@/src/core/domain/application/application-reference"
 import { applyEvent } from "@/src/core/domain/application/application"
+import { requiresIdentityVerification } from "@/src/core/domain/application/application-status"
 import { isWhole } from "@/src/core/domain/payment/refund-policy"
 import type { Dependencies } from "@/src/core/use-cases/dependencies"
+import { startIdentityVerification } from "@/src/core/use-cases/identity/start-identity-verification"
 import { mailCustomer } from "@/src/core/use-cases/mail/mail-customer"
 import { submitToKba } from "@/src/core/use-cases/registration/submit-to-kba"
 
@@ -12,8 +14,10 @@ import { submitToKba } from "@/src/core/use-cases/registration/submit-to-kba"
  * awaiting payment moves on.
  *
  * Starts the application: status 1, the status link, email 1, then it is handed
- * straight to the KBA submission (launch plan Q5, a provisional answer; there is no
- * identity verification step yet, Q4).
+ * straight to the KBA submission (launch plan Q5, a provisional answer; a de-registration
+ * needs no identity verification, Q4). A service that verifies the customer first
+ * (Neuzulassung, Q45) starts the verification instead, and nothing reaches the KBA
+ * until the identity is confirmed.
  *
  * Resumable when a step fails, since the provider retries a failed delivery:
  * email 1 goes out before the payment is recorded, so a failed send leaves
@@ -45,5 +49,6 @@ export async function confirmPayment(deps: Dependencies, reference: ApplicationR
   await mailCustomer(deps, confirmed, "orderConfirmation")
   // Due at once: if the submission below dies, the next tick resumes it.
   const paid = await deps.repository.update({ ...confirmed, polling: { ...confirmed.polling, nextPollAt: now } })
-  await submitToKba(deps, paid)
+  if (requiresIdentityVerification(paid.request.service)) await startIdentityVerification(deps, paid)
+  else await submitToKba(deps, paid)
 }

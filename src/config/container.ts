@@ -31,8 +31,9 @@ import { parseEnv, type Env, type EnvSource } from "./env"
  * secret — and a frozen clock or a predictable status link in a running dev
  * server would be a bug, not a convenience. Tests inject the fakes directly.
  *
- * Identity verification has no driver yet: Verimi is added later (launch plan
- * Q1–Q4), so its fake is wired everywhere until `IDENTITY_DRIVER` exists.
+ * Identity verification is the fake in every stage for now (`IDENTITY_DRIVER`): Verimi is added later
+ * (launch plan Q1–Q3), and `parseEnv` refuses the fake in production once a service that verifies the
+ * customer is on sale.
  *
  * The container holds the Zulex `X-Api-Key` and the Stripe, Resend, Supabase
  * and database credentials, so it is server-only: importing it from a client
@@ -44,8 +45,6 @@ export interface Container extends Dependencies {
    * directly (the poll route's `CRON_SECRET`, the funnel's Stripe publishable key).
    */
   readonly env: Env
-  /** Not in `Dependencies`: no use case takes identity verification yet. */
-  readonly identity: IdentityVerification
   /**
    * Only on the fake payment provider, which has no browser to pay in: plays
    * the customer paying, so the funnel runs end to end without Stripe keys.
@@ -104,7 +103,7 @@ export function createContainer(source: EnvSource = process.env): Container {
             bucket: env.SUPABASE_STORAGE_BUCKET!,
             serviceKey: env.SUPABASE_STORAGE_SERVICE_KEY!,
           }),
-    identity: new FakeIdentityVerification(),
+    identity: createIdentity(env),
     statusLink: (token) => new URL(`/status/${token}`, env.APP_BASE_URL).toString(),
   }
 }
@@ -120,6 +119,14 @@ function createRepository(env: Env): ApplicationRepository {
     connectionString: env.DATABASE_URL!,
     encryptionKey: env.CODES_ENCRYPTION_KEY!,
   })
+}
+
+/** A `switch` with no default: a driver added to `IDENTITY_DRIVER` does not compile until it is wired here. */
+function createIdentity(env: Env): IdentityVerification {
+  switch (env.IDENTITY_DRIVER) {
+    case "fake":
+      return new FakeIdentityVerification()
+  }
 }
 
 /** Counts must be shared by every instance, so the limiter lives wherever the repository does: in memory only while the repository is. */

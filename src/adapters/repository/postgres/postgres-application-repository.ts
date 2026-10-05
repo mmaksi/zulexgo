@@ -35,6 +35,7 @@ interface ApplicationRow {
   encrypted_details: string | null
   identity_verification_id: string | null
   identity_verification_deadline: Date | null
+  identity_verification_reminder_sent: boolean
   authority_ikfz_status: IkfzStatus
   idempotency_key: string
   zulex_application_id: string | null
@@ -74,8 +75,8 @@ const DUPLICATES: Record<string, DuplicateApplication["field"]> = {
 /**
  * Server-side only, through the Supavisor transaction pooler: every query is
  * unnamed, so no prepared statement outlives its transaction. Security codes,
- * a Neuzulassung's personal details and status tokens are encrypted here, before
- * they reach the database.
+ * a Neuzulassung's personal details, the identity provider's verification id and
+ * status tokens are encrypted here, before they reach the database.
  *
  * Wired when `REPOSITORY_DRIVER=postgres` (the staging and production Supabase projects; production
  * rejects the in-memory fake). Concurrency is optimistic: `update` is a compare-and-set on `version`
@@ -246,8 +247,9 @@ export class PostgresApplicationRepository implements ApplicationRepository {
       retry_attempts: application.retryAttempts,
       failure_kind: application.failure?.kind ?? null,
       failure_code: application.failure?.kind === "kbaError" ? application.failure.code : null,
-      identity_verification_id: application.identityVerification?.id ?? null,
+      identity_verification_id: application.identityVerification && this.cipher.encrypt(application.identityVerification.id, application.reference),
       identity_verification_deadline: application.identityVerification?.deadline ?? null,
+      identity_verification_reminder_sent: application.identityVerification?.reminderSent ?? false,
       next_poll_at: application.polling.nextPollAt ?? null,
       poll_attempts: application.polling.attempts,
     }
@@ -297,7 +299,7 @@ export class PostgresApplicationRepository implements ApplicationRepository {
       zulexApplicationId: row.zulex_application_id ?? undefined,
       retryAttempts: row.retry_attempts,
       failure: toFailure(row),
-      identityVerification: toIdentityVerification(row),
+      identityVerification: this.toIdentityVerification(row, reference),
       polling: { nextPollAt: row.next_poll_at ?? undefined, attempts: row.poll_attempts },
     }
   }
@@ -325,6 +327,19 @@ export class PostgresApplicationRepository implements ApplicationRepository {
     }
   }
 
+  /**
+   * Id and deadline are stored together or not at all (a CHECK in migration 0010), so `deadline!` holds. The id is
+   * ciphertext bound to the order (migration 0011), like a status token: the provider's id can be part of the customer's link.
+   */
+  private toIdentityVerification(row: ApplicationRow, reference: ApplicationReference): Application["identityVerification"] {
+    if (row.identity_verification_id === null) return undefined
+    return {
+      id: this.cipher.decrypt(row.identity_verification_id, reference),
+      deadline: row.identity_verification_deadline!,
+      reminderSent: row.identity_verification_reminder_sent,
+    }
+  }
+
   /** For the `SELECT_APPLICATION` queries that match at most one row. */
   private async findOne(sql: string, values: unknown[]): Promise<Application | undefined> {
     const { rows } = await this.pool.query<ApplicationRow>(sql, values)
@@ -349,11 +364,6 @@ export class PostgresApplicationRepository implements ApplicationRepository {
       client.release()
     }
   }
-}
-
-/** Id and deadline are stored together or not at all (a CHECK in migration 0010), so `deadline!` holds. */
-function toIdentityVerification({ identity_verification_id, identity_verification_deadline }: ApplicationRow): Application["identityVerification"] {
-  return identity_verification_id === null ? undefined : { id: identity_verification_id, deadline: identity_verification_deadline! }
 }
 
 /** A code is stored exactly for `kbaError` (a CHECK in migration 0006), so `failure_code!` holds. */

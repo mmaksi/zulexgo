@@ -22,8 +22,9 @@ describe("renderEmail", () => {
       expect(text.length).toBeLessThanOrEqual(BODY_LIMIT + 300)
       expect(html).toContain('lang="de"')
       expect(html).not.toContain('lang="en"')
-      const statusLinks = "statusLink" in template ? [template.statusLink] : []
-      expect(hrefsIn(html).filter((href) => href.startsWith("http"))).toEqual(statusLinks)
+      // Only the two emails that send the customer to verify link anywhere but to the order's status page.
+      const links = "verificationLink" in template ? [template.verificationLink] : "statusLink" in template ? [template.statusLink] : []
+      expect(hrefsIn(html).filter((href) => href.startsWith("http"))).toEqual(links)
     },
   )
 
@@ -75,6 +76,29 @@ describe("renderEmail", () => {
       expect(text).toMatch(/69,99\s€/)
       expect(text).not.toMatch(/Bearbeitungsgebühr/)
     })
+  })
+
+  describe("the identity verification emails", () => {
+    const verificationLink = "https://verification.example.test/fake-verification-render-test"
+    // 10:00 in Berlin on 5 March, 11:00 on 5 July (daylight saving), whatever zone the test runs in.
+    const winter = new Date("2026-03-05T09:00:00.000Z")
+    const summer = new Date("2026-07-05T09:00:00.000Z")
+    const requested = (deadline: Date): EmailTemplate => ({ name: "identityVerificationRequested", reference, verificationLink, deadline })
+
+    it("names the deadline in German, in Berlin time", async () => {
+      expect((await renderEmail(requested(winter))).text).toContain("5. März 2026, 10:00 Uhr")
+      expect((await renderEmail(requested(summer))).text).toContain("5. Juli 2026, 11:00 Uhr")
+    })
+
+    it.each(["identityVerificationRequested", "identityVerificationReminder"] as const)(
+      "%s: says what happens if the customer does not verify in time, and that everything goes back",
+      async (name) => {
+        const { text } = await renderEmail({ name, reference, verificationLink, deadline: winter })
+
+        expect(text).toMatch(/stornieren/)
+        expect(text).toMatch(/vollen Betrag/)
+      },
+    )
   })
 
   it.each(["correctionRequired", "rejected"] as const)("says in the %s email why the application failed", async (name) => {

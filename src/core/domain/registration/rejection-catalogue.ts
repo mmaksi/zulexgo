@@ -28,6 +28,11 @@ const GENERAL = "Die Zulassungsstelle konnte den Antrag mit diesen Angaben nicht
 /** For a submission we could not confirm: the wording owns up to a technical fault on our side. */
 const OUR_FAULT = "Wir konnten Ihren Antrag wegen einer technischen Störung nicht einreichen."
 
+/** The person who verified is not the owner on the order: says what to check, never what the document showed. */
+const IDENTITY_MISMATCH = "Die Angaben zu Name und Geburtsdatum stimmen nicht mit Ihrem Ausweis überein."
+/** The vendor's reason for a failed verification is never passed on. */
+const IDENTITY_FAILED = "Ihre Identität konnte nicht bestätigt werden."
+
 /**
  * What the customer is told went wrong; a code the catalogue lacks gets the general wording.
  * Never returns the vendor's description or the code itself.
@@ -41,5 +46,9 @@ export function reasonFor(failure: Failure, catalogue: RejectionCatalogue = REJE
     case "rejected":
     case "rejectionDocument":
       return GENERAL
+    case "identityMismatch":
+      return IDENTITY_MISMATCH
+    case "identityFailed":
+      return IDENTITY_FAILED
   }
 }

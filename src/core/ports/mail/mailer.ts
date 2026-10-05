@@ -4,7 +4,7 @@ import type { Email } from "@/src/core/domain/customer/email"
 import type { Money } from "@/src/core/domain/payment/money"
 
 /**
- * The customer emails of business logic §5, without Verimi's two. Each carries
+ * The customer emails of business logic §5, Verimi's two (2 and 3) and a reminder to verify included. Each carries
  * only what its email shows, so a security code has nowhere to go: the types
  * leave no field for one. Rendering to HTML is the adapter's job. The emails that
  * say what was ordered or what the KBA did carry the `service`, since their
@@ -13,6 +13,15 @@ import type { Money } from "@/src/core/domain/payment/money"
 export type EmailTemplate =
   /** Email 1: the payment is in and the order exists; carries the status link. */
   | { readonly name: "orderConfirmation"; readonly service: OrderableService; readonly reference: ApplicationReference; readonly statusLink: string }
+  /**
+   * Email 2, for a service that verifies the customer first: the payment is in, and nothing is filed until the customer
+   * verifies their identity at `verificationLink` before `deadline`. Its one button is that link, not the status link.
+   */
+  | { readonly name: "identityVerificationRequested"; readonly reference: ApplicationReference; readonly verificationLink: string; readonly deadline: Date }
+  /** The same ask, once, partway to the deadline, for a customer who has not verified yet. */
+  | { readonly name: "identityVerificationReminder"; readonly reference: ApplicationReference; readonly verificationLink: string; readonly deadline: Date }
+  /** Email 3: the identity is confirmed and the application is being filed. */
+  | { readonly name: "identityVerified"; readonly reference: ApplicationReference; readonly statusLink: string }
   /** Email 4: submitted to the KBA, whose answer is awaited. Sent again after a correction. */
   | {
       readonly name: "submittedToKba"
