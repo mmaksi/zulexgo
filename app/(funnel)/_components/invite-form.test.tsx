@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react"
+import { renderToStaticMarkup } from "react-dom/server"
 import userEvent from "@testing-library/user-event"
 import type { InviteAnswer } from "./invite-form"
 import { InviteForm } from "./invite-form"
@@ -89,5 +90,22 @@ describe("InviteForm", () => {
 
     expect(action).toHaveBeenCalledTimes(1)
     finish({ status: "refused" })
+  })
+
+  /**
+   * The form is on screen before its script has run, and for good where the script is blocked or fails.
+   * A native submit then sends the field as a query string: the code would end up in the address bar,
+   * the history and the server's logs.
+   */
+  describe("before its script has run", () => {
+    const html = () => renderToStaticMarkup(<InviteForm service="Neuzulassung" action={jest.fn()} />)
+
+    it("cannot be submitted, so the code is never sent by the browser's own submit", () => {
+      expect(html()).toMatch(/<button[^>]*type="submit"[^>]*\sdisabled=""/)
+    })
+
+    it("would send a code in the body, never in the address, if it somehow were", () => {
+      expect(html()).toMatch(/<form[^>]*method="post"/)
+    })
   })
 })

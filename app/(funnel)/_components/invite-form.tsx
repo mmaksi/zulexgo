@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useRef, useState, type FormEvent } from "react"
+import { useRef, useState, useSyncExternalStore, type FormEvent } from "react"
 import { TextField } from "@/app/_components/text-field"
 import { tooManyAttempts } from "@/app/(funnel)/too-many-attempts"
 import { Alert } from "@/src/ui/alert"
@@ -12,6 +12,8 @@ export type InviteAnswer =
   | { status: "refused" }
   | { status: "limited"; retryAfterMinutes: number }
   | { status: "unavailable" }
+
+const noSubscription = () => () => undefined
 
 const ASK = "Bitte geben Sie den Einladungscode ein, den Sie von uns erhalten haben."
 const REFUSED = "Dieser Code ist nicht gültig. Prüfen Sie ihn auf Tippfehler."
@@ -26,6 +28,9 @@ export function InviteForm({ service, action }: { service: string; action: (code
   const [answer, setAnswer] = useState<InviteAnswer | { status: "empty" }>()
   const [pending, setPending] = useState(false)
   const field = useRef<HTMLInputElement>(null)
+  // False in the server's HTML and until the page has hydrated: the button stays off, so the browser's own
+  // submit never sends the code as a query string (a blocked or failing script leaves it off for good).
+  const hydrated = useSyncExternalStore(noSubscription, () => true, () => false)
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -59,7 +64,7 @@ export function InviteForm({ service, action }: { service: string; action: (code
           Die {service} testen wir gerade mit einem kleinen Kreis. Geben Sie den Einladungscode ein, den Sie von uns erhalten haben.
         </p>
       </header>
-      <form noValidate onSubmit={submit} className="measure flex flex-col gap-6">
+      <form noValidate method="post" onSubmit={submit} className="measure flex flex-col gap-6">
         <TextField
           id="invite"
           name="invite"
@@ -70,7 +75,7 @@ export function InviteForm({ service, action }: { service: string; action: (code
           autoCapitalize="characters"
           spellCheck={false}
         />
-        <Button type="submit" disabled={pending} className="self-start">
+        <Button type="submit" disabled={!hydrated || pending} className="self-start">
           {pending ? "Wird geprüft …" : "Weiter"}
         </Button>
         {answer?.status === "limited" ? (
