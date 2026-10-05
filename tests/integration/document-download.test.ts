@@ -1,4 +1,4 @@
-import { anApplication } from "@/tests/fixtures/applications"
+import { aNewRegistrationApplication, anApplication } from "@/tests/fixtures/applications"
 import { FakeClock } from "@/src/adapters/clock/fake/fake-clock"
 import { InMemoryRateLimiter } from "@/src/adapters/rate-limit/fake/in-memory-rate-limiter"
 import { InMemoryApplicationRepository } from "@/src/adapters/repository/fake/in-memory-application-repository"
@@ -67,6 +67,35 @@ describe("the document download", () => {
     expect(response.status).toBe(404)
     expect(await response.text()).toBe("")
     expect(response.headers.get("content-disposition")).toBeNull()
+  })
+
+  describe("a Neuzulassung's documents", () => {
+    const registration = aNewRegistrationApplication({ status: "completed" })
+    const certificate = { id: "12", kind: "temporaryCertificate" } as const
+
+    async function setupRegistration() {
+      const deps = await setup()
+      const repository = new InMemoryApplicationRepository([
+        { application: registration, statusToken: "faketoken-registration" },
+        { application: own, statusToken: OWN_TOKEN },
+      ])
+      await deps.documents.put(registration.reference, certificate, pdf)
+      return { ...deps, repository }
+    }
+
+    it("serves the temporary certificate to its own link, under a name that says what it is", async () => {
+      const response = await download(await setupRegistration(), "faketoken-registration", certificate.id)
+
+      expect(response.status).toBe(200)
+      expect(response.headers.get("content-disposition")).toBe(`attachment; filename="ZulexGO-${registration.reference}-Zulassungsnachweis.pdf"`)
+    })
+
+    it("does not serve it to another order's link, with the same empty 404 as any other miss", async () => {
+      const response = await download(await setupRegistration(), OWN_TOKEN, certificate.id)
+
+      expect(response.status).toBe(404)
+      expect(await response.text()).toBe("")
+    })
   })
 
   describe("rate limiting", () => {

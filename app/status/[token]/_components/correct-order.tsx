@@ -5,9 +5,9 @@ import { useEffect, useRef, useState, type FormEvent } from "react"
 import { CodeField } from "@/app/_components/code-field"
 import { TextField } from "@/app/_components/text-field"
 import { validateField } from "@/app/_components/vehicle-data"
-import type { CorrectionField, OrderChangeState } from "@/app/status/[token]/order-change-state"
-import { Alert } from "@/src/ui/alert"
+import type { DeregistrationCorrectionField as CorrectionField, OrderChangeState } from "@/app/status/[token]/order-change-state"
 import { Button } from "@/src/ui/button"
+import { ChangeOutcome } from "./change-outcome"
 
 type Values = Record<CorrectionField, string>
 type Errors = Partial<Record<CorrectionField, string>>
@@ -120,7 +120,7 @@ export function CorrectOrder({ action, plateCount }: { action: CorrectOrderActio
         type="password"
       />
 
-      <Outcome state={outcome} />
+      <ChangeOutcome state={outcome} refused="Der Antrag wurde mit diesen Angaben erneut nicht angenommen. Bitte prüfen Sie Ihre Eingaben noch einmal genau." />
       <div>
         <Button type="submit" disabled={pending}>
           {pending ? "Wird gesendet …" : "Erneut einreichen"}
@@ -128,37 +128,4 @@ export function CorrectOrder({ action, plateCount }: { action: CorrectOrderActio
       </div>
     </form>
   )
-}
-
-function Outcome({ state }: { state?: OrderChangeState }) {
-  switch (state?.status) {
-    case "invalid":
-      return state.general ? <Alert variant="error" role="alert">{state.general}</Alert> : null
-    case "refused":
-      return (
-        <Alert variant="warning" role="alert">
-          Der Antrag wurde mit diesen Angaben erneut nicht angenommen. Bitte prüfen Sie Ihre Eingaben noch einmal genau.
-        </Alert>
-      )
-    case "unavailable":
-      return (
-        <Alert variant="warning" role="alert">
-          Die Zulassungsstelle ist gerade nicht erreichbar. Ihre Angaben sind nicht verloren: Bitte versuchen Sie es in einigen Minuten erneut.
-        </Alert>
-      )
-    case "limited":
-      return (
-        <Alert variant="warning" role="alert">
-          Zu viele Versuche. Bitte warten Sie {state.retryAfterMinutes} Minuten und versuchen Sie es dann erneut.
-        </Alert>
-      )
-    case "failed":
-      return (
-        <Alert variant="error" role="alert">
-          Das hat nicht geklappt. Bitte versuchen Sie es in einigen Minuten erneut. Es ist nichts verloren gegangen.
-        </Alert>
-      )
-    default:
-      return null
-  }
 }

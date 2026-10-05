@@ -129,6 +129,23 @@ describe("customerSteps for a service that verifies identity: statuses 1 â†’ 2 â
     })
   })
 
+  describe("a cancelled order says whether the customer gave up or the verification ran out", () => {
+    it("flags a verification that ran out", () => {
+      expect(customerSteps(verified(...VERIFY, "identityVerificationExpired"))[4]).toMatchObject({ outcome: "cancelled", verificationExpired: true })
+    })
+
+    it("does not flag a cancel by the customer, after a mismatch or after the KBA refused the filing", () => {
+      expect(customerSteps(verified(...VERIFY, "failedCorrectable", "cancelledByCustomer"))[4].verificationExpired).toBeUndefined()
+      expect(customerSteps(verified(...FILED, "failedCorrectable", "cancelledByCustomer"))[4].verificationExpired).toBeUndefined()
+    })
+
+    it("does not flag a de-registration's cancel, so its steps read as before", () => {
+      const cancelled = reached("paymentConfirmed", "submittedToKba", "failedCorrectable", "cancelledByCustomer")
+
+      expect(customerSteps(cancelled)[2]).not.toHaveProperty("verificationExpired")
+    })
+  })
+
   it("leaves the KBA step pending when the filing was refused before the KBA held it, the identity still verified", () => {
     expect(stepStates(verified(...VERIFIED, "failedCorrectable"))).toEqual([
       "paid:done",

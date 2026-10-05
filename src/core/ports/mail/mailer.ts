@@ -36,10 +36,16 @@ export type EmailTemplate =
   /** Email 5b: the order failed but can still be corrected or cancelled by the customer. */
   | {
       readonly name: "correctionRequired"
+      readonly service: OrderableService
       readonly reference: ApplicationReference
       readonly statusLink: string
       /** What went wrong, in our words (the rejection catalogue), never the vendor's. */
       readonly reason: string
+      /**
+       * The person who verified is not the owner on the order (launch plan Q47, provisional): nothing was filed, and the
+       * order is checked again once the name is corrected. Without it, the order was sent back by the registration service.
+       */
+      readonly identityMismatch?: boolean
     }
   /** Email 5c: the order failed for good; says what goes back and what is kept. */
   | {

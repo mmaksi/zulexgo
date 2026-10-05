@@ -174,3 +174,14 @@ Label ≤40 chars, helper ≤150. A field is exactly as the domain parses it.
 ### 4.3 Not tested, checked in the browser
 
 Copy, the progress indicator, the locator photos (placeholders until M7) and every layout at phone, tablet and laptop width.
+
+## 5. Neuzulassung after payment (status page and emails)
+
+The status page of §2.6 and the emails of §2.7, for an order whose `service` is `newRegistration`. The page picks its summary, its correction form and its wording by the order's service. Business rules: `registration-plan.md`; the provisional answers it builds are Q47, Q48, Q50, Q53, Q55 and Q56.
+
+- **Summary** — the end of the VIN only: a Neuzulassung has no plate until the authority assigns one, and the API does not say which (Q56).
+- **Stepper** — five rows (paid, identity check, identity confirmed, KBA, outcome). While the order waits for the customer's identity check the row names the day and time the wait ends (Berlin time); the page offers nothing to do but verify, and never shows the provider's link.
+- **5a** — the documents under their own names ("Bestätigung der Zulassung", "Vorläufiger Zulassungsnachweis", "Gebührenbeleg"), then "Wie geht es weiter?": where the plate is printed, that the authority posts the rest to the keeper's address, that plates are made locally (Q50, Q55). The wording is `NEW_REGISTRATION_NEXT_STEPS`, shared with email 5a; nothing is said about driving on the temporary certificate.
+- **5b** has two causes, told apart by whether the identity was ever verified. After a verification mismatch (nothing filed) the form asks for first name, last name and birth date, besides the eVB number and the Teil II; after the registration service sent the order back it asks for the eVB number and the Teil II only. It starts empty, a field left blank stays as it was, and its wording and rules are the funnel's (§4.2). "Korrektur absenden" patches an order Zulex holds, files one it refused afresh, or has the identity checked again for one never verified. The cancel and its fee notice are as §2.6.
+- **Cancelled** — a cancel by the customer reads as for a de-registration; a verification that ran out says so and that nothing was filed. "Neuen Antrag stellen" goes to the service's own funnel while it is on sale, otherwise to the start page.
+- **Emails** — 1, 4, 5a, 5b and 5c have a Neuzulassung wording, within §2.7's limits. Email 1 says an identity check follows; email 5b says nothing was filed when the check found someone else than the owner.

@@ -1,5 +1,6 @@
+import { MESSAGES as NEW_REGISTRATION_MESSAGES } from "@/app/(funnel)/register/_components/registration-data"
 import { validateField } from "@/app/_components/vehicle-data"
-import type { CorrectionInput } from "@/src/core/domain/application/correction"
+import type { OrderCorrectionInput } from "@/src/core/domain/application/correction"
 import { RATE_LIMITS } from "@/src/core/domain/rate-limit/rate-limits"
 import { GatewayUnavailable } from "@/src/core/errors/registration/gateway-unavailable"
 import { InvalidTransition } from "@/src/core/errors/application/invalid-transition"
@@ -39,19 +40,27 @@ export async function cancelOrder(deps: Dependencies, headers: Headers, token: s
   }
 }
 
-const FIELDS: CorrectionField[] = ["vin", "rearPlate", "frontPlate", "certificate"]
+const DEREGISTRATION_FIELDS = ["vin", "rearPlate", "frontPlate", "certificate"] as const
+const NEW_REGISTRATION_FIELDS = ["evbNumber", "part2Number", "part2SecurityCode", "firstName", "lastName", "birthDate"] as const
+const FIELDS: CorrectionField[] = [...DEREGISTRATION_FIELDS, ...NEW_REGISTRATION_FIELDS]
 
-/** Any POST can reach this, so only text in the four known fields gets through; anything else reads as blank. */
-function toInput(raw: unknown): CorrectionInput {
+/** Any POST can reach this, so only text in the known fields gets through; anything else reads as blank. */
+function toInput(raw: unknown): OrderCorrectionInput {
   const given = (typeof raw === "object" && raw !== null ? raw : {}) as Record<string, unknown>
   return Object.fromEntries(FIELDS.map((field) => [field, typeof given[field] === "string" ? given[field] : undefined]))
 }
 
+/** The funnel's own wording for a wrong field: a Neuzulassung's from the registration funnel, a de-registration's from its own. */
+function wordingFor(field: CorrectionField, value: string): string {
+  if ((NEW_REGISTRATION_FIELDS as readonly string[]).includes(field)) return NEW_REGISTRATION_MESSAGES[field as (typeof NEW_REGISTRATION_FIELDS)[number]]
+  return validateField(field as (typeof DEREGISTRATION_FIELDS)[number], value) ?? "Bitte prüfen Sie diese Angabe."
+}
+
 /** The funnel's own wording for each wrong field, taken from the value that was sent, which is never sent back. */
-function invalid(error: ValidationError, input: CorrectionInput): OrderChangeState {
+function invalid(error: ValidationError, input: OrderCorrectionInput): OrderChangeState {
   const errors: Partial<Record<CorrectionField, string>> = {}
   for (const field of FIELDS) {
-    if (error.fields.includes(field)) errors[field] = validateField(field, input[field] ?? "") ?? "Bitte prüfen Sie diese Angabe."
+    if (error.fields.includes(field)) errors[field] = wordingFor(field, input[field] ?? "")
   }
   return error.fields.includes("correction")
     ? { status: "invalid", errors, general: "Bitte ändern Sie mindestens eine Angabe." }
