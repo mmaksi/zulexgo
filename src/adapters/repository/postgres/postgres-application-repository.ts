@@ -2,6 +2,7 @@ import { DatabaseError, Pool, type PoolClient } from "pg"
 import type { Application, StatusChange } from "@/src/core/domain/application/application"
 import { parseApplicationReference, type ApplicationReference } from "@/src/core/domain/application/application-reference"
 import { OPEN_STATUSES, POLLED_STATUSES, type ApplicationStatus } from "@/src/core/domain/application/application-status"
+import type { Consent } from "@/src/core/domain/application/consent"
 import { parseDeregistrationRequest } from "@/src/core/domain/application/deregistration-request"
 import type { Service, ServiceRequest } from "@/src/core/domain/application/service"
 import { emailSchema } from "@/src/core/domain/customer/email"
@@ -37,6 +38,9 @@ interface ApplicationRow {
   identity_verification_deadline: Date | null
   identity_verification_reminder_sent: boolean
   authority_ikfz_status: IkfzStatus
+  agb_version: string | null
+  power_of_attorney_version: string | null
+  consent_at: Date | null
   idempotency_key: string
   zulex_application_id: string | null
   retry_attempts: number
@@ -242,6 +246,9 @@ export class PostgresApplicationRepository implements ApplicationRepository {
       email: application.email,
       ...this.requestColumns(application),
       authority_ikfz_status: application.ikfzStatus,
+      agb_version: application.consent?.agbVersion ?? null,
+      power_of_attorney_version: application.consent?.powerOfAttorneyVersion ?? null,
+      consent_at: application.consent?.givenAt ?? null,
       idempotency_key: application.idempotencyKey,
       zulex_application_id: application.zulexApplicationId ?? null,
       retry_attempts: application.retryAttempts,
@@ -293,6 +300,7 @@ export class PostgresApplicationRepository implements ApplicationRepository {
       history,
       request: this.toRequest(row, reference, history.at(-1)!.at),
       email: emailSchema.parse(row.email),
+      consent: toConsent(row),
       ikfzStatus: row.authority_ikfz_status,
       idempotencyKey: row.idempotency_key,
       payment: { id: row.stripe_payment_intent_id, total: Money.ofCents(row.total_cents) },
@@ -363,6 +371,16 @@ export class PostgresApplicationRepository implements ApplicationRepository {
     } finally {
       client.release()
     }
+  }
+}
+
+/** The version and the time are stored together (a CHECK in migration 0012), so `consent_at!` holds; an order made before consent was recorded has neither. */
+function toConsent({ agb_version, power_of_attorney_version, consent_at }: ApplicationRow): Consent | undefined {
+  if (agb_version === null) return undefined
+  return {
+    agbVersion: agb_version,
+    ...(power_of_attorney_version === null ? {} : { powerOfAttorneyVersion: power_of_attorney_version }),
+    givenAt: consent_at!,
   }
 }
 

@@ -1,6 +1,7 @@
 import type { Application } from "@/src/core/domain/application/application"
 import { referenceFromToken } from "@/src/core/domain/application/application-reference"
-import { isOnSale, parseServiceRequest } from "@/src/core/domain/application/service"
+import { recordConsent } from "@/src/core/domain/application/consent"
+import { isOrderable, parseServiceRequest, SERVICES_ON_SALE, type ServiceRequest } from "@/src/core/domain/application/service"
 import { emailSchema } from "@/src/core/domain/customer/email"
 import { SERVICE_PRICES } from "@/src/core/domain/payment/pricing"
 import { combinedIkfzStatus } from "@/src/core/domain/registration/registration-authority"
@@ -10,6 +11,19 @@ import { OpenApplicationExists } from "@/src/core/errors/application/open-applic
 import { ServiceNotOnSale } from "@/src/core/errors/application/service-not-on-sale"
 import type { Dependencies } from "@/src/core/use-cases/dependencies"
 
+/**
+ * Where the authority for an order is found, and the field to blame when none answers. A
+ * de-registration keeps the authority of its plate; a car is registered where its keeper lives.
+ */
+function authorityOf(request: ServiceRequest) {
+  switch (request.service) {
+    case "deregistration":
+      return { where: { prefix: request.licencePlate.prefix }, invalidField: "licencePlate.prefix" }
+    case "newRegistration":
+      return { where: { postcode: request.owner.address.reveal().postcode }, invalidField: "owner.address.postcode" }
+  }
+}
+
 /** Tries at a free reference: they are short, so a clash is plausible, three in a row are not. */
 const REFERENCE_ATTEMPTS = 3
 
@@ -18,7 +32,9 @@ const REFERENCE_ATTEMPTS = 3
  * by webhook) and open a payment the browser confirms with `clientSecret`.
  *
  * `service` is what the funnel sells, and only a service on sale is taken: a funnel's server
- * action is reachable by any POST, so this is the gate, not the landing page.
+ * action is reachable by any POST, so this is the gate, not the landing page. So is `consents`,
+ * what the customer ticked: without every one the service requires nothing is opened (launch plan
+ * D9), and what was agreed to, with the version of each text, is kept on the order.
  *
  * J8: the same plate and VIN with a paid order still open would be filed
  * twice, and the KBA rejects the second, so the customer is warned first and
@@ -27,22 +43,26 @@ const REFERENCE_ATTEMPTS = 3
  *
  * Creates the order at `awaiting_payment`: no status link and no email yet, those follow
  * when the provider reports the payment (`confirmPayment`). Everything arrives untrusted
- * from the browser, so a service that is not on sale is `ServiceNotOnSale`, a malformed
- * request or email is a `ValidationError`, and a duplicate that the customer has not
- * acknowledged is `OpenApplicationExists`. A registration service outage on the authority
+ * from the browser, so a service that is not on sale is `ServiceNotOnSale`, a missing consent
+ * is `ConsentRequired`, a malformed request or email is a `ValidationError`, and a duplicate that
+ * the customer has not acknowledged is `OpenApplicationExists`. A registration service outage on the authority
  * lookup propagates and nothing is stored or opened.
  */
 export async function submitCheckout(
   deps: Dependencies,
-  input: { service: unknown; request: unknown; email: unknown; acknowledgedDuplicate?: boolean },
+  input: { service: unknown; request: unknown; email: unknown; consents: unknown; acknowledgedDuplicate?: boolean },
 ): Promise<{ reference: Application["reference"]; clientSecret: string }> {
-  if (!isOnSale(input.service)) throw new ServiceNotOnSale()
-  const request = parseServiceRequest(input.service, input.request)
+  const onSale: readonly unknown[] = deps.servicesOnSale ?? SERVICES_ON_SALE
+  if (!isOrderable(input.service) || !onSale.includes(input.service)) throw new ServiceNotOnSale()
+  const takenAt = deps.clock.now()
+  const consent = recordConsent(input.service, input.consents, takenAt)
+  const request = parseServiceRequest(input.service, input.request, takenAt)
   const email = validate(emailSchema, input.email, "email")
   // Says only that an order is open, never which.
   if (!input.acknowledgedDuplicate && (await deps.repository.hasOpenApplication(request))) throw new OpenApplicationExists()
   // Stored on the order: it decides when the card is captured and how often the KBA is asked.
-  const ikfzStatus = combinedIkfzStatus(await deps.registration.findAuthorities({ prefix: request.licencePlate.prefix }))
+  const { where, invalidField } = authorityOf(request)
+  const ikfzStatus = combinedIkfzStatus(await deps.registration.findAuthorities(where), invalidField)
   const total = SERVICE_PRICES[request.service]
 
   for (let attempt = 1; ; attempt++) {
@@ -59,6 +79,7 @@ export async function submitCheckout(
         history: [{ status: "awaiting_payment", at: now }],
         request,
         email,
+        consent,
         ikfzStatus,
         idempotencyKey: deps.tokens.generate(),
         payment: { id: paymentId, total },

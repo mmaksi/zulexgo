@@ -18,11 +18,11 @@ export interface RegistrationAuthority {
 const SLOWEST_FIRST: IkfzStatus[] = ["offline", "unavailable", "online"]
 
 /**
- * A prefix can span several authorities and we cannot tell which one decides, so expect the
- * slowest. Throws a `ValidationError` for `licencePlate.prefix` when the list is empty: no
- * authority answers for that prefix, which is then treated as an invalid prefix.
+ * A prefix or a postcode can span several authorities and we cannot tell which one decides, so
+ * expect the slowest. Throws a `ValidationError` for `invalidField` (the plate prefix unless said
+ * otherwise) when the list is empty: no authority answers for it, which is then treated as invalid.
  */
-export function combinedIkfzStatus(authorities: readonly RegistrationAuthority[]): IkfzStatus {
-  if (authorities.length === 0) throw new ValidationError(["licencePlate.prefix"])
+export function combinedIkfzStatus(authorities: readonly RegistrationAuthority[], invalidField = "licencePlate.prefix"): IkfzStatus {
+  if (authorities.length === 0) throw new ValidationError([invalidField])
   return SLOWEST_FIRST.find((status) => authorities.some((authority) => authority.ikfzStatus === status))!
 }

@@ -1,21 +1,16 @@
 "use client"
 
 import Link from "next/link"
-import { useRef, useState, type FormEvent } from "react"
-import { formatEuros } from "@/src/core/domain/payment/money"
-import { PROCESSING_FEE, SERVICE_PRICES } from "@/src/core/domain/payment/pricing"
-import { Button } from "@/src/ui/button"
-import { Checkbox } from "@/src/ui/checkbox"
-import { StripePaymentFields } from "@/app/(funnel)/_components/stripe/stripe-payment-fields"
-import type { PaymentDriver, PaymentMode } from "@/app/(funnel)/_components/payment-driver"
+import { SERVICE_PRICES } from "@/src/core/domain/payment/pricing"
+import { CheckoutPanel } from "@/app/(funnel)/_components/checkout-panel"
+import type { PaymentMode } from "@/app/(funnel)/_components/payment-driver"
 import type { CheckoutActions } from "./checkout-actions"
-import { SimulatedPaymentFields } from "./simulated-payment-fields"
 import type { PlateCount, VehicleData } from "@/app/_components/vehicle-data"
-import { Alert } from "@/src/ui/alert"
 import { PlateFrame } from "@/src/ui/plate-frame"
 
 const MASK = "•••"
-const TOTAL = SERVICE_PRICES.deregistration
+
+const linkClass = "underline underline-offset-4 hover:text-orange-dark"
 
 /** site-contract §2.4: masked summary, full price, the fee notice and consent before the pay button. */
 export function ReviewStep({
@@ -31,65 +26,35 @@ export function ReviewStep({
   actions: CheckoutActions
   onPaid: (reference: string) => void
 }) {
-  const driverRef = useRef<PaymentDriver | null>(null)
-  const order = useRef<{ reference: string; clientSecret: string } | null>(null)
-  const [terms, setTerms] = useState(false)
-  const [earlyStart, setEarlyStart] = useState(false)
-  const [duplicate, setDuplicate] = useState(false)
-  const [wantsAnother, setWantsAnother] = useState(false)
-  const [paying, setPaying] = useState(false)
-  const [error, setError] = useState<string>()
-  const consented = terms && earlyStart && (!duplicate || wantsAnother)
-
-  async function pay(event: FormEvent) {
-    event.preventDefault()
-    if (!consented || paying || !driverRef.current) return
-    setPaying(true)
-    setError(undefined)
-    try {
-      const failed = await takePayment(driverRef.current)
-      if (failed) setError(failed)
-    } catch {
-      // A request that rejected (a lost connection, a server error). The order created so far is kept (`order`), so
-      // trying again pays the same one instead of opening a second.
-      setError("Das hat gerade nicht geklappt. Bitte versuchen Sie es in ein paar Minuten noch einmal.")
-    } finally {
-      // Always, so that no failure leaves the button busy for good.
-      setPaying(false)
-    }
-  }
-
-  async function takePayment(payment: PaymentDriver): Promise<string | undefined> {
-    const invalid = await payment.prepare()
-    if (invalid) return invalid
-
-    // A declined card is retried on the same order, never a second one.
-    if (!order.current) {
-      const started = await actions.startCheckout({
-        plateCount,
-        vehicle,
-        consents: { terms, earlyStart },
-        ...(wantsAnother ? { acknowledgedDuplicate: true } : {}),
-      })
-      if (!started.ok) {
-        if (started.reason === "duplicate") {
-          setDuplicate(true)
-          return undefined
-        }
-        return started.reason === "invalid"
-          ? "Einige Angaben sind nicht gültig. Bitte gehen Sie einen Schritt zurück und prüfen Sie sie."
-          : "Das hat gerade nicht geklappt. Bitte versuchen Sie es in ein paar Minuten noch einmal."
-      }
-      order.current = { reference: started.reference, clientSecret: started.clientSecret }
-    }
-
-    const declined = await payment.confirm(order.current)
-    if (declined) return declined
-    onPaid(order.current.reference)
-  }
-
   return (
-    <form onSubmit={pay} noValidate className="flex flex-col gap-(--field-gap) pb-28 md:pb-0">
+    <CheckoutPanel
+      total={SERVICE_PRICES.deregistration}
+      priceLabel="Abmeldung, Gesamtpreis inkl. Behördengebühr und MwSt."
+      consents={[
+        {
+          kind: "terms",
+          label: (
+            <>
+              Ich akzeptiere die{" "}
+              <Link href="/agb" target="_blank" rel="noopener" className={linkClass}>
+                AGB
+              </Link>{" "}
+              und habe die Widerrufsbelehrung gelesen.
+            </>
+          ),
+        },
+        {
+          kind: "earlyStart",
+          label:
+            "Ich verlange ausdrücklich, dass ZulexGO vor Ablauf der Widerrufsfrist mit der Abmeldung beginnt. Mir ist bekannt, dass mein Widerrufsrecht erlischt, sobald der Auftrag vollständig ausgeführt ist.",
+        },
+      ]}
+      payment={payment}
+      returnPath="/deregister/bestaetigung"
+      startCheckout={(checkout) => actions.startCheckout({ plateCount, vehicle, ...checkout })}
+      completeSimulatedPayment={actions.completeSimulatedPayment}
+      onPaid={onPaid}
+    >
       <section aria-labelledby="review-summary" className="flex flex-col gap-3">
         <h2 id="review-summary" className="text-h4 text-grau-dark">
           Ihre Angaben
@@ -101,82 +66,7 @@ export function ReviewStep({
           <Row term="E-Mail" value={vehicle.email} />
         </dl>
       </section>
-
-      <section aria-labelledby="review-price" className="flex flex-col gap-3">
-        <h2 id="review-price" className="text-h4 text-grau-dark">
-          Preis
-        </h2>
-        <dl className="grid max-w-md grid-cols-[1fr_auto] gap-x-6 gap-y-2 text-body">
-          <dt className="font-normal text-grau-dark">Abmeldung, Gesamtpreis inkl. Behördengebühr und MwSt.</dt>
-          <dd className="text-right text-h3 text-grau-dark">{formatEuros(TOTAL)}</dd>
-        </dl>
-        <Alert variant="warning" className="measure">
-          Stornieren Sie nach einem korrigierbaren Fehler oder kann der Antrag nicht korrigiert werden, behalten wir{" "}
-          {formatEuros(PROCESSING_FEE)} Bearbeitungsgebühr ein und erstatten den Rest innerhalb von 3–5 Werktagen.{" "}
-          <Link href="/agb" target="_blank" rel="noopener" className="underline underline-offset-4 hover:text-orange-dark">
-            Mehr in den AGB
-          </Link>
-        </Alert>
-      </section>
-
-      <section aria-labelledby="review-payment" className="flex flex-col gap-3">
-        <h2 id="review-payment" className="text-h4 text-grau-dark">
-          Zahlung
-        </h2>
-        {payment.kind === "stripe" ? (
-          <StripePaymentFields publishableKey={payment.publishableKey} amountCents={TOTAL.cents} driverRef={driverRef} />
-        ) : (
-          <SimulatedPaymentFields driverRef={driverRef} completeSimulatedPayment={actions.completeSimulatedPayment} />
-        )}
-      </section>
-
-      <div className="flex flex-col gap-4">
-        <Consent checked={terms} onChange={setTerms}>
-          Ich akzeptiere die{" "}
-          <Link href="/agb" target="_blank" rel="noopener" className="underline underline-offset-4 hover:text-orange-dark">
-            AGB
-          </Link>{" "}
-          und habe die Widerrufsbelehrung gelesen.
-        </Consent>
-        <Consent checked={earlyStart} onChange={setEarlyStart}>
-          Ich verlange ausdrücklich, dass ZulexGO vor Ablauf der Widerrufsfrist mit der Abmeldung beginnt. Mir ist bekannt,
-          dass mein Widerrufsrecht erlischt, sobald der Auftrag vollständig ausgeführt ist.
-        </Consent>
-      </div>
-
-      {duplicate ? (
-        <div className="flex flex-col gap-4">
-          <Alert role="alert" variant="warning" className="measure">
-            Für dieses Fahrzeug läuft bereits ein Antrag bei uns. Ein zweiter Antrag für dasselbe Fahrzeug wird vom KBA voraussichtlich
-            abgelehnt.
-          </Alert>
-          <Consent checked={wantsAnother} onChange={setWantsAnother}>
-            Ich möchte trotzdem einen weiteren Antrag stellen.
-          </Consent>
-        </div>
-      ) : null}
-
-      {error ? (
-        <Alert role="alert" variant="error" className="measure">
-          {error}
-        </Alert>
-      ) : null}
-
-      {/* site-contract §3: on phones the CTA docks at the bottom with the total. */}
-      <div className="flex flex-col gap-2 max-md:fixed max-md:inset-x-0 max-md:bottom-0 max-md:z-40 max-md:border-t max-md:border-border max-md:bg-white max-md:px-(--gutter) max-md:py-3 max-md:shadow-elev-2">
-        <div className="flex items-center justify-between gap-4 md:justify-start">
-          <span className="text-body text-grau-dark md:hidden">{formatEuros(TOTAL)}</span>
-          <Button type="submit" disabled={!consented || paying} aria-describedby={consented ? undefined : "pay-hint"}>
-            {paying ? "Zahlung läuft …" : "Jetzt bezahlen"}
-          </Button>
-        </div>
-        {consented ? null : (
-          <p id="pay-hint" className="text-small text-grau-bright">
-            {duplicate ? "Bitte bestätigen Sie zuerst die Punkte oben." : "Bitte bestätigen Sie zuerst die beiden Punkte oben."}
-          </p>
-        )}
-      </div>
-    </form>
+    </CheckoutPanel>
   )
 }
 
@@ -194,14 +84,5 @@ function Row({ term, value, plate = false }: { term: string; value: string; plat
         <dd className="break-all text-grau-dark">{value}</dd>
       )}
     </>
-  )
-}
-
-function Consent({ checked, onChange, children }: { checked: boolean; onChange: (checked: boolean) => void; children: React.ReactNode }) {
-  return (
-    <label className="measure flex cursor-pointer items-start gap-3 text-body text-grau-dark">
-      <Checkbox checked={checked} onCheckedChange={(value) => onChange(value === true)} />
-      <span>{children}</span>
-    </label>
   )
 }

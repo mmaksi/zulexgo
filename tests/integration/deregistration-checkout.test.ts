@@ -1,5 +1,5 @@
 import { handlePaymentNotification } from "@/app/api/webhooks/stripe/handle"
-import { FAKE_REQUEST } from "@/tests/fixtures/applications"
+import { FAKE_CONSENTS, FAKE_REQUEST } from "@/tests/fixtures/applications"
 import { submitCheckout } from "@/src/core/use-cases/checkout/submit-checkout"
 import { webhookRequest, withVendorsAtTheNetwork } from "./network-harness"
 
@@ -14,7 +14,7 @@ const { world, stored, emails } = withVendorsAtTheNetwork()
 const STRIPE_OBJECT_ID = /\b(?:pi|pm|ch|cus|re|py|src|card|seti|evt)_[A-Za-z0-9]+/g
 
 async function checkout() {
-  const { reference, clientSecret } = await submitCheckout(world.deps, { service: "deregistration", request: FAKE_REQUEST, email: "customer@example.test" })
+  const { reference, clientSecret } = await submitCheckout(world.deps, { service: "deregistration", request: FAKE_REQUEST, email: "customer@example.test", consents: FAKE_CONSENTS })
   const paymentId = (await stored(reference)).payment.id
   return { reference, clientSecret, paymentId }
 }

@@ -1,9 +1,8 @@
 "use client"
 
 import { useEffect, type RefObject } from "react"
-import type { PaymentDriver } from "@/app/(funnel)/_components/payment-driver"
-import type { CheckoutActions } from "./checkout-actions"
 import { Alert } from "@/src/ui/alert"
+import type { PaymentDriver } from "./payment-driver"
 
 /** Where no payment provider is configured (dev, a demo): no money moves, the server plays the customer paying. */
 export function SimulatedPaymentFields({
@@ -11,7 +10,7 @@ export function SimulatedPaymentFields({
   completeSimulatedPayment,
 }: {
   driverRef: RefObject<PaymentDriver | null>
-  completeSimulatedPayment: CheckoutActions["completeSimulatedPayment"]
+  completeSimulatedPayment: (reference: string) => Promise<{ ok: boolean }>
 }) {
   useEffect(() => {
     driverRef.current = {

@@ -1,5 +1,5 @@
 import { HttpResponse } from "msw"
-import { FAKE_REQUEST } from "@/tests/fixtures/applications"
+import { FAKE_CONSENTS, FAKE_REQUEST } from "@/tests/fixtures/applications"
 import { FAKE_NEW_REGISTRATION } from "@/tests/fixtures/new-registration"
 import { secretsOf } from "@/tests/fixtures/secrets"
 import { ZULEX_TEST_API_KEY } from "@/tests/msw/zulex"
@@ -63,7 +63,7 @@ async function runEveryPath(revealStatusLinks: boolean): Promise<string[]> {
     return pollDueApplications(deps, 50)
   }
   const checkoutAndPay = async () => {
-    const { reference } = await submitCheckout(deps, { service: "deregistration", request: FAKE_REQUEST, email: "customer@example.test" })
+    const { reference } = await submitCheckout(deps, { service: "deregistration", request: FAKE_REQUEST, email: "customer@example.test", consents: FAKE_CONSENTS })
     await deps.payments.customerPays((await deps.repository.get(reference))!.payment.id, "card")
     await confirmPayment(deps, reference)
     return reference
@@ -84,7 +84,7 @@ async function runEveryPath(revealStatusLinks: boolean): Promise<string[]> {
   await resendStatusLink(deps, { reference: completed, email: "customer@example.test" })
 
   const badCodes = { ...FAKE_REQUEST, codes: { ...FAKE_REQUEST.codes, certificate: `${FAKE_REQUEST.codes.certificate}X` } }
-  await submitCheckout(deps, { service: "deregistration", request: badCodes, email: "customer@example.test" }).catch((error) => console.error(error))
+  await submitCheckout(deps, { service: "deregistration", request: badCodes, email: "customer@example.test", consents: FAKE_CONSENTS }).catch((error) => console.error(error))
 
   return Promise.all([completed, rejected].map(async (reference) => (await deps.repository.getStatusToken(reference))!))
 }

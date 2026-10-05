@@ -104,6 +104,29 @@ export function applicationRepositoryContract(name: string, makeSubject: () => A
         expect((stored as DeregistrationApplication).request.codes.rearPlate.reveal()).toBe("AA1")
       })
 
+      // Launch plan D9: what the customer agreed to is kept with the order, with the version of each text.
+      it("round-trips the consent given at checkout, a Neuzulassung's power of attorney included, and nothing for an order made before it was recorded", async () => {
+        const deregistration = anApplication({ consent: { agbVersion: "2026-03", givenAt: minutes(-30) } })
+        const newRegistration = aNewRegistrationApplication({ consent: { agbVersion: "2026-03", powerOfAttorneyVersion: "2026-04", givenAt: minutes(-30) } })
+        const before = anApplication()
+
+        for (const order of [deregistration, newRegistration, before]) await repository.create(order)
+
+        expect((await repository.get(deregistration.reference))?.consent).toEqual({ agbVersion: "2026-03", givenAt: minutes(-30) })
+        expect((await repository.get(deregistration.reference))?.consent).not.toHaveProperty("powerOfAttorneyVersion")
+        expect((await repository.get(newRegistration.reference))?.consent).toEqual({ agbVersion: "2026-03", powerOfAttorneyVersion: "2026-04", givenAt: minutes(-30) })
+        expect((await repository.get(before.reference))?.consent).toBeUndefined()
+      })
+
+      it("hands out the consent as a copy, so mutating its date never changes the store", async () => {
+        const created = await repository.create(anApplication({ consent: { agbVersion: "2026-03", givenAt: minutes(-30) } }))
+        const copy = (await repository.get(created.reference)) as unknown as { consent: { givenAt: Date } }
+
+        copy.consent.givenAt.setFullYear(1999)
+
+        expect((await repository.get(created.reference))?.consent?.givenAt).toEqual(minutes(-30))
+      })
+
       it("returns undefined for an unknown reference", async () => {
         expect(await repository.get(anApplication().reference)).toBeUndefined()
       })
@@ -144,6 +167,15 @@ export function applicationRepositoryContract(name: string, makeSubject: () => A
 
         expect(updated.version).toBe(2)
         expect(await repository.get(created.reference)).toEqual(updated)
+      })
+
+      it("keeps the consent through every update", async () => {
+        const consent = { agbVersion: "2026-03", powerOfAttorneyVersion: "2026-04", givenAt: minutes(-30) }
+        const created = await repository.create(aNewRegistrationApplication({ consent }))
+
+        await repository.update({ ...created, status: "cancelled" })
+
+        expect((await repository.get(created.reference))?.consent).toEqual(consent)
       })
 
       it("appends new status changes to the history, in order", async () => {

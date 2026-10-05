@@ -16,8 +16,9 @@ Every folder has one purpose and one allowed set of dependencies. If you cannot 
 ```
 app/                    Next.js App Router. Routing, layouts, pages, route handlers ONLY.
   (marketing)/          Route group: landing + legal pages. No URL segment.
-  (funnel)/             Route group: the funnels, one folder each (`deregister/`). `_components/` holds what
-                        every funnel shares: the Stripe Payment Element and the payment driver.
+  (funnel)/             Route group: the funnels, one folder each (`deregister/`, `register/`). `_components/` holds
+                        what every funnel shares: the step frame, the payment panel, the Stripe Payment Element
+                        and the payment driver.
   status/[token]/       Account-free status dashboard.
   api/                  Route handlers — webhooks and client-callable endpoints.
   _components/          App-level UI shared across route groups (header, footer, landing sections).

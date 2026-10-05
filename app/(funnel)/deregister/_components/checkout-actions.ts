@@ -1,3 +1,5 @@
+import type { StartCheckoutResult } from "@/app/(funnel)/_components/checkout-panel"
+import type { ConsentKind } from "@/src/core/domain/application/consent"
 import type { IkfzStatus } from "@/src/core/domain/registration/registration-authority"
 import type { PlateCount, VehicleData } from "@/app/_components/vehicle-data"
 
@@ -7,12 +9,10 @@ export interface CheckoutActions {
   startCheckout(input: {
     plateCount: PlateCount
     vehicle: VehicleData
-    consents: { terms: boolean; earlyStart: boolean }
+    consents: Partial<Record<ConsentKind, boolean>>
     /** The customer was told an order for this vehicle is already open and wants another. */
     acknowledgedDuplicate?: boolean
-  }): Promise<
-    { ok: true; reference: string; clientSecret: string } | { ok: false; reason: "invalid" | "consent" | "duplicate" | "unavailable" }
-  >
+  }): Promise<StartCheckoutResult>
   /** Only where no real payment provider is configured: plays the customer paying. */
   completeSimulatedPayment(reference: string): Promise<{ ok: boolean }>
 }

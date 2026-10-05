@@ -87,6 +87,19 @@ describeWithPostgres("PostgresApplicationRepository", () => {
     })
   })
 
+  describe("the consent kept with an order", () => {
+    it.each([
+      ["an AGB version without the time it was agreed", () => anApplication(), "agb_version = 'draft-1'"],
+      ["a time without a version", () => anApplication(), "consent_at = now()"],
+      ["a power of attorney without the consent it was given with", () => aNewRegistrationApplication(), "power_of_attorney_version = 'draft-1'"],
+      ["a Neuzulassung's consent without its power of attorney", () => aNewRegistrationApplication(), "agb_version = 'draft-1', consent_at = now()"],
+    ])("refuses %s, however the row is written", async (_, order, assignments) => {
+      const created = await repository.create(order())
+
+      await expect(database.query(`UPDATE applications SET ${assignments} WHERE reference = '${created.reference}'`)).rejects.toThrow(/applications_consent_complete/)
+    })
+  })
+
   // What the plan's N3 asks for: a database reader (a dump, a support query, a leaked backup) learns nothing a person typed.
   it("keeps everything a Neuzulassung's customer typed out of every stored row, and the encrypted blob bound to its order", async () => {
     const created = await repository.create(aNewRegistrationApplication())
