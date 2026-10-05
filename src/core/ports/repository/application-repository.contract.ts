@@ -6,7 +6,7 @@ import {
   type NewRegistrationApplication,
 } from "@/tests/fixtures/applications"
 import { FAKE_NEW_REGISTRATION, FAKE_NEW_REGISTRATION_NOW } from "@/tests/fixtures/new-registration"
-import { applyEvent } from "@/src/core/domain/application/application"
+import { applyEvent, type Application } from "@/src/core/domain/application/application"
 import { APPLICATION_STATUSES } from "@/src/core/domain/application/application-status"
 import { applyNewRegistrationCorrection } from "@/src/core/domain/application/new-registration-correction"
 import type { Failure } from "@/src/core/domain/registration/failure"
@@ -558,6 +558,60 @@ export function applicationRepositoryContract(name: string, makeSubject: () => A
 
         expect(due.map(({ reference }) => reference)).toEqual([waiting.reference, verified.reference])
         expect(due[0]).toEqual(waiting)
+      })
+    })
+
+    // What the monitoring report reads. It must never carry what the customer entered.
+    describe("findTrailsSince", () => {
+      const startedAt = (at: Date, status: Application["status"] = "awaiting_payment") => [{ status, at }]
+
+      it("returns where each order of the service stands and how it got there, for the orders created at or after the moment", async () => {
+        const deadline = minutes(60)
+        const verifying = await repository.create(
+          aNewRegistrationApplication({
+            status: "awaiting_identity_verification",
+            history: [
+              { status: "awaiting_payment", at: minutes(-30) },
+              { status: "submitted_and_paid", at: minutes(-20) },
+              { status: "awaiting_identity_verification", at: minutes(-19) },
+            ],
+            identityVerification: { id: "verification-1", deadline, reminderSent: false },
+          }),
+        )
+        const justCreated = await repository.create(aNewRegistrationApplication({ history: startedAt(minutes(-60)) }))
+
+        const trails = await repository.findTrailsSince("newRegistration", minutes(-60))
+
+        expect(trails).toHaveLength(2)
+        expect(trails).toContainEqual({ status: "awaiting_identity_verification", history: verifying.history, verificationDeadline: deadline })
+        expect(trails).toContainEqual({ status: "awaiting_payment", history: justCreated.history, verificationDeadline: undefined })
+      })
+
+      it("leaves out the orders created before the moment, and those of another service", async () => {
+        await repository.create(aNewRegistrationApplication({ history: startedAt(minutes(-61)) }))
+        await repository.create(anApplication({ history: startedAt(minutes(-10)) }))
+        const wanted = await repository.create(aNewRegistrationApplication({ history: startedAt(minutes(-10)) }))
+
+        expect(await repository.findTrailsSince("newRegistration", minutes(-60))).toEqual([
+          { status: "awaiting_payment", history: wanted.history, verificationDeadline: undefined },
+        ])
+        expect(await repository.findTrailsSince("deregistration", minutes(-60))).toHaveLength(1)
+      })
+
+      it("holds nothing of what the customer entered or paid", async () => {
+        await repository.create(aNewRegistrationApplication({ history: startedAt(minutes(-10)) }))
+        await repository.create(anApplication({ history: startedAt(minutes(-10)) }))
+
+        for (const service of ["newRegistration", "deregistration"] as const) {
+          const trails = await repository.findTrailsSince(service, minutes(-60))
+
+          expect(trails).toHaveLength(1)
+          expect(Object.keys(trails[0]).every((key) => ["history", "status", "verificationDeadline"].includes(key))).toBe(true)
+        }
+      })
+
+      it("is empty when there is no order", async () => {
+        expect(await repository.findTrailsSince("newRegistration", minutes(-60))).toEqual([])
       })
     })
   })

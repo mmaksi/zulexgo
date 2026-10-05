@@ -21,6 +21,9 @@ const REQUEST_PARSERS: Record<OrderableService, (input: unknown, now: Date) => S
   newRegistration: parseNewRegistrationRequest,
 }
 
+/** Every service an order can be made for. */
+export const ORDERABLE_SERVICES = Object.keys(REQUEST_PARSERS) as OrderableService[]
+
 /** Whether `service` is one an order can be made for. Takes anything: the value comes from the browser. */
 export const isOrderable = (service: unknown): service is OrderableService => typeof service === "string" && Object.hasOwn(REQUEST_PARSERS, service)
 

@@ -4,7 +4,8 @@ import { parseApplicationReference, type ApplicationReference } from "@/src/core
 import { OPEN_STATUSES, POLLED_STATUSES, type ApplicationStatus } from "@/src/core/domain/application/application-status"
 import type { Consent } from "@/src/core/domain/application/consent"
 import { parseDeregistrationRequest } from "@/src/core/domain/application/deregistration-request"
-import type { Service, ServiceRequest } from "@/src/core/domain/application/service"
+import type { OrderTrail } from "@/src/core/domain/application/order-report"
+import type { OrderableService, Service, ServiceRequest } from "@/src/core/domain/application/service"
 import { emailSchema } from "@/src/core/domain/customer/email"
 import type { Failure } from "@/src/core/domain/registration/failure"
 import { Money } from "@/src/core/domain/payment/money"
@@ -228,6 +229,28 @@ export class PostgresApplicationRepository implements ApplicationRepository {
       [POLLED_STATUSES, now, limit],
     )
     return rows.map((row) => this.toApplication(row))
+  }
+
+  /**
+   * Reads the status, the deadline and the history only, so nothing encrypted is selected, let alone
+   * decrypted. "Created" is the first history entry, as the contract says, not `created_at`, which the
+   * database sets and a test's clock cannot. Scans one service's orders; a monitoring read, not a request path.
+   */
+  async findTrailsSince(service: OrderableService, since: Date): Promise<readonly OrderTrail[]> {
+    const { rows } = await this.pool.query<{ status: ApplicationStatus; verification_deadline: Date | null; history: ApplicationRow["history"] }>(
+      `SELECT a.status, a.identity_verification_deadline AS verification_deadline,
+         (SELECT json_agg(json_build_object('status', h.status, 'at', h.changed_at) ORDER BY h.id)
+            FROM status_history h WHERE h.application_reference = a.reference) AS history
+       FROM applications a
+       WHERE a.service = $1
+         AND (SELECT h.changed_at FROM status_history h WHERE h.application_reference = a.reference ORDER BY h.id LIMIT 1) >= $2`,
+      [service, since],
+    )
+    return rows.map((row) => ({
+      status: row.status,
+      history: row.history.map(({ status, at }) => ({ status, at: new Date(at) })),
+      verificationDeadline: row.verification_deadline ?? undefined,
+    }))
   }
 
   /**

@@ -2,6 +2,8 @@ import type { Application } from "@/src/core/domain/application/application"
 import type { ApplicationReference } from "@/src/core/domain/application/application-reference"
 import type { DeregistrationRequest } from "@/src/core/domain/application/deregistration-request"
 import type { NewRegistrationRequest } from "@/src/core/domain/application/new-registration-request"
+import type { OrderTrail } from "@/src/core/domain/application/order-report"
+import type { OrderableService } from "@/src/core/domain/application/service"
 
 /**
  * Where applications live between requests. Owns our status machine's state,
@@ -26,6 +28,8 @@ import type { NewRegistrationRequest } from "@/src/core/domain/application/new-r
  *   with no plate yet) the VIN; one still awaiting payment, completed, failed for
  *   good or cancelled does not count, nor does one for another service. It says nothing
  *   more: no reference, no status.
+ * - `findTrailsSince` returns, for monitoring, where each order of a service created since a moment
+ *   stands and how it got there, and nothing the customer entered.
  * - `findDueForPolling` returns applications whose next check is due, soonest
  *   first: a status check at the KBA, a silent resubmission after a technical
  *   failure, or a look at the money of a 5b that waits for the customer.
@@ -81,4 +85,11 @@ export interface ApplicationRepository {
    * watching one. Applications with equal times come back in no set order.
    */
   findDueForPolling(now: Date, limit: number): Promise<Application[]>
+  /**
+   * The orders of `service` created at or after `since` (the moment of the first entry of their history),
+   * each as its status, its history and, once an identity verification was started, where it ends. In no set
+   * order. Never the request, the email or the payment: the monitoring report that reads this carries no
+   * personal data, and the Postgres adapter decrypts nothing for it.
+   */
+  findTrailsSince(service: OrderableService, since: Date): Promise<readonly OrderTrail[]>
 }
