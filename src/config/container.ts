@@ -20,7 +20,7 @@ import type { IdentityVerification } from "@/src/core/ports/identity/identity-ve
 import type { RateLimiter } from "@/src/core/ports/rate-limit/rate-limiter"
 import type { Dependencies } from "@/src/core/use-cases/dependencies"
 import { seedDocumentsFor, seedFor, seedPaymentsFor } from "@/db/seed/seed"
-import { parseEnv, type Env, type EnvSource } from "./env"
+import { betaOf, parseEnv, type Env, type EnvSource } from "./env"
 
 /**
  * The composition root: the only place in the application that constructs an
@@ -105,6 +105,7 @@ export function createContainer(source: EnvSource = process.env): Container {
           }),
     identity: createIdentity(env),
     servicesOnSale: env.SERVICES_ON_SALE,
+    beta: betaOf(env),
     statusLink: (token) => new URL(`/status/${token}`, env.APP_BASE_URL).toString(),
   }
 }

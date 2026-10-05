@@ -9,6 +9,7 @@ import { validate } from "@/src/core/domain/validate"
 import { DuplicateApplication } from "@/src/core/errors/application/duplicate-application"
 import { OpenApplicationExists } from "@/src/core/errors/application/open-application-exists"
 import { ServiceNotOnSale } from "@/src/core/errors/application/service-not-on-sale"
+import { requireInvite, takeBetaPlace } from "@/src/core/use-cases/checkout/beta-access"
 import type { Dependencies } from "@/src/core/use-cases/dependencies"
 
 /**
@@ -43,17 +44,19 @@ const REFERENCE_ATTEMPTS = 3
  *
  * Creates the order at `awaiting_payment`: no status link and no email yet, those follow
  * when the provider reports the payment (`confirmPayment`). Everything arrives untrusted
- * from the browser, so a service that is not on sale is `ServiceNotOnSale`, a missing consent
+ * from the browser, so a service that is not on sale is `ServiceNotOnSale`, a service in its beta without
+ * a valid `invite` is `InviteRequired`, one whose day's places are taken is `BetaFull`, a missing consent
  * is `ConsentRequired`, a malformed request or email is a `ValidationError`, and a duplicate that
  * the customer has not acknowledged is `OpenApplicationExists`. A registration service outage on the authority
  * lookup propagates and nothing is stored or opened.
  */
 export async function submitCheckout(
   deps: Dependencies,
-  input: { service: unknown; request: unknown; email: unknown; consents: unknown; acknowledgedDuplicate?: boolean },
+  input: { service: unknown; request: unknown; email: unknown; consents: unknown; invite?: unknown; acknowledgedDuplicate?: boolean },
 ): Promise<{ reference: Application["reference"]; clientSecret: string }> {
   const onSale: readonly unknown[] = deps.servicesOnSale
   if (!isOrderable(input.service) || !onSale.includes(input.service)) throw new ServiceNotOnSale()
+  requireInvite(deps, input.service, input.invite)
   const takenAt = deps.clock.now()
   const consent = recordConsent(input.service, input.consents, takenAt)
   const request = parseServiceRequest(input.service, input.request, takenAt)
@@ -64,6 +67,8 @@ export async function submitCheckout(
   const { where, invalidField } = authorityOf(request)
   const ikfzStatus = combinedIkfzStatus(await deps.registration.findAuthorities(where), invalidField)
   const total = SERVICE_PRICES[request.service]
+  // Last of the checks, so a form that had to be corrected or a duplicate the customer was warned of costs no place.
+  await takeBetaPlace(deps, request.service)
 
   for (let attempt = 1; ; attempt++) {
     const reference = referenceFromToken(deps.tokens.generate())

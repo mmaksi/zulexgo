@@ -1,6 +1,7 @@
 import "server-only"
 import { z } from "zod"
 import { requiresIdentityVerification } from "@/src/core/domain/application/application-status"
+import { type Beta, MIN_INVITE_LENGTH, normaliseInvite } from "@/src/core/domain/application/beta"
 import { isOrderable, type OrderableService, type Service } from "@/src/core/domain/application/service"
 
 /**
@@ -35,6 +36,8 @@ const secret = z.string().min(1).optional()
 /** A comma-separated list in the environment, an array of trimmed entries here. */
 const commaList = (list: string) => list.split(",").map((entry) => entry.trim()).filter(Boolean)
 
+const inviteCodes = (list: string) => commaList(list).map(normaliseInvite)
+
 const orderableService = z.custom<OrderableService>(isOrderable, { message: "is not a service an order can be made for." })
 
 /**
@@ -46,6 +49,13 @@ const salesFields = {
   // a deploy that sets nothing sells what it always sold; the card on the landing page and the funnel's
   // route follow this list, and `submitCheckout` refuses anything else.
   SERVICES_ON_SALE: z.string().default("deregistration").transform(commaList).pipe(z.array(orderableService).min(1)),
+  // The services on sale to people with an invite code only. One not listed here is open to everyone.
+  BETA_SERVICES: z.string().default("").transform(commaList).pipe(z.array(orderableService)),
+  // Checkouts a day for each service in beta.
+  BETA_DAILY_CAP: z.coerce.number().int().min(1).default(5),
+  // The invite codes of each service, one per person in the beta. Secrets: never in an error or a log.
+  INVITE_CODES_DEREGISTRATION: z.string().default("").transform(inviteCodes),
+  INVITE_CODES_NEW_REGISTRATION: z.string().default("").transform(inviteCodes),
 }
 const salesSchema = z.object(salesFields)
 
@@ -141,6 +151,7 @@ function applyGuardrails(env: Parsed, ctx: Ctx) {
   checkRepository(env, ctx)
   checkStorage(env, ctx)
   checkIdentity(env, ctx)
+  checkBeta(env, ctx)
 }
 
 function requireDeployedStageVariables(env: Parsed, ctx: Ctx) {
@@ -281,6 +292,43 @@ function checkIdentity(env: Parsed, ctx: Ctx) {
   if (problem) reject(ctx, "IDENTITY_DRIVER", problem)
 }
 
+/** Where each service's invite codes are set. */
+const INVITE_CODES = {
+  deregistration: "INVITE_CODES_DEREGISTRATION",
+  newRegistration: "INVITE_CODES_NEW_REGISTRATION",
+} as const satisfies Record<OrderableService, keyof Parsed>
+
+/**
+ * A service in beta needs codes (or nobody could order it), and codes need a service in beta: a list set
+ * for a service that is not listed would leave it open to everyone while the operator believes it is
+ * invite-only. The messages name variables, never a code.
+ */
+function checkBeta(env: Parsed, ctx: Ctx) {
+  for (const service of env.BETA_SERVICES) {
+    if (!env.SERVICES_ON_SALE.includes(service)) reject(ctx, "BETA_SERVICES", `lists ${service}, which is not in SERVICES_ON_SALE.`)
+    if (env[INVITE_CODES[service]].length === 0) {
+      reject(ctx, INVITE_CODES[service], `required while ${service} is in BETA_SERVICES: nobody could order it.`)
+    }
+  }
+
+  for (const [service, variable] of Object.entries(INVITE_CODES) as [OrderableService, keyof Parsed][]) {
+    const codes = env[variable] as string[]
+    if (codes.length > 0 && !env.BETA_SERVICES.includes(service)) {
+      reject(ctx, variable, `is set but ${service} is not in BETA_SERVICES, so anyone could order it.`)
+    }
+    if (codes.some((code) => code.length < MIN_INVITE_LENGTH)) {
+      reject(ctx, variable, `holds a code shorter than ${MIN_INVITE_LENGTH} characters, which is too easy to guess.`)
+    }
+  }
+}
+
+/** The beta the deployment runs, if any service is in it: what checkout and the funnels read. */
+export function betaOf(env: Pick<Env, "BETA_SERVICES" | "BETA_DAILY_CAP" | typeof INVITE_CODES[OrderableService]>): Beta | undefined {
+  if (env.BETA_SERVICES.length === 0) return undefined
+  const invites = Object.fromEntries(env.BETA_SERVICES.map((service) => [service, env[INVITE_CODES[service]]]))
+  return { invites, dailyPlaces: env.BETA_DAILY_CAP }
+}
+
 export class EnvironmentError extends Error {
   constructor(problems: string[]) {
     super(`Invalid environment:\n${problems.map((problem) => `  - ${problem}`).join("\n")}`)
@@ -314,11 +362,11 @@ export function parseEnv(source: EnvSource): Env {
  * request (the landing page's cards), where building the container would open adapters for nothing. It
  * is the same setting `parseEnv` validates, so the two cannot disagree.
  */
-export function parseSales(source: EnvSource): { servicesOnSale: OrderableService[] } {
+export function parseSales(source: EnvSource): { servicesOnSale: OrderableService[]; betaServices: OrderableService[] } {
   const result = salesSchema.safeParse(withoutBlanks(source))
 
   if (!result.success) throw environmentError(result.error)
-  return { servicesOnSale: result.data.SERVICES_ON_SALE }
+  return { servicesOnSale: result.data.SERVICES_ON_SALE, betaServices: result.data.BETA_SERVICES }
 }
 
 /** What this deployment sells, read from the process's environment. */

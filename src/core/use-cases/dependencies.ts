@@ -1,3 +1,4 @@
+import type { Beta } from "@/src/core/domain/application/beta"
 import type { OrderableService } from "@/src/core/domain/application/service"
 import type { RejectionCatalogue } from "@/src/core/domain/registration/rejection-catalogue"
 import type { ApplicationRepository } from "@/src/core/ports/repository/application-repository"
@@ -48,4 +49,9 @@ export interface Dependencies {
    * refused, whatever the landing page shows. Tests list the services they place orders for.
    */
   readonly servicesOnSale: readonly OrderableService[]
+  /**
+   * The services in their beta, with the invite codes that open each. Unset when no service is: everything
+   * on sale is open to everyone.
+   */
+  readonly beta?: Beta
 }

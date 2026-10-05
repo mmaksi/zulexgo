@@ -1,4 +1,4 @@
-import { fakeIdentityProblem, parseEnv, parseSales, ZULEX_BASE_URLS } from "./env"
+import { betaOf, fakeIdentityProblem, parseEnv, parseSales, ZULEX_BASE_URLS } from "./env"
 
 const dev = { APP_ENV: "dev" }
 
@@ -189,6 +189,61 @@ describe("services on sale", () => {
     expect(parseSales({ SERVICES_ON_SALE: "newRegistration" }).servicesOnSale).toEqual(["newRegistration"])
     expect(parseSales({}).servicesOnSale).toEqual(["deregistration"])
     expect(() => parseSales({ SERVICES_ON_SALE: "nonsense" })).toThrow(/SERVICES_ON_SALE/)
+  })
+})
+
+describe("the beta", () => {
+  const onSale = { ...staging, SERVICES_ON_SALE: "deregistration,newRegistration" }
+  const inBeta = { ...onSale, BETA_SERVICES: "newRegistration", INVITE_CODES_NEW_REGISTRATION: "k7m2-qx9p, B4TA 0001" }
+
+  it("has no service in it unless the deployment says so, and then everything on sale is open to everyone", () => {
+    expect(parseEnv(production).BETA_SERVICES).toEqual([])
+    expect(betaOf(parseEnv(production))).toBeUndefined()
+  })
+
+  it("takes the services in beta, each with the codes that open it, written as a person would type them", () => {
+    expect(betaOf(parseEnv(inBeta))).toEqual({ invites: { newRegistration: ["K7M2-QX9P", "B4TA0001"] }, dailyPlaces: 5 })
+  })
+
+  it("takes the day's places from BETA_DAILY_CAP", () => {
+    expect(betaOf(parseEnv({ ...inBeta, BETA_DAILY_CAP: "12" }))?.dailyPlaces).toBe(12)
+  })
+
+  it.each(["0", "-1", "2.5", "many"])("rejects BETA_DAILY_CAP=%s", (cap) => {
+    expect(() => parseEnv({ ...inBeta, BETA_DAILY_CAP: cap })).toThrow(/BETA_DAILY_CAP/)
+  })
+
+  it("refuses a service in beta that has no invite codes, which nobody could order", () => {
+    expect(() => parseEnv({ ...onSale, BETA_SERVICES: "newRegistration" })).toThrow(/INVITE_CODES_NEW_REGISTRATION/)
+  })
+
+  it("refuses codes for a service that is not in beta, which would leave it open to everyone", () => {
+    expect(() => parseEnv({ ...onSale, INVITE_CODES_NEW_REGISTRATION: "K7M2-QX9P" })).toThrow(/INVITE_CODES_NEW_REGISTRATION/)
+  })
+
+  it("refuses a service in beta that is not on sale", () => {
+    expect(() => parseEnv({ ...staging, BETA_SERVICES: "newRegistration", INVITE_CODES_NEW_REGISTRATION: "K7M2-QX9P" })).toThrow(/BETA_SERVICES/)
+  })
+
+  it("refuses a code that is too short to be hard to guess", () => {
+    expect(() => parseEnv({ ...inBeta, INVITE_CODES_NEW_REGISTRATION: "K7M2-QX9P,abc123" })).toThrow(/INVITE_CODES_NEW_REGISTRATION/)
+  })
+
+  it("never puts a code in the error", () => {
+    let message = ""
+    try {
+      parseEnv({ ...inBeta, INVITE_CODES_NEW_REGISTRATION: "K7M2-QX9P,abc123" })
+    } catch (error) {
+      message = String(error)
+    }
+
+    expect(message).toMatch(/INVITE_CODES_NEW_REGISTRATION/)
+    expect(message).not.toMatch(/K7M2|ABC123/i)
+  })
+
+  it("names the services in beta without the rest of the environment, for the landing page", () => {
+    expect(parseSales({ SERVICES_ON_SALE: "deregistration,newRegistration", BETA_SERVICES: "newRegistration" }).betaServices).toEqual(["newRegistration"])
+    expect(parseSales({}).betaServices).toEqual([])
   })
 })
 
