@@ -152,7 +152,7 @@ Registration stays `REGISTRATION_DRIVER=fake` while the Zulex API is down; payme
 
 1. **Developers → API keys**: copy the publishable key (`pk_test_…`) and the secret key (`sk_test_…`).
 2. **Developers → Webhooks**: the endpoint exists (`we_1UKcZOFkTWmWhWUMfaW3drfH`, created 2026-09-28 through the Stripe MCP): URL `https://zulexgo-staging.vercel.app/api/webhooks/stripe`, events **`payment_intent.amount_capturable_updated`** and **`payment_intent.succeeded`** only, API version `2026-08-26.dahlia`, the one the Stripe adapter pins. Open it and copy its signing secret (**Signing secret → Reveal**, `whsec_…`). Don't add a second endpoint: each has its own secret, and the app verifies against one.
-3. **Settings → Payment methods**: cards on. For Apple Pay, **Payment method domains → Add** `zulexgo-staging.vercel.app`. SEPA Direct Debit stays off: the app does not offer it.
+3. **Settings → Payment methods**: cards on. For Apple Pay and Google Pay, **Payment method domains → Add** every domain that shows the form: `zulexgo-staging.vercel.app` is registered (`pmd_1ULhCNFkTWmWhWUMJEzfJHCV`, created 2026-10-01 through the Stripe MCP; Apple Pay and Google Pay both `active`). No verification file is hosted: Stripe does Apple's merchant validation. SEPA Direct Debit stays off: the app does not offer it.
 
 **Vercel, project `zulexgo-staging`, environment Production** (secrets Sensitive):
 

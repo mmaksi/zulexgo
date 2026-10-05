@@ -409,6 +409,7 @@ Nothing below is decided here. Numbers are stable — milestones refer to them. 
 | 2 — blocks the status model in M2/M3 | Q1–Q4, Q7, Q8, Q9, Q18 | Status list, error algorithm and refund function are built in M2 and encoded in the M3 schema. |
 | 3 — blocks launch, not the skeleton | Q10–Q16, Q19–Q44 | Needed for M5–M7; earlier work proceeds on fakes and placeholders. |
 | 4 — non-blocking | Q17 | A placeholder processing time can ship and be replaced. |
+| 5 — Neuzulassung only | Q45–Q56 | Not needed for the de-registration launch. Q45, Q46, Q50 and Q56 shape the Neuzulassung plan first (`docs/registration-plan.md`). |
 
 **Identity verification (Verimi)**
 
@@ -586,11 +587,76 @@ Nothing below is decided here. Numbers are stable — milestones refer to them. 
 43. **When do the other services launch, and in which order?** The landing page shows Neuzulassung, Wiederzulassung, Ummeldung and Adressänderung with their prices as "Bald verfügbar". The add-ons (Q41) and the THG-Quote (Q42) belong to them, so their answers wait on this one.
    **Blocks:** nothing in the MVP.
    **Provisional answer in code (not approved by the founder):** only de-registration is sold. The other cards are visible and disabled (`available: false` in `app/_components/service-selection.tsx`).
-   **If the founder answers differently:** each service needs its own request type beside `DeregistrationRequest` in `src/core/domain/`, its Zulex call on the `RegistrationGateway` port with a fake and a contract case, and its own funnel under `app/(funnel)/`; the price is already in `SERVICE_PRICES`. Flip `available` last, and update `service-selection.test.tsx`, which asserts exactly one purchasable service.
+   **If the founder answers differently:** each service needs its own request type beside `DeregistrationRequest` in `src/core/domain/`, its Zulex call on the `RegistrationGateway` port with a fake and a contract case, and its own funnel under `app/(funnel)/`; the price is already in `SERVICE_PRICES`. Flip `available` last, and update `service-selection.test.tsx`, which asserts exactly one purchasable service. The plan for Neuzulassung is `docs/registration-plan.md`.
 44. **Can the customer cancel before an error, or only after one?** The price calculation says a processing fee of 19.99 € is retained "bei Abbruch durch den Kunden" and the rest refunded within 3–5 Werktagen, and the notice must be visible before payment. The application filed at Zulex cannot be withdrawn (the API has no cancellation endpoint, `docs/deregistration-user-journeys.md` § API & business problems, item 8), so today a customer can only cancel at 5b, after a correctable failure. Does "Abbruch" mean exactly that, or also giving up while the KBA is still processing?
    **Blocks:** M7 (the AGB fee clause, with Q13).
    **Provisional answer in code (not approved by the founder):** "Abbruch" is the cancel at 5b, as in the business logic document §3. The fee, the refund and the 3–5 Werktage are shown before payment (`review-step.tsx`), on the status page and in the refund email.
    **If the founder answers differently:** a cancel while the KBA is processing has to withdraw the application first, which needs Zulex to offer a way to do it; without one, the only option is a goodwill refund after the fact, decided by hand. Cancelling between payment and filing (status 1, normally seconds) would need `cancel-application.ts` to accept it and release the hold; today the status machine allows `cancelledByCustomer` only from a 5b.
+
+**Added 2026-10-03 (Neuzulassung plan, `docs/registration-plan.md`)**
+
+Nothing below is built. Each "plan default" is what the plan's milestones (N0–N10) build if the question is still open when they start, chosen as the safest option; it becomes a "provisional answer in code" once built.
+
+45. **Does Neuzulassung need identity verification before launch?** Unlike de-registration (Q4), the request sends the owner's name, birth date and address to the KBA, and without a check anyone holding a Teil II and its code could register a car in someone else's name.
+   **Blocks:** N5, N9; with Q1–Q3.
+   **Provisional answer in code:** none yet.
+   **Plan default (not approved by the founder):** yes. Statuses 2 and 3 run for Neuzulassung, Zulex is called only after status 3, and the service does not go on sale until a real identity adapter exists; production refuses the fake while `newRegistration` is on sale.
+   **If the founder answers differently:** the per-service path in `application-status.ts` sends Neuzulassung 1 → 4 like de-registration, and `confirmPayment` calls `submitToKba` for it; N5 drops off the critical path.
+46. **On whose authority does Zulex file a private person's registration?** The API has a dealer path (`PERMANENT_POA`) and an individual path carrying data, but no proof that the owner asked for it. Does the customer give ZulexGO or Zulex a power of attorney (Vollmacht), in what form (checkbox, signed document, through Verimi), and must it be kept?
+   **Blocks:** N6 (checkout consent), N8 (lawyer text), Q56.
+   **Provisional answer in code:** none yet.
+   **Plan default (not approved by the founder):** a mandatory power-of-attorney checkbox at checkout, its text version and time stored with the order like the AGB consent (D9), wording from the lawyer.
+   **If the founder answers differently:** a signed document or a Verimi signature becomes a step after payment, before status 3, with its own email.
+47. **What if the verified identity does not match the owner on the order?** Verimi may report a name or birth date that differs from what the customer typed (a typo, a missing second first name).
+   **Blocks:** N5.
+   **Provisional answer in code:** none yet.
+   **Plan default (not approved by the founder):** nothing has been filed yet, so the order goes to 5b and the customer corrects the owner's name and birth date on the status page at no cost; verification is then compared again. A failed verification (not a mismatch) is 5c, refund minus 19.99 €, as business-logic §2 says.
+   **If the founder answers differently:** taking name and birth date from Verimi instead of the form removes the mismatch but moves verification before payment, which reorders statuses 1–3; treating a mismatch as a failed verification makes it 5c.
+48. **Verification deadline for Neuzulassung (Q14 for this service):** the card hold runs while the customer has not verified. How long, which reminder, and what happens when the deadline passes?
+   **Blocks:** N2, N5.
+   **Provisional answer in code:** none yet.
+   **Plan default (not approved by the founder):** a reminder after 2 days, a deadline after 4, so it ends before the hold guard would capture (Q20); when it passes, the order is cancelled and the hold released in full, since nothing was filed, with email 6.
+   **If the founder answers differently:** the deadline and reminder are one pure function beside `hold-policy.ts`; a deadline that ends after the capture margin means a captured payment is refunded instead of released, and keeping the fee makes it a `retainFee` row in `refund-policy.ts`.
+49. **Who and what can be registered at launch?** The API takes cars, motorcycles, 125s, quads, trailers and trucks; taxi and rental use; day registrations; legal entities; E, H and seasonal plates.
+   **Blocks:** N2, N6.
+   **Provisional answer in code:** none yet.
+   **Plan default (not approved by the founder):** cars only; private persons aged 18 or over, living in Germany, who will be the keeper; brand-new vehicles with a manufacturer-issued Teil II carrying a security code; standard registration, normal use; E-plate offered for electric cars only, seasonal plates offered, no H-plate.
+   **If the founder answers differently:** widen `new-registration-request.ts` and the eligibility step; each new vehicle type needs its own plate-count and copy.
+50. **Does Neuzulassung launch with plates?** Business-logic §1 says that for registrations "the licence plates are produced and sent by post" at 5a, but who makes them, how they are paid for after completion, and the delivery address are open (Q41). Without plates from us the customer has them made locally.
+   **Blocks:** N7 (5a copy), N10.
+   **Provisional answer in code:** none yet.
+   **Plan default (not approved by the founder):** launch without selling plates; status page and email 5a say what arrives by post and that plates are made at a local plate maker; plates follow in N10.
+   **If the founder answers differently:** N10 moves before N9, with Q41's answers.
+51. **Wish plates (Wunschkennzeichen):** the API takes a wish plate only with a PIN from a reservation made on the authority's own portal, and has no reservation endpoint. Do we offer it, and is any authority fee for it inside the 129 €?
+   **Blocks:** N2, N6, Q52.
+   **Provisional answer in code:** none yet.
+   **Plan default (not approved by the founder):** not offered at launch; the authority assigns the plate. This also avoids "plate not available" failures and an unpriced fee.
+   **If the founder answers differently:** a plate-and-PIN field group in the funnel's plate step, `wishLicencePlate` in the request and in the 5b correction, and a price rule if the fee is extra.
+52. **Is 129 € the final price everywhere?** Authority fees can differ by authority and by plate type (E, seasonal, wish). Does 129 € cover every case, and are they gross of VAT (Q19)?
+   **Blocks:** N8 (PAngV display).
+   **Provisional answer in code:** none yet.
+   **Plan default (not approved by the founder):** 129 € flat, no surcharge for any plate option, shown as Q19's provisional wording; monthly reconciliation against the `FEE` documents.
+   **If the founder answers differently:** a surcharge per option goes into `pricing.ts` as a priced basket line (`quote()`), and the review step shows it.
+53. **Which Neuzulassung failures are correctable (Q10 for this service)?** Business-logic §2 names wrong eVB and plate unavailable (5b), wrong owner data, wrong address, failed identity verification (5c). Zulex's `PATCH` can change only the eVB, the Teil II number and code, and a wish plate.
+   **Blocks:** N2, N7.
+   **Provisional answer in code:** none yet.
+   **Plan default (not approved by the founder):** an error in a field `PATCH` can change → 5b; owner, address, bank or vehicle data → 5c; an unknown code → one silent retry, then 5b, as Q10.
+   **If the founder answers differently:** entries in `REJECTION_CATALOGUE`, keyed by service if Zulex's codes differ per service.
+54. **Holding the vehicle-tax bank account:** business-logic §4 says payment data is not stored on our servers. The direct-debit mandate for vehicle tax is not our payment, but it must be held from checkout until filing, after verification, possibly days later. May we store it encrypted, for how long, and may the account belong to someone other than the owner?
+   **Blocks:** N3, N8.
+   **Provisional answer in code:** none yet.
+   **Plan default (not approved by the founder):** stored AES-GCM encrypted with the owner data, erased when the order ends; German IBANs only; the account holder is the owner (the API has no field for another holder).
+   **If the founder answers differently:** an earlier erase point means a refile after a 400 (Q37) has to ask for the IBAN again; another account holder needs a field Zulex does not have (Q56).
+55. **What does the customer receive after 5a, and what must they do?** Documents shipped or picked up (`deliveryInfo`), whether the original Teil II must be sent to the authority, and what the temporary registration certificate allows until the post arrives.
+   **Blocks:** N7 (5a copy and email), N8.
+   **Provisional answer in code:** none yet.
+   **Plan default (not approved by the founder):** shipping to the owner's address only; 5a lists the documents and points to the authority's letter, and makes no claim about driving on the temporary certificate until Zulex and the lawyer confirm the wording.
+   **If the founder answers differently:** pick-up adds a choice to the funnel's delivery and the copy of email 5a.
+56. **Zulex provider questions for Neuzulassung:** is it enabled for private persons on our account and in the integration environment? Where does the assigned plate appear when no wish plate is sent? Is `sepaInfo` required? The format of the Teil II number and security code? Which optional owner fields the authority expects? How is the owner's identity and power of attorney proven to the authority (Q1, Q46)? What does `PICKUP` mean for a private person? The Neuzulassung error codes, and do they differ from de-registration's? Can a `PATCH` drop a wish plate?
+   **Blocks:** N4, N7, N9.
+   **Provisional answer in code:** none yet.
+   **Plan default (not approved by the founder):** `sepaInfo` always sent; the assigned plate read from documents only; Teil II number 1–20 characters and code at least 1, as the spec says; one rejection catalogue for both services.
+   **If the founder answers differently:** each answer lands in the Zulex adapter's schemas and `new-registration-request.ts`; findings go into `docs/registration-user-journeys.md` (N4).
 
 ## Verification
 
