@@ -1,4 +1,5 @@
 import type { Metadata } from "next"
+import { BetaGate } from "@/app/(funnel)/beta-gate"
 import { requireOnSale } from "@/app/(funnel)/on-sale"
 import { paymentModeOfDeployment } from "@/app/(funnel)/payment-mode"
 import { completeSimulatedPaymentAction } from "@/app/(funnel)/simulated-payment-action"
@@ -11,13 +12,15 @@ export default async function DeregisterPage() {
   await requireOnSale("deregistration")
 
   return (
-    <DeregistrationFunnel
-      payment={await paymentModeOfDeployment()}
-      actions={{
-        checkEligibility: checkEligibilityAction,
-        startCheckout: startCheckoutAction,
-        completeSimulatedPayment: completeSimulatedPaymentAction,
-      }}
-    />
+    <BetaGate service="deregistration" name="Abmeldung">
+      <DeregistrationFunnel
+        payment={await paymentModeOfDeployment()}
+        actions={{
+          checkEligibility: checkEligibilityAction,
+          startCheckout: startCheckoutAction,
+          completeSimulatedPayment: completeSimulatedPaymentAction,
+        }}
+      />
+    </BetaGate>
   )
 }

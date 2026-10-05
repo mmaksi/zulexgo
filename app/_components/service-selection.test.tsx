@@ -26,6 +26,21 @@ describe("ServiceSelection", () => {
     expect(screen.getAllByText("Bald verfügbar")).toHaveLength(screen.getAllByRole("listitem").length - 2)
   })
 
+  it("says which services are for invited customers only, and still links to them so an invited customer can start", () => {
+    render(<ServiceSelection servicesOnSale={["deregistration", "newRegistration"]} betaServices={["newRegistration"]} />)
+
+    const badge = screen.getByText("Nur mit Einladung")
+    const card = badge.closest("li")!
+    expect(screen.getAllByText("Nur mit Einladung")).toHaveLength(1)
+    expect(within(card).getByRole("link", { name: /jetzt zulassen/i })).toHaveAttribute("href", "/register")
+  })
+
+  it("marks no service for invited customers when none is in beta", () => {
+    render(<ServiceSelection servicesOnSale={["deregistration", "newRegistration"]} />)
+
+    expect(screen.queryByText("Nur mit Einladung")).not.toBeInTheDocument()
+  })
+
   it("marks every other service as unavailable, not merely unlinked", () => {
     render(<ServiceSelection servicesOnSale={["deregistration"]} />)
 

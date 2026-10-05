@@ -3,7 +3,7 @@ import { InMemoryRateLimiter } from "@/src/adapters/rate-limit/fake/in-memory-ra
 import type { Beta } from "@/src/core/domain/application/beta"
 import { BetaFull } from "@/src/core/errors/application/beta-full"
 import { InviteRequired } from "@/src/core/errors/application/invite-required"
-import { requireInvite, takeBetaPlace } from "./beta-access"
+import { requireInvite, takeBetaPlace } from "@/src/core/use-cases/checkout/beta-access"
 
 const DAY = 24 * 60 * 60_000
 const beta: Beta = { invites: { newRegistration: ["K7M2-QX9P"] }, dailyPlaces: 2 }

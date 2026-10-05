@@ -117,3 +117,33 @@ describe("startRegistrationCheckout", () => {
     expect(await startRegistrationCheckout(deps, from("203.0.113.7"), input)).toMatchObject({ ok: true })
   })
 })
+
+describe("startRegistrationCheckout while Neuzulassung is in its beta", () => {
+  const input = { data: FILLED_REGISTRATION_FORM, consents: FAKE_NEW_REGISTRATION_CONSENTS }
+  const inBeta = () => {
+    const world = setup()
+    return { ...world, deps: { ...world.deps, beta: { invites: { newRegistration: ["K7M2-QX9P"] }, dailyPlaces: 1 } } }
+  }
+
+  it("opens the order for a customer holding the invite", async () => {
+    const { deps, createPayment } = inBeta()
+
+    expect(await startRegistrationCheckout(deps, from("203.0.113.7"), input, "K7M2-QX9P")).toMatchObject({ ok: true })
+    expect(createPayment).toHaveBeenCalledTimes(1)
+  })
+
+  it("answers a customer without a valid invite as needing one, and opens nothing", async () => {
+    const { deps, createPayment } = inBeta()
+
+    expect(await startRegistrationCheckout(deps, from("203.0.113.7"), input)).toEqual({ ok: false, reason: "invite" })
+    expect(await startRegistrationCheckout(deps, from("203.0.113.7"), input, "WRONG-CODE")).toEqual({ ok: false, reason: "invite" })
+    expect(createPayment).not.toHaveBeenCalled()
+  })
+
+  it("answers the checkout after the day's places are gone as full", async () => {
+    const { deps } = inBeta()
+    await startRegistrationCheckout(deps, from("203.0.113.7"), input, "K7M2-QX9P")
+
+    expect(await startRegistrationCheckout(deps, from("198.51.100.9"), input, "K7M2-QX9P")).toEqual({ ok: false, reason: "full" })
+  })
+})

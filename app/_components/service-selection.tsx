@@ -62,10 +62,18 @@ const SERVICES: { service: Service; title: string; description: string }[] = [
   },
 ]
 
-export function ServiceSelection({ servicesOnSale }: { servicesOnSale: readonly OrderableService[] }) {
+export function ServiceSelection({
+  servicesOnSale,
+  betaServices = [],
+}: {
+  servicesOnSale: readonly OrderableService[]
+  /** The services on sale to invited customers only: they stay linked, since an invited customer starts from here. */
+  betaServices?: readonly OrderableService[]
+}) {
   const cards = SERVICES.map((card) => ({
     ...card,
     funnel: isOrderable(card.service) && servicesOnSale.includes(card.service) ? FUNNELS[card.service] : undefined,
+    inBeta: isOrderable(card.service) && betaServices.includes(card.service),
   }))
 
   return (
@@ -93,6 +101,11 @@ export function ServiceSelection({ servicesOnSale }: { servicesOnSale: readonly 
 
               <CardContent className="flex-1">
                 <CardDescription>{service.description}</CardDescription>
+                {service.funnel && service.inBeta ? (
+                  <Badge variant="secondary" className="mt-4">
+                    Nur mit Einladung
+                  </Badge>
+                ) : null}
               </CardContent>
 
               {/* The price and the action slot are the same height in every

@@ -19,7 +19,7 @@ export default function LandingPage() {
   return (
     <>
       <Hero />
-      <ServiceSelection servicesOnSale={salesOfDeployment().servicesOnSale} />
+      <ServiceSelection {...salesOfDeployment()} />
       <TrustStrip />
       {/* §5.1 at most one section wedge per viewport height */}
       <Wedge />
