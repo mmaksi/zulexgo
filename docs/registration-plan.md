@@ -21,7 +21,7 @@ The second service after de-registration: **Neuzulassung**, registering a brand-
 
 ## Status (2026-10-05)
 
-N1 to N7 are built and merged into `staging`; N0, N8, N9 and N10 are not. **Neuzulassung is not on sale**: `newRegistration` is not in `SERVICES_ON_SALE`, so `/register` is not found, the landing card says "Bald verfügbar" and `submitCheckout` refuses the service. It runs end to end on the fakes and the msw doubles; no real order has gone through it.
+N1 to N7 are built and merged into `staging`, and N8 but for its lawyer texts; N0, N9 and N10 are not. **Neuzulassung is not on sale**: `newRegistration` is not in `SERVICES_ON_SALE`, so `/register` is not found, the landing card says "Bald verfügbar" and `submitCheckout` refuses the service. It runs end to end on the fakes and the msw doubles; no real order has gone through it.
 
 | Milestone | State | Pull requests | What was built, and where it differs from the text below |
 |---|---|---|---|
@@ -33,7 +33,7 @@ N1 to N7 are built and merged into `staging`; N0, N8, N9 and N10 are not. **Neuz
 | N5 | Merged 2026-10-05 | #75 | `confirmPayment` starts the verification; `checkIdentityVerification` runs from the poller and from `/api/webhooks/identity`; emails 2, 3 and the reminder; migration `0011`. **Only a fake identity adapter exists**; there is no Verimi adapter. |
 | N6 | Merged 2026-10-05 | #76 | The funnel `/register` and the parts both funnels share (`app/(funnel)/_components/`); consent stored with the order (D9) with a third checkbox for the power of attorney; migration `0012_record_consent`; `docs/site-contract.md` §4. |
 | N7 | Merged 2026-10-05 | #77 | The status page, the correction form, cancel and emails 1, 4, 5a, 5b and 5c for a Neuzulassung; `docs/site-contract.md` §5. `new-registration-correction.ts` became its own module. |
-| N8 | Not started | none | Lawyer texts, retention (nothing erases the IBAN when an order ends), rate limits on the eligibility lookup and checkout, the threat-model addendum. |
+| N8 | Built but for the lawyer texts, 2026-10-05 | #80 | A Neuzulassung's bank account is dropped when its order ends (`applyEvent`, `withoutBankAccount`; Q54); the postcode check and the checkout are rate limited per address; `docs/threat-model.md`. **Not done:** the lawyer texts and the impact-assessment decision (the founder deferred them: placeholders stay and the service stays off sale), retention of the rest of the data (Q22), and the PAngV display, which needed no change. |
 | N9 | Not started | none | Needs the production stack (launch-plan M8), the Zulex API with Neuzulassung enabled and a real identity adapter; production already refuses the fake identity check while a service that verifies is on sale. |
 | N10 | Not started | none | Plates, sticker and shipping (Q41, Q50). |
 
@@ -43,6 +43,9 @@ Where the built code departs from the text of this plan:
 - **The assigned plate is not read from the API** (the response does not carry it): the status page and email 5a say it is printed in the temporary certificate, an assumption until the N4 spike shows where it appears.
 - **The verification deadline counts from the payment**, the reminder from reaching status 2, so a retried email 2 repeats the deadline the customer was given (Q48).
 - **Consent** has three checkboxes for a Neuzulassung (AGB with the withdrawal notice, the early-start waiver, and a power of attorney that also carries the direct-debit mandate), their text versions stored with the order (Q46, D9).
+- **The bank account is erased when the order ends, not on a schedule**: `applyEvent` is where every order moves, so it drops the account from the request of an order that reaches 5a, 5c or `cancelled`, and the repository stores the details without it. No `Clock` is involved and no job runs. An order abandoned at checkout is never ended, so it keeps its IBAN, as it keeps everything (Q22): erasing it means voiding its payment first.
+- **Rate limits** cover the Neuzulassung's two server actions only (the postcode check 30 an hour, the checkout 10 an hour, per address, `RATE_LIMITS`); de-registration's two are unlimited until launch-plan M7. The server actions' logic moved to `app/(funnel)/register/requests.ts` so it can be tested, as the status page's is.
+- **PAngV**: the price is already shown as a final price "inkl. Behördengebühr und MwSt." (Q19) in the review step and on the landing page, from `SERVICE_PRICES`. The landing card for Neuzulassung no longer says plates can be ordered with it (Q50).
 - **Seeded orders**: one Neuzulassung per status (`ZG-SEED11` to `ZG-SEED19`). There is none for "5b after an identity mismatch" or "cancelled because the verification ran out", which the status page also shows.
 
 Every answer the code gives to Q45–Q56 is a provisional one, listed with its "if the founder answers differently" pointers in [launch-plan.md](launch-plan.md).
