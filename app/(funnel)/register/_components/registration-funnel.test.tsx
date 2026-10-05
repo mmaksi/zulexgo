@@ -155,6 +155,15 @@ describe("Neuzulassung funnel", () => {
       expect(heading()).toHaveTextContent("Können Sie online zulassen?")
     })
 
+    it("tells the customer how long to wait when their address asked too often, and keeps them on the step", async () => {
+      const { user } = setup({ checkEligibility: jest.fn(async () => ({ ok: false as const, reason: "limited" as const, retryAfterMinutes: 42 })) })
+
+      await passRequirements(user)
+
+      expect(screen.getByLabelText("Postleitzahl Ihres Wohnorts")).toHaveAccessibleDescription(/42 Minuten/)
+      expect(heading()).toHaveTextContent("Können Sie online zulassen?")
+    })
+
     it("lets the customer retry when the request itself rejects", async () => {
       const checkEligibility = jest
         .fn()
@@ -559,6 +568,26 @@ describe("Neuzulassung funnel", () => {
       await user.click(payButton())
 
       expect(startCheckout).toHaveBeenLastCalledWith(expect.objectContaining({ acknowledgedDuplicate: true }))
+      expect(await screen.findByText("ZG-ABC123")).toBeInTheDocument()
+    })
+
+    it("tells the customer how long to wait when their address opened too many checkouts, and lets them pay once it has passed", async () => {
+      const startCheckout = jest
+        .fn()
+        .mockResolvedValueOnce({ ok: false, reason: "limited", retryAfterMinutes: 42 })
+        .mockResolvedValueOnce({ ok: true, reference: "ZG-ABC123", clientSecret: "fake-secret" })
+      const { user, actions } = setup({ startCheckout })
+      await reachReview(user)
+      await tickAll(user)
+
+      await user.click(payButton())
+
+      expect(await screen.findByRole("alert")).toHaveTextContent(/42 Minuten/)
+      expect(actions.completeSimulatedPayment).not.toHaveBeenCalled()
+      expect(payButton()).toBeEnabled()
+
+      await user.click(payButton())
+
       expect(await screen.findByText("ZG-ABC123")).toBeInTheDocument()
     })
 

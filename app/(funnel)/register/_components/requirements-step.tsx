@@ -7,6 +7,7 @@ import { TextField } from "@/app/_components/text-field"
 import { Alert } from "@/src/ui/alert"
 import { Button } from "@/src/ui/button"
 import { RadioGroup } from "@/src/ui/radio-group"
+import { failureWording, UNREACHABLE } from "./eligibility-failure"
 import type { RegistrationActions } from "./registration-actions"
 
 export interface RegistrationEligibility {
@@ -51,8 +52,6 @@ type Requirement = (typeof REQUIREMENTS)[number]["key"]
 
 const POSTCODE_ID = "eligibility-postcode"
 
-const UNREACHABLE = "Die Zulassungsstelle ist gerade nicht zu erreichen. Bitte versuchen Sie es in ein paar Minuten noch einmal."
-
 /** site-contract §2.2: stops an ineligible customer before any effort or money. */
 export function RequirementsStep({
   initialPostcode,
@@ -87,11 +86,7 @@ export function RequirementsStep({
     try {
       const result = await checkEligibility(postcode)
       if (!result.ok) {
-        refuse(
-          result.reason === "invalidPostcode"
-            ? "Für diese Postleitzahl finden wir keine Zulassungsstelle. Prüfen Sie die 5 Ziffern."
-            : UNREACHABLE,
-        )
+        refuse(failureWording(result))
         return
       }
       onEligible({ postcode: result.postcode, ikfzStatus: result.ikfzStatus })

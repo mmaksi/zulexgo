@@ -26,8 +26,9 @@ export interface Dependencies {
   readonly documents: DocumentStore
   /**
    * Bounds the entry points that take a status link or an address (status page, downloads,
-   * cancel, correct, resend a link; `limitResend` is the one use case that counts). The
-   * payment, filing and polling flow is not rate limited.
+   * cancel, correct, resend a link; `limitResend` is the one use case that counts) and the
+   * Neuzulassung funnel's two server actions, the postcode check and the checkout (counted in
+   * `app/(funnel)/register/requests.ts`). The payment, filing and polling flow is not rate limited.
    */
   readonly rateLimiter: RateLimiter
   /** The only source of "now": hold expiry, poll schedules and history timestamps all read it. */

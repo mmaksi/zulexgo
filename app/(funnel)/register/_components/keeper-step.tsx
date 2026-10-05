@@ -7,10 +7,9 @@ import { Button } from "@/src/ui/button"
 import { FieldError } from "@/src/ui/field"
 import { RadioGroup } from "@/src/ui/radio-group"
 import type { RegistrationEligibility } from "./requirements-step"
+import { failureWording, UNREACHABLE } from "./eligibility-failure"
 import type { RegistrationActions } from "./registration-actions"
 import { fieldId, useStepForm, type StepProps } from "./use-step-form"
-
-const UNREACHABLE = "Die Zulassungsstelle ist gerade nicht zu erreichen. Bitte versuchen Sie es in ein paar Minuten noch einmal."
 
 /**
  * site-contract §2.3: who the car is registered to. The postcode picked the authority in the first
@@ -55,7 +54,7 @@ export function KeeperStep({
       const result = await checkEligibility(data.postcode)
       if (!here.current) return
       if (result.ok) return onNext({ postcode: result.postcode, ikfzStatus: result.ikfzStatus })
-      refuse(result.reason === "invalidPostcode" ? "Für diese Postleitzahl finden wir keine Zulassungsstelle. Prüfen Sie die 5 Ziffern." : UNREACHABLE)
+      refuse(failureWording(result))
     } catch {
       if (here.current) refuse(UNREACHABLE)
     } finally {
