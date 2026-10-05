@@ -1,6 +1,6 @@
 # ZulexGO B2C — Product Requirements Document (MVP: Vehicle De-registration)
 
-Business logic — statuses, error handling, payment, refunds — follows [launch-plan.md](launch-plan.md), the source of truth when documents disagree. Open points are numbered there Q1–Q18 and cited below by number.
+Business logic — statuses, error handling, payment, refunds — follows [launch-plan.md](launch-plan.md), the source of truth when documents disagree. Open points are numbered there Q1–Q56 and cited below by number. Neuzulassung (registering a brand-new car) is built but not on sale; its scope, status and open questions are in [registration-plan.md](registration-plan.md).
 
 ## 1. Vision
 Let any private vehicle owner in Germany de-register their vehicle (Außerbetriebsetzung) fully online — no Zulassungsstelle appointment, no account, no paperwork mailed. ZulexGO wraps the B2B Zulex API in a guided, trustworthy consumer flow: check eligibility, enter the codes from documents and plates, pay, verify identity, follow every step to the official KBA confirmation.
@@ -14,14 +14,14 @@ Out of scope for MVP: fleet managers, dealers (served by B2B), legal entities.
 
 ## 3. Feature List
 **Must-Have**
-- Guided service selection (de-registration only; other services shown as "coming soon")
+- Guided service selection (de-registration is the only service on sale; the others, Neuzulassung included, are shown as "coming soon")
 - Early eligibility check: German plate, documents & plate seals with intact security codes, one-vs-two plates, authority availability (sets processing-time expectation)
 - Contextual form: front-plate code shown only for two-plate vehicles; plate reservation removed from the MVP
 - Full client-side validation matching API patterns before payment
 - Online payment with the full price and the processing-fee notice shown before paying
 - Order confirmation with order ID and status link
-- Identity verification (Verimi), added later: open questions to the founder (launch plan Q1–Q4)
-- Account-free status dashboard via a personal status link, showing the customer statuses (five until Verimi is added, then seven), with an email on every status change and on every refund
+- Identity verification before filing, for a service filed in the customer's name: built for Neuzulassung on a fake adapter and provisional answers (launch plan Q45–Q48); the Verimi adapter, and whether de-registration needs the check, are open questions to the founder (Q1–Q4)
+- Account-free status dashboard via a personal status link, showing the customer statuses (five for a de-registration, seven for a Neuzulassung, which verifies the customer's identity first), with an email on every status change and on every refund
 - Automatic, silent retry of technical errors before the customer is told anything
 - Correction flow for correctable failures, with the option to cancel instead
 - Clear end states: success with the official confirmation PDF, correctable failure, non-correctable failure with refund
@@ -30,6 +30,7 @@ Out of scope for MVP: fleet managers, dealers (served by B2B), legal entities.
 Statuses, emails, the error algorithm, payment and refund amounts: [launch-plan.md](launch-plan.md). Content per screen: [site-contract.md](site-contract.md).
 
 **Should-Have**
+- Neuzulassung (a brand-new car, 129 €): funnel, identity check, status page and emails are built and not on sale; it goes on sale at the plan's N9, after production, the Zulex API and a real identity adapter exist
 - "Resend my status link" recovery by email + reference number (a launch-plan assumption, not in the business logic)
 - Duplicate-application warning (same plate + VIN with open application)
 - German + English UI (German primary)

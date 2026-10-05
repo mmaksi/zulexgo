@@ -1,4 +1,4 @@
-# Site Contract — ZulexGO B2C (De-registration MVP)
+# Site Contract — ZulexGO B2C (De-registration MVP; Neuzulassung built, not on sale)
 
 Page structure, section content, site behaviour. Business rules: [launch-plan.md](launch-plan.md); visual rules: [design-standard.md](design-standard.md).
 
@@ -7,7 +7,7 @@ Page structure, section content, site behaviour. Business rules: [launch-plan.md
 **Landing page (`/`)**
 1. Header — brand, minimal nav; orientation and trust.
 2. Hero — value proposition; routes into the funnel.
-3. Service selection — de-registration actionable; future services visible-but-disabled.
+3. Service selection — a service is actionable only while it is in `SERVICES_ON_SALE` (de-registration); the others, Neuzulassung included, are visible-but-disabled.
 4. Trust strip — answers "is this official/safe?" before the funnel.
 5. How it works — effort and document expectations in four steps.
 6. FAQ — objections that would otherwise become support tickets.
@@ -24,7 +24,7 @@ The Neuzulassung funnel (`/register`) has seven steps; its contract is §4.
 
 **Status dashboard (`/status/{token}`)**
 1. Vehicle summary — which application this is.
-2. Status stepper — customer statuses 1 → 4 → 5a | 5b | 5c, current position; 2 and 3 slot in when Verimi is added.
+2. Status stepper — customer statuses 1 → 4 → 5a | 5b | 5c, current position; a Neuzulassung has 2 (identity check) and 3 (identity confirmed) between 1 and 4 (§5).
 3. Outcome block — 5a: success documents; 5b: reason, correct-or-cancel choice, fee notice; 5c/cancelled: reason, refund info, new-application CTA.
 4. Correction form (conditional) — fix and resubmit rejected data in place.
 5. Help block — lost-link recovery, support.
@@ -75,7 +75,7 @@ Per field: label ≤40, helper ≤150, locator image (where to find it), error �
 
 ### 2.6 Status Dashboard (status link)
 - **Vehicle summary** — plate + masked VIN only; never security codes.
-- **Status stepper** — the customer statuses as three rows now (1, 4 and the outcome 5a | 5b | 5c), five with Verimi; per step: title ≤50, status line ≤50, description ≤150 chars, timestamp (our backend), state (done/current/pending/failed). Titles/status lines = the statuses and internal labels in `launch-plan.md` § Context; status 1 wording depends on Q7.
+- **Status stepper** — the customer statuses as three rows for a de-registration (1, 4 and the outcome 5a | 5b | 5c) and five for a Neuzulassung, which adds the identity check; per step: title ≤50, status line ≤50, description ≤150 chars, timestamp (our backend), state (done/current/pending/failed). Titles/status lines = the statuses and internal labels in `launch-plan.md` § Context; status 1 wording depends on Q7.
 - **Outcome block** variants:
   - *5a* — success text ≤300 chars + documents list.
   - *5b* — reason (our wording from the rejection catalogue, never `errorInfo`'s) ≤300; the correction form and the CTA "Antrag stornieren" ≤25 with the adjacent fee notice ("19.99 € is retained, the rest is refunded") ≤150 chars; cancelling asks for confirmation in a dialog that repeats the amounts.
@@ -86,10 +86,10 @@ Per field: label ≤40, helper ≤150, locator image (where to find it), error �
 - **Help block** — support email + "resend link" entry (needs email + order ID), ≤150 chars.
 
 ### 2.7 Transactional Emails
-Six emails now, eight once Verimi is added (trigger, subject, content): table in `launch-plan.md` § M5, plus resend-link email (launch-plan assumption). Per email: **subject** ≤70 chars incl. order ID; **body** ≤600 chars, one status statement + CTA button; no personal data beyond plate + order ID; never a security code; none during the silent automatic retry. German wording is a translation task.
+Eight emails (trigger, subject, content): table in `launch-plan.md` § M5, plus a reminder to verify and the resend-link email (launch-plan assumption). Emails 2 and 3 and the reminder are sent for a Neuzulassung only; a de-registration does not verify (Q4). Per email: **subject** ≤70 chars incl. order ID; **body** ≤600 chars, one status statement + CTA button; no personal data beyond order ID (and a de-registration's plate); never a security code; none during the silent automatic retry. German wording is a translation task.
 
 ### 2.8 Content gaps (open in the launch plan)
-1. **Identity-verification content (status 2–3, emails 2–3)** — depends on who integrates Verimi and whether de-registration needs it (Q1–Q4); Verimi deadline wording on Q14.
+1. **Identity-verification content (status 2–3, emails 2–3)** — built for a Neuzulassung on provisional answers (Q45–Q48, §5), with the fake identity adapter; the real one depends on who integrates Verimi (Q1–Q3), and whether de-registration needs it is Q4; Verimi deadline wording on Q14.
 2. **Rejection reason copy and 5b/5c split** — depend on undocumented `errorInfo` code catalogue, Q10, Q18. Until it exists, unrecognised error → 5b (launch-plan fallback).
 3. **Timestamps** — only backend-owned steps have them; API-side transitions don't, so we timestamp at poll time (approximate; acceptable, note it).
 4. **Status 1 wording** — "Payment captured" vs "payment authorised" depends on when a held card payment is captured (Q7).

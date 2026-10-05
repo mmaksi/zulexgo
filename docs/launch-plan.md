@@ -112,10 +112,10 @@ Funnel UI (M4 Track B) starts once M2's fakes exist, parallel to M3.
   | `MAIL_DRIVER` | `console` \| `resend` | `RESEND_API_KEY`, `MAIL_FROM`; `MAIL_ALLOWLIST` on staging | M4 |
   | `REPOSITORY_DRIVER` | `fake` \| `postgres` | `DATABASE_URL`, `DIRECT_DATABASE_URL`, `CODES_ENCRYPTION_KEY` | M3 |
   | `STORAGE_DRIVER` | `fake` \| `supabase` | `SUPABASE_STORAGE_URL`, `SUPABASE_STORAGE_BUCKET`, `SUPABASE_STORAGE_SERVICE_KEY` | M5 |
-  | `IDENTITY_DRIVER` | `fake` \| `verimi` | Verimi credentials — names pending Q1–Q3 | M5 |
+  | `IDENTITY_DRIVER` | `fake` today; `verimi` is added with its adapter | Verimi credentials — names pending Q1–Q3 | M5, once the adapter exists |
 
   A variable is required **only when its driver is switched on**: until M4, `APP_ENV=dev` boots on fakes with no secrets; staging deploys in M1 before any vendor credential exists. From M4, dev's `.env.local` carries the Stripe `dev` sandbox keys and the Zulex integration key (see Adapters per stage). Production rejects every fake value, so it cannot quietly run on one.
-- Guardrails as tests: live Stripe key rejected unless production; test key rejected in production; production Zulex URL rejected unless production; production rejected on any fake driver; staging mail confined to `MAIL_ALLOWLIST`, which production forbids; no source file branches on `NODE_ENV`.
+- Guardrails as tests: live Stripe key rejected unless production; test key rejected in production; production Zulex URL rejected unless production; production rejected on any fake driver (the identity driver only while a service that verifies the customer is on sale, `fakeIdentityProblem` in `env.ts`); staging mail confined to `MAIL_ALLOWLIST`, which production forbids; no source file branches on `NODE_ENV`.
 - `src/config/container.ts` — `createContainer(env)`. First two ports the full 7-step way (port → contract → fake → real → wire → lint): `Clock` and `TokenGenerator`, so the pattern exists before Stripe/Zulex.
 - ESLint `no-restricted-imports` block from `external-services` in `eslint.config.mjs`.
 - `.env.example` committed with every variable and a one-line comment.
@@ -202,10 +202,10 @@ Funnel UI (M4 Track B) starts once M2's fakes exist, parallel to M3.
 
 **Goal:** A paying customer follows every step by email and dashboard, verifies identity, and downloads the official confirmation when finished.
 
-**Status:** built except the Verimi step. What remains is Verimi (adapter, emails 2 and 3, the 2 → 3 transition, `IDENTITY_DRIVER`), waiting for Q1–Q4, and a run on staging with the storage key set.
+**Status:** built except the Verimi adapter. Statuses 2 and 3, emails 2 and 3, a reminder to verify and the 2 → 3 transition run for a Neuzulassung on the fake identity adapter (`IDENTITY_DRIVER` accepts `fake` only); de-registration does not verify (Q4, provisional). What remains is the Verimi adapter, waiting for Q1–Q3, and a run on staging with the storage key set.
 
 **How:**
-- The emails of business-logic document §5 (six now, eight once Verimi is added), as reviewed HTML snapshots (the one snapshot case `CLAUDE.md` permits), with no security codes and no token beyond the status link:
+- The emails of business-logic document §5 (eight; emails 2 and 3, and a reminder to verify, are sent for a Neuzulassung only), as reviewed HTML snapshots (the one snapshot case `CLAUDE.md` permits), with no security codes and no token beyond the status link:
 
   | # | Trigger | Subject | Content |
   |---|---|---|---|
@@ -370,7 +370,7 @@ Funnel UI (M4 Track B) starts once M2's fakes exist, parallel to M3.
 
 ## Known defects (docs vs code audit, 2026-09-29)
 
-Found on `main` @ `1ed5034`. Numbered D1–D11; D2, D3, D4, D5, D6, D7 and D11 are fixed.
+Found on `main` @ `1ed5034`. Numbered D1–D11; D2, D3, D4, D5, D6, D7, D9 and D11 are fixed.
 
 | # | Defect | Status |
 |---|---|---|
@@ -382,13 +382,13 @@ Found on `main` @ `1ed5034`. Numbered D1–D11; D2, D3, D4, D5, D6, D7 and D11 a
 | D6 | A create timeout ends in 5c with a full refund | Fixed (provisional answer to Q23) |
 | D7 | Landing price ("ab 29,00 €") differs from checkout (69,99 €) | Fixed: both read the founder's price list (Q19) |
 | D8 | Legal pages are wrong or missing | Parked (M7) |
-| D9 | Consent (`agb_version`, `consent_at`) is never stored | Planned |
+| D9 | Consent (`agb_version`, `consent_at`) is never stored | Fixed (Neuzulassung plan N6) |
 | D10 | Checked radio contrast is 2.31:1 | Planned |
 | D11 | On staging, two Vercel instances can give two orders the same fake Zulex id | Fixed |
 
 **Planned fixes** (test-first, one PR each into `staging`; D3, D4 and D6 moved to the fixed list below with M6):
 
-- **D9.** Write both columns at checkout (`app/(funnel)/deregister/actions.ts`, `submit-checkout.ts`, `Application`, `postgres-application-repository.ts`); test that they persist and that checkout is refused without them.
+- **D9 (fixed).** Checkout now stores what the customer ticked. `recordConsent` (`src/core/domain/application/consent.ts`) turns what the browser sent into `Application.consent` (`agbVersion`, `givenAt`, and for a Neuzulassung `powerOfAttorneyVersion`), `submitCheckout` refuses an order without every consent its service needs (`ConsentRequired`), and the repository writes `agb_version`, `consent_at` and the new `power_of_attorney_version` (migration `0012_record_consent`, whose check refuses a version without a time). The versions are `LEGAL_TEXT_VERSIONS`, `draft-1` until the lawyer's texts replace the placeholders (Q13, Q46); orders made before it, the seeded ones included, have no consent.
 - **D10.** `src/ui/radio-group.tsx` draws an orange dot and border on white; `docs/design-standard.md` requires an orange fill with a grau-dark mark. Presentation: checked in the browser, not tested.
 - **D2 (fixed).** A held card fires no `charge.refunded` (a release fires `payment_intent.canceled`, a fee-only capture `charge.captured`), and the webhook acts only on "payment ready", so email 6 was never sent. `handleFailure` now sends it right after the money is returned, under the key `confirmRefund` uses, so the provider's confirmation adds nothing and no new Stripe webhook event is needed.
 - **D5 (fixed).** Emails 4, 5a, 5b and 5c went out after the status was saved. Each now goes out first, keyed by its transition, so a failed send leaves the application at its old status, backed off like any other failure after the service answered (a minute, then the online poll table), and a later poll sends it. To make that rerun safe, settlement recognises what it already did (`settledDecision`) and `submitToKba` finishes a failure instead of filing an application whose payment was released. A mailer that fails for good now holds an application at its old status instead of dropping the email (Q33); the poll log names the order and the kind of error each time it does. Zulex's application id is stored before email 4 is sent, so a failed email never makes the next tick file the application again (Q23: a replay's answer is unspecified).
@@ -409,30 +409,32 @@ Nothing below is decided here. Numbers are stable — milestones refer to them. 
 | 2 — blocks the status model in M2/M3 | Q1–Q4, Q7, Q8, Q9, Q18 | Status list, error algorithm and refund function are built in M2 and encoded in the M3 schema. |
 | 3 — blocks launch, not the skeleton | Q10–Q16, Q19–Q44 | Needed for M5–M7; earlier work proceeds on fakes and placeholders. |
 | 4 — non-blocking | Q17 | A placeholder processing time can ship and be replaced. |
+| 5 — Neuzulassung only | Q45–Q56 | Not needed for the de-registration launch. Q45, Q46, Q50 and Q56 shape the Neuzulassung plan first (`docs/registration-plan.md`). |
 
 **Identity verification (Verimi)**
 
 1. **Who integrates Verimi?** ZulexGO calling Verimi directly, or the Zulex backend running the Verimi step? Zulex API spec has no Verimi field, endpoint or status.
    **Blocks:** M5 (Verimi adapter, `IDENTITY_DRIVER` credentials), M7 (privacy policy and data processing agreement).
-   **Provisional answer in code:** none yet. The `IdentityVerification` port and its fake exist, outside the flow.
+   **Provisional answer in code (not approved by the founder):** ZulexGO runs the verification itself, behind the `IdentityVerification` port (`src/core/ports/identity/`); a Neuzulassung goes through it (Q45). Only the fake adapter exists: no Verimi adapter is written, because no source for Verimi's API is confirmed, and the Zulex API has no verification step.
+   **If the founder answers differently:** if Zulex runs the verification, the adapter is a Zulex-backed implementation of the same port (registration plan N5).
 2. **Who sends email 2 and where does the Verimi link come from?** Document lists it among emails ZulexGO sends via Resend, but ZulexGO can't create the link unless it integrates Verimi itself.
    **Blocks:** M5 (email 2).
-   **Provisional answer in code:** none yet. No email 2 template.
+   **Provisional answer in code (not approved by the founder):** ZulexGO sends email 2 (`identityVerificationRequested`) through the mailer, carrying the link the provider's `start` returns (the fake returns a placeholder), and a reminder (`identityVerificationReminder`, Q48).
 3. **How does ZulexGO learn verification succeeded or failed?** Verimi callback, Zulex status, or polling? Zulex exposes only `IN_PROGRESS | FINISHED | ERROR`.
    **Blocks:** M2 (event behind the 2 → 3 transition; placeholder until answered), M5 (the transition itself), M6 ("identity verification failed → 5c").
-   **Provisional answer in code:** none yet.
+   **Provisional answer in code (not approved by the founder):** the poller reads the result (`getResult`) of every order at status 2. The provider's signed callback at `/api/webhooks/identity` (header `x-identity-signature`, a name of ours until a provider is chosen) only triggers the same read: a callback never carries an outcome that is acted on (`readNotification`).
 4. **Does de-registration need Verimi at all?** De-registration request carries no owner data, and under i-Kfz the scratched security codes are the proof of possession. Several document examples (eVB, plate shipping, owner address) come from registration services.
    **Blocks:** M2 (seven or five statuses), M3 (status column), M5 (stepper, emails 2 and 3), M7 (whether the privacy policy covers ID and selfie data).
-   **Provisional answer in code (not approved by the founder):** the flow runs without Verimi, 1 → 4 (`src/core/use-cases/payment/confirm-payment.ts`). Whether launch waits for it is still open.
+   **Provisional answer in code (not approved by the founder):** de-registration runs without Verimi, 1 → 4 (`DIRECT_SERVICES` in `application-status.ts`, `src/core/use-cases/payment/confirm-payment.ts`); every other service verifies first (Q45). Whether the de-registration launch waits for it is still open.
 14. **Verimi deadline:** email 2 names a deadline. How long, is there a reminder, and what happens when it passes (5c with 19.99 € retained, or full refund)?
    **Blocks:** M5 (email 2 content), M6 (expiry outcome and its refund).
-   **Provisional answer in code:** none yet.
+   **Provisional answer in code (not approved by the founder):** see Q48: a reminder after 2 days, a deadline after 4, and nothing was filed when it passes, so the order is cancelled with everything back, not 5c. It applies to a Neuzulassung only, since de-registration does not verify (Q4).
 
 **Submission to Zulex and the KBA**
 
 5. **When is the application "handed over to the Zulex API"?** Step 1 (after payment) or step 3 (after verification)? Per the spec, a create call at step 1 would submit to the KBA immediately, contradicting step 4 coming after step 3.
    **Blocks:** M2 (status transitions), M4 (which use case calls Zulex — skeleton can't run end to end without it).
-   **Provisional answer in code (not approved by the founder):** step 1, right after payment (`src/core/use-cases/registration/submit-to-kba.ts`).
+   **Provisional answer in code (not approved by the founder):** step 1, right after payment (`src/core/use-cases/registration/submit-to-kba.ts`). A service that verifies the customer's identity first (Neuzulassung) is filed after status 3 instead (Q45).
 
 **Payment and capture**
 
@@ -478,7 +480,7 @@ Nothing below is decided here. Numbers are stable — milestones refer to them. 
 
 13. **Right of withdrawal vs the 19.99 € fee:** can a consumer withdrawing within 14 days be charged the fee, and does ZulexGO still need the immediate-performance waiver? Needs the lawyer.
    **Blocks:** M4 (consent checkboxes at checkout), M7 (AGB fee clause).
-   **Provisional answer in code (not approved by the founder):** two mandatory checkboxes at checkout: "AGB akzeptiert, Widerrufsbelehrung gelesen", and the immediate-performance waiver ("verlange ausdrücklich … vor Ablauf der Widerrufsfrist … Widerrufsrecht erlischt, sobald vollständig ausgeführt"). No fee rule on withdrawal. Consent is not stored (Known defects, D9).
+   **Provisional answer in code (not approved by the founder):** two mandatory checkboxes at checkout: "AGB akzeptiert, Widerrufsbelehrung gelesen", and the immediate-performance waiver ("verlange ausdrücklich … vor Ablauf der Widerrufsfrist … Widerrufsrecht erlischt, sobald vollständig ausgeführt"). No fee rule on withdrawal. The consents are stored with the order (D9), and a Neuzulassung adds a third (Q46).
 
 **Emails**
 
@@ -533,7 +535,7 @@ Nothing below is decided here. Numbers are stable — milestones refer to them. 
 30. **"Kfz-Steuer und Versicherung enden automatisch":** the status page says so at 5a. Is that correct for every case, or does the customer still have to tell their insurer?
    **Blocks:** M5 (status page copy), M7 (legal review).
    **Provisional answer in code (not approved by the founder):** the sentence stays on the status page; the email does not repeat it.
-31. **Who signs off the German wording?** The seven customer emails (`src/adapters/mail/resend/copy.ts`) and the status page are translated by us from an English document. Do the emails also need the company name and address in a footer, as the site's footer has?
+31. **Who signs off the German wording?** The customer emails (`src/adapters/mail/resend/copy.ts`) and the status page are translated by us from an English document. Do the emails also need the company name and address in a footer, as the site's footer has?
    **Blocks:** M5 (emails), M7 (legal).
    **Provisional answer in code:** the reviewed HTML snapshots in `src/adapters/mail/resend/__snapshots__/` are the artefact to review; no company name or address in the emails, only the support address. The M6 wording is ours too and unreviewed: the general reasons in `src/core/domain/registration/rejection-catalogue.ts`, the correction form and cancel dialog on the status page, and the 5b email's new text.
 32. **A customer at 5b before M6 exists:** *closed by M6.* The page and email 5b now offer correcting and cancelling; a mail to support is no longer the way. The question stays so the number does not move.
@@ -585,12 +587,65 @@ Nothing below is decided here. Numbers are stable — milestones refer to them. 
    **If the founder answers differently:** a link on the confirmation page and in email 5a, or a port per `external-services` if carbonify.de has an API; the price stays unaffected, since the quota costs the customer nothing.
 43. **When do the other services launch, and in which order?** The landing page shows Neuzulassung, Wiederzulassung, Ummeldung and Adressänderung with their prices as "Bald verfügbar". The add-ons (Q41) and the THG-Quote (Q42) belong to them, so their answers wait on this one.
    **Blocks:** nothing in the MVP.
-   **Provisional answer in code (not approved by the founder):** only de-registration is sold. The other cards are visible and disabled (`available: false` in `app/_components/service-selection.tsx`).
-   **If the founder answers differently:** each service needs its own request type beside `DeregistrationRequest` in `src/core/domain/`, its Zulex call on the `RegistrationGateway` port with a fake and a contract case, and its own funnel under `app/(funnel)/`; the price is already in `SERVICE_PRICES`. Flip `available` last, and update `service-selection.test.tsx`, which asserts exactly one purchasable service.
+   **Provisional answer in code (not approved by the founder):** only de-registration is sold: `SERVICES_ON_SALE` in `src/core/domain/application/service.ts` lists it alone, the landing cards read the list (the other cards are visible and disabled), and `submitCheckout` refuses a service that is not on it. Neuzulassung is built (request, Zulex adapter, identity step, funnel, status page, emails) and not sold: `/register` is not found until it is on the list.
+   **If the founder answers differently:** each service needs its own request type beside `DeregistrationRequest` and `NewRegistrationRequest` in `src/core/domain/application/` (a member of `ServiceRequest`), its Zulex call on the `RegistrationGateway` port with a fake and a contract case, a funnel under `app/(funnel)/` and an entry in `FUNNELS` (`app/_components/funnels.ts`); the price is already in `SERVICE_PRICES`. Add the service to `SERVICES_ON_SALE` last, and update `service-selection.test.tsx`, which asserts which services are purchasable, and `app/(funnel)/register/page.test.ts`, which asserts `/register` is not found while Neuzulassung is off the list. The plan for Neuzulassung is `docs/registration-plan.md`.
 44. **Can the customer cancel before an error, or only after one?** The price calculation says a processing fee of 19.99 € is retained "bei Abbruch durch den Kunden" and the rest refunded within 3–5 Werktagen, and the notice must be visible before payment. The application filed at Zulex cannot be withdrawn (the API has no cancellation endpoint, `docs/deregistration-user-journeys.md` § API & business problems, item 8), so today a customer can only cancel at 5b, after a correctable failure. Does "Abbruch" mean exactly that, or also giving up while the KBA is still processing?
    **Blocks:** M7 (the AGB fee clause, with Q13).
    **Provisional answer in code (not approved by the founder):** "Abbruch" is the cancel at 5b, as in the business logic document §3. The fee, the refund and the 3–5 Werktage are shown before payment (`review-step.tsx`), on the status page and in the refund email.
    **If the founder answers differently:** a cancel while the KBA is processing has to withdraw the application first, which needs Zulex to offer a way to do it; without one, the only option is a goodwill refund after the fact, decided by hand. Cancelling between payment and filing (status 1, normally seconds) would need `cancel-application.ts` to accept it and release the hold; today the status machine allows `cancelledByCustomer` only from a 5b.
+
+**Added 2026-10-03 (Neuzulassung plan, `docs/registration-plan.md`)**
+
+Each answer below is what milestones N1–N7 of the plan (merged 2026-10-03 to 2026-10-05) built while the question was still open, chosen as the safest option. None is approved by the founder. Neuzulassung is not on sale (Q43), so none of it reaches a customer yet.
+
+45. **Does Neuzulassung need identity verification before launch?** Unlike de-registration (Q4), the request sends the owner's name, birth date and address to the KBA, and without a check anyone holding a Teil II and its code could register a car in someone else's name.
+   **Blocks:** N5, N9; with Q1–Q3.
+   **Provisional answer in code (not approved by the founder):** yes. Statuses 2 and 3 run for every service except de-registration (`DIRECT_SERVICES` in `application-status.ts`): `confirmPayment` starts the verification for a Neuzulassung instead of filing it, and Zulex is called only after status 3 (`checkIdentityVerification`, run by the poller and by the signed callback at `/api/webhooks/identity`). Only the fake identity adapter exists, and production refuses it while a service that verifies is in `SERVICES_ON_SALE` (`fakeIdentityProblem` in `src/config/env.ts`), so Neuzulassung cannot go on sale before a real adapter does.
+   **If the founder answers differently:** `DIRECT_SERVICES` lists the services that go from payment straight to the KBA: adding `newRegistration` sends it 1 → 4 like de-registration, `confirmPayment` then calls `submitToKba` for it, and the code under `src/core/use-cases/identity/` goes unused. Update the tests that walk the verified path (`identity-verification.test.ts`, `application-status.test.ts`) and the guardrail in `env.test.ts`.
+46. **On whose authority does Zulex file a private person's registration?** The API has a dealer path (`PERMANENT_POA`) and an individual path carrying data, but no proof that the owner asked for it. Does the customer give ZulexGO or Zulex a power of attorney (Vollmacht), in what form (checkbox, signed document, through Verimi), and must it be kept?
+   **Blocks:** N6 (checkout consent), N8 (lawyer text), Q56.
+   **Provisional answer in code (not approved by the founder):** three mandatory checkboxes at checkout for a Neuzulassung: the AGB with the withdrawal notice, the early-start waiver (Q13) and a power of attorney that also carries the direct-debit mandate for the vehicle tax. The order keeps the text versions and the time (`Application.consent`, `LEGAL_TEXT_VERSIONS` in `consent.ts`, migration `0012`), and `submitCheckout` refuses an order without all three (`ConsentRequired`). Both texts are drafts (`draft-1`) written by us, not by the lawyer.
+   **If the founder answers differently:** the consents each service needs are `REQUIRED` in `consent.ts`, the wording of every checkbox is in the two `review-step.tsx` files, and `LEGAL_TEXT_VERSIONS` must change whenever a text does. A signed document or a Verimi signature becomes a step after payment, before status 3, with its own email.
+47. **What if the verified identity does not match the owner on the order?** Verimi may report a name or birth date that differs from what the customer typed (a typo, a missing second first name).
+   **Blocks:** N5.
+   **Provisional answer in code (not approved by the founder):** nothing has been filed when the verification finds someone other than the owner, so the order goes to 5b (failure `identityMismatch`) with an email 5b that says nothing was filed. The customer corrects name and birth date (and, if they like, the eVB number and Teil II) on the status page at no cost, and the same verification is read again at once: a match files the order, another mismatch returns it to 5b. Names are compared in whole, ignoring case, accents, umlaut spellings, apostrophes and hyphens (`isTheOwner` in `verified-person.ts`); the birth date must agree exactly. Once an order's identity was verified its name and birth date can no longer be corrected, because the person was checked against them. A failed verification (not a mismatch) is 5c, refund minus 19.99 €. A mismatched customer who cancels instead pays the 19.99 € fee, as at any 5b (Q44).
+   **If the founder answers differently:** taking name and birth date from the provider instead of the form removes the mismatch but moves the verification before payment, which reorders statuses 1–3. Treating a mismatch as a failed verification makes it 5c: end it with `identityVerificationFailed` in `accept` (`check-identity-verification.ts`). The correction is `recheck` in `correct-application.ts` with `new-registration-correction.ts`, and the two email 5b variants are in `copy.ts`.
+48. **Verification deadline for Neuzulassung (Q14 for this service):** the card hold runs while the customer has not verified. How long, which reminder, and what happens when the deadline passes?
+   **Blocks:** N2, N5.
+   **Provisional answer in code (not approved by the founder):** a reminder after 2 days, counted from reaching status 2, and a deadline after 4, counted from the payment, so a retried email 2 repeats the deadline the customer was already given (`VERIFICATION_REMINDER_AFTER_MS` and `VERIFICATION_DEADLINE_AFTER_MS` in `verification-policy.ts`). The deadline ends before the card hold would be captured ahead (Q20). When it passes with no result the order is cancelled (the status page says the verification ran out), the hold is released in full (a captured payment is refunded in full, outcome `verificationExpired`) and email 6 follows. The provider's answer is read before the clock, so a customer who verified in time is accepted even if the poller reads it late. The reminder is its own email (`identityVerificationReminder`).
+   **If the founder answers differently:** the deadline and reminder are one pure function in `verification-policy.ts`, beside `hold-policy.ts`; a deadline that ends after the capture margin means a captured payment is refunded instead of released, and keeping the fee makes it a `retainFee` row in `refund-policy.ts`.
+49. **Who and what can be registered at launch?** The API takes cars, motorcycles, 125s, quads, trailers and trucks; taxi and rental use; day registrations; legal entities; E, H and seasonal plates.
+   **Blocks:** N2, N6.
+   **Provisional answer in code (not approved by the founder):** cars only (`vehicleType` `CAR` in the Zulex body, `request-bodies.ts`); a private keeper of 18 or over (`ownerSchema` checks the age against the clock; the funnel's first step asks that the keeper lives in Germany); a brand-new car with a 17-character VIN and a manufacturer-issued Teil II with a security code; standard registration, normal use. An E-plate only for a fully electric car, a seasonal plate with months 1 to 12, no H-plate (`new-registration-request.ts`, `plate-options.ts`); whether a season has a minimum or maximum length is not checked. The funnel's first step asks the questions and stops with the reason and the offline alternative (`requirements-step.tsx`).
+   **If the founder answers differently:** widen `new-registration-request.ts` and the eligibility step; each new vehicle type needs its own plate-count and copy.
+50. **Does Neuzulassung launch with plates?** Business-logic §1 says that for registrations "the licence plates are produced and sent by post" at 5a, but who makes them, how they are paid for after completion, and the delivery address are open (Q41). Without plates from us the customer has them made locally.
+   **Blocks:** N7 (5a copy), N10.
+   **Provisional answer in code (not approved by the founder):** launch without selling plates. Status page and email 5a say that the assigned plate is printed in the temporary certificate, that the authority posts the rest, and that plates are made at a local plate maker (`NEW_REGISTRATION_NEXT_STEPS` in `new-registration-next-steps.ts`, shared by both).
+   **If the founder answers differently:** N10 moves before N9, with Q41's answers; the wording to change is in `new-registration-next-steps.ts`.
+51. **Wish plates (Wunschkennzeichen):** the API takes a wish plate only with a PIN from a reservation made on the authority's own portal, and has no reservation endpoint. Do we offer it, and is any authority fee for it inside the 129 €?
+   **Blocks:** N2, N6, Q52.
+   **Provisional answer in code (not approved by the founder):** not offered: the request has no wish plate or PIN, the authority assigns the plate, and `NewRegistrationPatch` carries none. This also avoids "plate not available" failures and an unpriced fee.
+   **If the founder answers differently:** a plate-and-PIN field group in the funnel's plate step (`plate-step.tsx`), `wishLicencePlate` in `new-registration-request.ts`, in `request-bodies.ts` and in `NewRegistrationPatch` (`registration-gateway.ts`) for the 5b correction, and a price rule if the fee is extra.
+52. **Is 129 € the final price everywhere?** Authority fees can differ by authority and by plate type (E, seasonal, wish). Does 129 € cover every case, and are they gross of VAT (Q19)?
+   **Blocks:** N8 (PAngV display).
+   **Provisional answer in code (not approved by the founder):** 129 € flat (`SERVICE_PRICES.newRegistration`), no surcharge for any plate option, shown as Q19's provisional wording says. The `FEE` documents Zulex lists are kept and offered on the status page; no monthly reconciliation against them exists yet.
+   **If the founder answers differently:** a surcharge per option goes into `pricing.ts` as a priced basket line (`quote()`), and the review step shows it.
+53. **Which Neuzulassung failures are correctable (Q10 for this service)?** Business-logic §2 names wrong eVB and plate unavailable (5b), wrong owner data, wrong address, failed identity verification (5c). Zulex's `PATCH` can change only the eVB, the Teil II number and code, and a wish plate.
+   **Blocks:** N2, N7.
+   **Provisional answer in code (not approved by the founder):** an error in a field Zulex's `PATCH` can change (the eVB number, the Teil II number and code) is corrected at 5b on the status page; owner, address, bank and vehicle data cannot be corrected once filed. `REJECTION_CATALOGUE` is still empty (Q10), so every KBA code is unknown: one silent retry, then 5b, whose form offers only the eVB and Teil II, so a mistake in other data ends with the customer cancelling (the fee is kept). A failed identity verification is 5c.
+   **If the founder answers differently:** entries in `REJECTION_CATALOGUE`, keyed by service if Zulex's codes differ per service.
+54. **Holding the vehicle-tax bank account:** business-logic §4 says payment data is not stored on our servers. The direct-debit mandate for vehicle tax is not our payment, but it must be held from checkout until filing, after verification, possibly days later. May we store it encrypted, for how long, and may the account belong to someone other than the owner?
+   **Blocks:** N3, N8.
+   **Provisional answer in code (not approved by the founder):** the account is stored AES-GCM encrypted with the owner data, in one blob bound to the order's reference (`encrypted_details`, `new-registration-details.ts`, migration `0010`); German IBANs only (`bank-account.ts`); the account holder is the owner. Erasing it when the order ends is not built: nothing deletes it yet (N8, Q22).
+   **If the founder answers differently:** an earlier erase point means a refile after a 400 (Q37) has to ask for the IBAN again; another account holder needs a field Zulex does not have (Q56).
+55. **What does the customer receive after 5a, and what must they do?** Documents shipped or picked up (`deliveryInfo`), whether the original Teil II must be sent to the authority, and what the temporary registration certificate allows until the post arrives.
+   **Blocks:** N7 (5a copy and email), N8.
+   **Provisional answer in code (not approved by the founder):** shipping to the owner's address only (`deliveryInfo` `SHIPPING`, `request-bodies.ts`). 5a lists the documents under their own names (confirmation, temporary certificate, fee statement), says the authority posts the rest and that its letter says what to do next, and claims nothing about driving on the temporary certificate (`NEW_REGISTRATION_NEXT_STEPS`).
+   **If the founder answers differently:** pick-up adds a choice to the funnel's delivery and the copy of email 5a (`copy.ts`, `new-registration-next-steps.ts`).
+56. **Zulex provider questions for Neuzulassung:** is it enabled for private persons on our account and in the integration environment? Where does the assigned plate appear when no wish plate is sent? Is `sepaInfo` required? The format of the Teil II number and security code? Which optional owner fields the authority expects? How is the owner's identity and power of attorney proven to the authority (Q1, Q46)? What does `PICKUP` mean for a private person? The Neuzulassung error codes, and do they differ from de-registration's? Can a `PATCH` drop a wish plate?
+   **Blocks:** N4, N7, N9.
+   **Provisional answer in code (not approved by the founder):** `sepaInfo` always sent; the assigned plate is not read from the API (the response does not carry it), so 5a says it is printed in the temporary certificate, an assumption until the spike shows where it appears; Teil II number 1–20 characters and code at least 1, as the spec says; one `REJECTION_CATALOGUE` for both services. The spike has not been run: it needs a `ZULEX_API_KEY` for the integration environment, and its findings are to go to `docs/registration-user-journeys.md`, which does not exist yet.
+   **If the founder answers differently:** each answer lands in the Zulex adapter's schemas and `new-registration-request.ts`; findings go into `docs/registration-user-journeys.md` (N4).
 
 ## Verification
 
