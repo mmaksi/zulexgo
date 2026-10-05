@@ -1,23 +1,16 @@
 # Real de-registration journeys
 
-What a customer actually meets today, read from the code on `staging` @ `71409d8` (M0–M6 merged), 2026-09-30.
+What a customer actually meets today, read from the code on `staging` @ `e2d4331` (M0–M6 and Neuzulassung N1–N7 merged), 2026-10-05.
 
 [deregistration-user-journeys.md](deregistration-user-journeys.md) says what *should* happen (J1–J12, API findings). This file says what *does*. Intent still follows [launch-plan.md](launch-plan.md), which wins when documents disagree; differences are listed in §14.
 
-**Changes since this snapshot** (checked against `staging` @ `775c613`, 2026-10-05; the rest of this file has not been re-audited):
+Every journey here is a de-registration, the only service on sale (`SERVICES_ON_SALE`): checkout refuses any other service, and `/deregister` shares its frame, review and payment parts with the Neuzulassung funnel without any difference for the customer. A Neuzulassung (built, not on sale: [registration-plan.md](registration-plan.md)) alone passes statuses 2 and 3, with emails 2, 3 and a reminder, on a fake identity adapter; its other paths are not described here.
 
-- **Consent is stored** (launch plan D9, migration `0012_record_consent`): `Application.consent` keeps the AGB version and the time, and checkout refuses an order without both consents. §1 #5, B10 and the "not built" list in §15 still say it is not stored.
-- **The price is no longer a stand-in.** `SERVICE_PRICES.deregistration` is 49.00 € (the founder's price list, D7 fixed). The fee is still 19.99 €, so a cancel at 5b returns 29.01 €, and the 50.00 € and 69.99 € figures in §1 #4, §9, §12, §14 and §15 are out of date.
-- **Seeded orders:** sixteen, not seven: the seven de-registrations and nine Neuzulassungen (`/status/seed-status-link-new-registration-<status>`).
-- **Migrations `0008` to `0012`** also apply on a deploy (the service, two statuses, a Neuzulassung's details, its identity follow-up, consent). §16 names only `0006` and `0007`.
-- **Checkout refuses a service that is not in `SERVICES_ON_SALE`**; `/deregister` now shares its frame, review and payment parts with the Neuzulassung funnel. A de-registration customer sees no difference.
-- **Statuses 2 and 3, emails 2 and 3 and a reminder exist for a Neuzulassung only**, on a fake identity adapter. A de-registration still goes 1 → 4, so §1 #6 and §3 hold for it.
-
-**Not verified against:** the live Zulex API (down; the adapter has only run against a mock built from `docs/api-1.yaml`), live Stripe, a real inbox, production (does not exist yet). What only those can confirm is in §15.
+**Not verified against:** the live Zulex API (down; the adapter has only run against a mock built from `docs/api-1.yaml`), live Stripe, a real inbox, production (does not exist yet). What only those can confirm is in §16.
 
 | Tag | Meaning |
 |---|---|
-| **[OPEN Qn]** | The founder has not answered launch-plan question *n*. The code runs a provisional answer; §12 lists all of them. |
+| **[OPEN Qn]** | The founder has not answered launch-plan question *n*. The code runs a provisional answer; §15 lists all of them. |
 | **[PLACEHOLDER]** | A stand-in value or text in the code. |
 | **[PROVISION]** | Needs an account, key, plan or setting outside the code. |
 | **[NOT BUILT]** | Planned, absent. |
@@ -32,9 +25,9 @@ What a customer actually meets today, read from the code on `staging` @ `71409d8
 | 1 | **Nothing calls the poller.** `vercel.json` has no `crons`; `/api/internal/poll` is never hit (launch plan D1). | [PROVISION] [GAP] | An order reaches status 4 and stays there. No 5a/5b/5c, no emails 5a/5b/5c, no documents, no capture for hand-processed authorities, no 24 h resubmission, no daily look at a 5b. Needs a cron entry and a Vercel plan that allows per-minute cron (Hobby is non-commercial and daily-only). Deferred while Zulex is down. |
 | 2 | **Zulex API is down / never used.** Staging runs `REGISTRATION_DRIVER=fake`. The fake accepts every prefix as `online` and reports every application *in progress* for ever; a deployed instance cannot script it. | [PROVISION] | On staging no new order can leave status 4. Zulex integration key, per-stage key question and the status webhook request are still open (`docs/provisioning.md` §5). |
 | 3 | **Rejection catalogue is empty.** `REJECTION_CATALOGUE = {}` | [OPEN Q10] | Every KBA error code is "unknown": one silent retry, then 5b with one general sentence. **A KBA error can never reach 5c today**, so the "refund minus 19.99 €" 5c path is built but unreachable. |
-| 4 | **Price is a stand-in:** 50.00 € + 19.99 € = 69.99 €. Landing says "ab 29,00 €" and "Endpreis". | [PLACEHOLDER] [OPEN Q19] | Customer sees two different prices. |
-| 5 | **Legal text missing.** `/agb` says "In Vorbereitung" while checkout requires accepting the AGB and the Widerrufsbelehrung. Consent is required but never stored (D9). No rule for withdrawal within 14 days. | [NOT BUILT] [OPEN Q13] | Cannot lawfully take money yet. |
-| 6 | **No identity verification.** The flow is 1 → 4. Verimi (statuses 2–3, emails 2–3) is not built. | [NOT BUILT] [OPEN Q1–Q4] | Anyone holding the codes can order (Q24). |
+| 4 | **The price's VAT basis is unanswered.** The price is the founder's list: 49.00 €, the 19.99 € fee inside it, shown as a final price including the authority fee and VAT on the landing page, in the FAQ and at checkout. Whether it is gross of VAT, whether the authority fee is passed through, and the invoice are open; no invoice is issued. | [OPEN Q19] | Customer sees one price everywhere, but no invoice. |
+| 5 | **Legal text missing.** `/agb` says "In Vorbereitung" while checkout requires accepting the AGB and the Widerrufsbelehrung. Consent is stored with the order (the AGB version and the time, D9), against a placeholder text (`draft-1`). No rule for withdrawal within 14 days. | [NOT BUILT] [OPEN Q13] | Cannot lawfully take money yet. |
+| 6 | **No identity verification for a de-registration.** Its flow is 1 → 4 (provisional answer to Q4). The check is built for a Neuzulassung (statuses 2–3, emails 2–3) on a fake adapter only: no Verimi adapter exists. | [NOT BUILT] [OPEN Q1–Q4] | Anyone holding the codes can order (Q24). |
 | 7 | **Production does not exist.** Vercel `zulexgo`, production Supabase, live Stripe (KYC pending), Zulex production key, domain and mail DNS. The config layer refuses any fake driver in production. | [PROVISION] | — |
 
 ---
@@ -49,7 +42,7 @@ What a customer actually meets today, read from the code on `staging` @ `71409d8
 | Database | in memory, seeded at boot | Supabase Postgres, seeded on deploy | Supabase, never seeded, not set up |
 | Documents | in memory | Supabase Storage bucket `kba-documents` (whether `STORAGE_DRIVER=supabase` is flipped is not recorded in the repo) | not set up |
 
-The 7 seeded orders (one per status) open at `/status/seed-status-link-<status>` in dev and staging. Their links are in the repo, so on staging anyone can open or rotate them.
+The 16 seeded orders (`ZG-SEED01` to `ZG-SEED07`, a de-registration for each of its seven statuses, and `ZG-SEED11` to `ZG-SEED19`, a Neuzulassung for each of its nine) open at `/status/seed-status-link-<status>` and `/status/seed-status-link-new-registration-<status>` in dev and staging. Their links are in the repo, so on staging anyone can open or rotate them.
 
 ---
 
@@ -78,7 +71,7 @@ The 7 seeded orders (one per status) open at `/status/seed-status-link-<status>`
 | `failed_final` (5c) | "Antrag abgelehnt" + refund info | 5c, then 6 | no |
 | `cancelled` | "Antrag storniert" + refund info | 6 | no |
 
-`completed`, `failed_final`, `cancelled` are terminal. A new attempt is always a new order at full price.
+`completed`, `failed_final`, `cancelled` are terminal. A new attempt is always a new order at full price. A Neuzulassung adds `awaiting_identity_verification` (2) and `identity_verified` (3) between 1 and 4; a de-registration never enters them.
 
 ---
 
@@ -94,7 +87,7 @@ The 7 seeded orders (one per status) open at `/status/seed-status-link-<status>`
 | 4 | **Review & pay:** sees masked summary, price, the 19.99 € fee notice, the Stripe Payment Element (cards, Apple Pay, Google Pay), two consent boxes (AGB + Widerrufsbelehrung; express early start / loss of withdrawal right). "Jetzt bezahlen" stays disabled until both are ticked. | — |
 | 5 | Clicks pay. | `elements.submit()` → server action: both consents present, request re-validated, duplicate check (B8), authority looked up again, **Stripe PaymentIntent created** (manual capture, `order_id` = reference, `service_type`), application stored as `awaiting_payment` with the codes AES-GCM encrypted, reference `ZG-XXXXXX` and a random Zulex idempotency key. Returns the client secret. Browser then calls `stripe.confirmPayment` in place. |
 | 6 | Sees "Ihr Antrag ist eingegangen", the reference, "Statuslink ist unterwegs an …". | — |
-| 7 | (can close the tab) | **Stripe webhook** `payment_intent.amount_capturable_updated` (card held), signature checked → `confirmPayment`: payment must be held/captured; 256-bit status token issued; **email 1**; status 1; poll due now; then inline: |
+| 7 | (can close the tab) | **Stripe webhook** `payment_intent.amount_capturable_updated` (card held), signature checked → `confirmPayment`: payment must be held/captured and be the order's whole total; 256-bit status token issued; **email 1**; status 1; poll due now; then inline: |
 | 8 | — | `submitToKba`: `POST /deregistration-applications` with `X-Idempotency-Key`. On `201` the Zulex `applicationId` is saved first; online authority → **card captured in full**; **email 4**; status 4; first check due in 1 min; Stripe PaymentIntent tagged with `application_id` (best effort). |
 | 9 | Opens the link: step 1 done, step 4 pulsing, outcome pending. Page re-asks the server every 30 s and on focus. | — |
 | 10 | — | **Cron (not scheduled, §1)** hits `/api/internal/poll` (bearer `CRON_SECRET`, 50 due orders per call, oldest first). Checks at +1, 2, 5, 10, 30 min, then hourly: `GET /deregistration-applications/{id}`. |
@@ -129,7 +122,7 @@ As H1 except:
 | B7 | Customer changes the prefix on the vehicle step | The availability notice is **not** recomputed; checkout re-reads the authority for the final prefix, so the stored `ikfzStatus` (which drives polling and hold handling) can differ from the notice the customer saw [GAP]. |
 | B8 | Same plate + VIN already has a paid, unfinished order (1, 4 or 5b) | First "pay" click stops: "Für dieses Fahrzeug läuft bereits ein Antrag …" plus a third checkbox. Says nothing about the other order. Unpaid, finished, failed and cancelled orders don't count. Two racing checkouts can both pass. The check isn't rate-limited (M7), so it can be probed with guessed VINs [OPEN Q38]. |
 | B9 | Leaves mid-funnel (steps 2–3) | Link click → "Antrag verlassen?"; close/reload → browser prompt; Back goes one step. A reload loses everything. |
-| B10 | Consent unticked | Button disabled; the server refuses too. Consent is not stored [D9]. |
+| B10 | Consent unticked | Button disabled; the server refuses too. What was ticked is stored with the order: the AGB version (`draft-1`, a placeholder) and the time [D9]. |
 | B11 | Server-side validation fails | "Einige Angaben sind nicht gültig. Bitte gehen Sie einen Schritt zurück …". |
 | B12 | Any other checkout failure (Zulex lookup, Stripe, database) | "Das hat gerade nicht geklappt …". |
 | B13 | Reloaded *after* paying | Funnel restarts at step 0 with nothing remembered. A customer who starts again meets B8 once the webhook has made the first order open; before that, nothing stops a second payment. |
@@ -145,8 +138,8 @@ As H1 except:
 | P3 | 3-D Secure failed or abandoned | "Zahlung nicht abgeschlossen. Es wurde nichts abgebucht." + "Erneut versuchen" → restart at step 0 (new order). |
 | P4 | Customer never pays, or goes back and edits after a failed try | An `awaiting_payment` row and an open PaymentIntent stay for ever. No link exists for it. Nothing is deleted [OPEN Q22]. |
 | P5 | Tab closed after paying | No effect: the webhook, not the browser, starts everything. |
-| P6 | Webhook unsigned / wrongly signed | 400, Stripe doesn't retry. Events other than `amount_capturable_updated` / `succeeded`, or a PaymentIntent without `order_id`, are ignored (200). A repeat is a no-op. Any failure inside is a 500, so Stripe retries. Retry resumes with the token it already issued. |
-| P7 | Payment not yet held/captured when the event is handled | Nothing happens. |
+| P6 | Webhook unsigned / wrongly signed | 400, Stripe doesn't retry. Events other than `amount_capturable_updated` / `succeeded`, or a PaymentIntent without an `order_id` that is one of our references, are ignored (200). A repeat is a no-op. Any failure inside is a 500, so Stripe retries. Retry resumes with the token it already issued. |
+| P7 | Payment not yet held/captured when the event is handled, or not the order's whole total (a partial capture or refund, another amount) | Nothing happens; in the second case nothing is filed, mailed or issued, and a log line names the order. |
 | P8 | Email 1 cannot be sent | Nothing is recorded; 500; Stripe retries. If it never works the order stays `awaiting_payment`, the hold lapses in 7 days, the customer is charged nothing and told nothing [OPEN Q33]. |
 | P9 | Webhook never delivered | Same dead end. The poller doesn't look at `awaiting_payment` and "resend link" refuses it [GAP]. |
 | P10 | SEPA Direct Debit | Not offered (cards, Apple Pay, Google Pay only). `payment_failed` isn't subscribed; the customer sees the failure in the form [OPEN Q12]. |
@@ -182,7 +175,7 @@ Runs inline after payment (H1 step 8) and, when it did not finish, from the poll
 | K5 | `FINISHED` with only a `REJECTION` document | **5b** ("rejectionDocument"). |
 | K6 | `FINISHED` with no documents | **5a** with an empty download area ("… sobald sie vorliegt"). The order is terminal and never revisited, so the PDF never arrives [GAP, OPEN Q28]. |
 | K7 | `ERROR` with a code | Catalogue is empty, so every code is "technical": **one** silent `POST /applications/{id}/retry`, nothing sent or refunded. A second `ERROR` → **5b** with a log warning to add the code. (If the catalogue marks a code *final* → 5c, fee kept; *correctable* → 5b without retry.) A missing `errorInfo` reads as code 0. The one retry is per filing; a corrected resubmission gets its own [OPEN Q9, Q10, Q18]. |
-| K8 | Documents can't be stored on completion | The step fails and repeats every tick; the customer stays at step 4 until it works. |
+| K8 | Documents can't be stored on completion | The step fails and is retried on a backoff (a minute, then the online table); the customer stays at step 4 until it works. |
 | K9 | Card at completion | Held → captured in full. Already captured → nothing. **Hold already lapsed** → order completes, nothing collected, loss is ours, log line names it [OPEN Q20]. |
 
 ---
@@ -202,12 +195,12 @@ The customer chooses one of three things.
 | Zulex refuses the `PATCH` (400) | "Der Antrag wurde mit diesen Angaben erneut nicht angenommen …"; order unchanged. |
 | Zulex unreachable | "… nicht erreichbar … Ihre Angaben sind nicht verloren"; order unchanged. (On a refile it is accepted and the poller files it.) |
 | Field wrong / nothing changed | Message at the field; nothing sent. |
-| Part of the money already went back (half-done cancel, lapsed hold) | Form replaced by "Stornierung begonnen … bitte abschließen"; only cancel remains. |
+| Part of the money already went back (half-done cancel, lapsed hold), or the payment is not the order's whole total | Form replaced by "Stornierung begonnen … bitte abschließen"; only cancel remains. |
 | Link invalid, or order no longer at 5b | Page refreshes to show where the order stands. |
 
 **B. Cancel** — dialog names the fee and refund. Money moves first, then email 6, then the status.
 - Held card → capture 19.99 € only (Stripe releases the rest) [OPEN Q8].
-- Captured card → refund total − 19.99 € (50.00 €).
+- Captured card → refund total − 19.99 € (29.01 €), less anything that already went back.
 - Status `cancelled`; polling stops; email 6 with the returned amount.
 - A failure part-way leaves the order at 5b; asking again finishes it without moving money twice. Double clicks are safe.
 
@@ -221,7 +214,7 @@ Correct, cancel and the poller claim the order with a version-checked write, so 
 
 **Reachable today only through S5/S6** (24 h unconfirmed filing → full refund, no fee kept).
 
-The fee-keeping 5c (a KBA code the catalogue marks final: refund total − 19.99 €, emails 5c then 6) is built and tested but has no trigger until the catalogue has entries [OPEN Q10]. 5c on failed identity verification does not exist [NOT BUILT, Q1–Q4].
+The fee-keeping 5c (a KBA code the catalogue marks final: refund total − 19.99 €, emails 5c then 6) is built and tested but has no trigger until the catalogue has entries [OPEN Q10]. 5c on failed identity verification exists for a Neuzulassung only; a de-registration does not verify (provisional answer to Q4).
 
 Customer sees "Antrag abgelehnt", the reason, "Eine Korrektur ist nicht möglich", the exact refund read live from Stripe ("… in 3 bis 5 Werktagen") and "Neuen Antrag stellen" (`/deregister`). If Stripe cannot say (for example staging's seeded orders), the page points to the email.
 
@@ -241,18 +234,18 @@ Customer sees "Antrag abgelehnt", the reason, "Eine Korrektur ist nicht möglich
 
 ## 12. Money per path
 
-Price is a placeholder: 69.99 € = 50.00 € + 19.99 € fee.
+Price: 49.00 € (the founder's price list), of which the 19.99 € fee is part.
 
 | Path | Card at that moment | Customer ends up paying | Stripe action | Email 6 |
 |---|---|---|---|---|
-| Completed, online authority | captured at filing | 69.99 € | capture full | no |
-| Completed, hand-processed | held → captured ≤ 48 h before lapse, or at completion | 69.99 € | capture full | no |
-| 5b cancel, card still held (S2, hand-processed) | held | 19.99 € | capture 19.99 €, rest auto-released | yes, 50.00 € |
-| 5b cancel, card captured | captured | 19.99 € | refund 50.00 € | yes, 50.00 € |
+| Completed, online authority | captured at filing | 49.00 € | capture full | no |
+| Completed, hand-processed | held → captured ≤ 48 h before lapse, or at completion | 49.00 € | capture full | no |
+| 5b cancel, card still held (S2, hand-processed) | held | 19.99 € | capture 19.99 €, rest auto-released | yes, 29.01 € |
+| 5b cancel, card captured | captured | 19.99 € | refund 29.01 € | yes, 29.01 € |
 | 5c fee-keeping [unreachable today] | either | 19.99 € | as the two rows above | yes |
-| 5c after 24 h unconfirmed (S5) | held / captured | 0 € | release / refund 69.99 € | yes, 69.99 € |
+| 5c after 24 h unconfirmed (S5) | held / captured | 0 € | release / refund 49.00 € | yes, 49.00 € |
 | Hold lapsed, then completed | released | 0 € (loss ours) | none | no |
-| Hold lapsed, then failed | released | 0 € | none | yes, 69.99 € |
+| Hold lapsed, then failed | released | 0 € | none | yes, 49.00 € |
 | Correction | unchanged | no extra | none | no |
 | Payment declined / abandoned | none | 0 € | none | no |
 
@@ -269,11 +262,11 @@ Price is a placeholder: 69.99 € = 50.00 € + 19.99 € fee.
 | 5c | `rejected` | entering 5c | reason, refund, fee if any |
 | 6 | `refundIssued` | see A5 | |
 | — | `statusLinkResent` | A2 | |
-| 2, 3 | Verimi | — | [NOT BUILT] |
+| 2, 3 | `identityVerificationRequested`, `identityVerified` (and a reminder) | a Neuzulassung only | a de-registration does not verify (Q4); the Verimi adapter is [NOT BUILT] |
 
 **Never emailed:** the silent retry, the silent resubmission, a refused correction, a poll that changed nothing, a payment failure. No email carries a security code.
 
-**Delivery:** an email goes out *before* its status is saved, so an address the mailer keeps refusing holds the order at its old status and retries every tick, with no limit and (except email 4) no backoff; a held card may lapse meanwhile [OPEN Q33]. Staging drops non-allowlisted recipients silently (logged). All German wording is ours and unreviewed [OPEN Q31].
+**Delivery:** an email goes out *before* its status is saved, so an address the mailer keeps refusing holds the order at its old status and retries on a backoff (a minute, then the online table), with no limit; a held card may lapse meanwhile [OPEN Q33]. Staging drops non-allowlisted recipients silently (logged). All German wording is ours and unreviewed [OPEN Q31].
 
 ---
 
@@ -282,12 +275,10 @@ Price is a placeholder: 69.99 € = 50.00 € + 19.99 € fee.
 | Where | Says | Code does |
 |---|---|---|
 | Landing trust strip (`trust-strip.tsx`) | "Abbuchung erst mit dem Ergebnis" | Card is charged at filing (online) or ≤ 48 h before the hold lapses. Commit `5287b7f` fixed three other texts and missed this one [GAP]. |
-| `/datenschutz` | "Sicherheitscodes werden nicht dauerhaft gespeichert"; collects name, address, phone | Codes are stored encrypted and never deleted [OPEN Q22]. No name, address or phone is collected [GAP, D8]. |
-| Landing service card | "ab 29,00 €", "Endpreis" | Checkout charges 69,99 € [OPEN Q19]. |
+| `/datenschutz` | "Sicherheitscodes werden nicht dauerhaft gespeichert"; collects name, address, phone | Codes are stored encrypted and never deleted [OPEN Q22]. A de-registration collects no name, address or phone (a Neuzulassung, not on sale, collects all three) [GAP, D8]. |
 | FAQ "Wie lange …" | "meist innerhalb eines Werktages" | Funnel and email 4 say "wenigen Minuten bis Stunden". |
 | FAQ "abgelehnt" | "klären wir die Korrektur mit Ihnen" | Correction is self-service on the status page. |
 | `docs/site-contract.md` §2.4 | Payment Element with SEPA | Cards only [OPEN Q12]. |
-| `docs/deregistration-user-journeys.md` J1, J5 | Statuses 2–3 in the happy path; 5c "minus 19.99 €" | Verimi not built; that 5c is unreachable (§1 #3, #6). |
 | Launch plan M6 exit criterion | email 6 "only after `charge.refunded`" | Sent when Stripe accepts the refund [OPEN Q35]. |
 
 ---
@@ -300,7 +291,7 @@ Each is in [launch-plan.md](launch-plan.md) with "if the founder answers differe
 
 | Q | Question | Code today |
 |---|---|---|
-| 1–4 | Verimi: who integrates, who sends the link, how we learn the result, is it needed | Not in the flow; port + fake exist unused; 1 → 4 |
+| 1–4 | Verimi: who integrates, who sends the link, how we learn the result, is it needed | A de-registration does not verify: 1 → 4. A Neuzulassung does, on the fake adapter; no Verimi adapter exists |
 | 5 | When is Zulex called | Right after payment |
 | 7 | When is a held card captured | Online: at filing. Hand-processed: at completion or ≤ 48 h before lapse |
 | 8 | How to keep 19.99 € from a held card | Capture 19.99 € only |
@@ -308,11 +299,11 @@ Each is in [launch-plan.md](launch-plan.md) with "if the founder answers differe
 | 10 | Zulex error-code catalogue (which are correctable/final) | Empty |
 | 11 | Can a correction cost more | No |
 | 12 | SEPA timing | Not offered |
-| 13 | Withdrawal vs fee | Two consent boxes, nothing else |
-| 14 | Verimi deadline | — |
+| 13 | Withdrawal vs fee | Two consent boxes, stored with the order; no fee rule on withdrawal |
+| 14 | Verimi deadline | None for a de-registration (it does not verify); a Neuzulassung: reminder after 2 days, deadline after 4 (Q48) |
 | 17 | Processing-time wording | Two fixed sentences |
 | 18 | Retry a data rejection | No (400 and rejection document skip the retry) |
-| 19 | Real price, VAT, invoice | 50.00 € + 19.99 € |
+| 19 | Real price, VAT, invoice | 49.00 € as a final price, the fee inside it; no invoice |
 | 20 | Hold lapse | Capture ahead; a lapse ends the order with nothing kept |
 | 21 | 5b deadline | None; waits for ever |
 | 22 | Retention | Nothing deleted; link never expires |
@@ -333,17 +324,20 @@ Each is in [launch-plan.md](launch-plan.md) with "if the founder answers differe
 | 38 | Duplicate order | Warn, continue with a checkbox |
 | 39 | Special plates | Warn, continue |
 | 40 | Stray application after 24 h | Log line only |
+| 41–43 | Add-ons, THG-Quote, launch order of the other services | Only the de-registration is sold; no add-ons, no THG-Quote |
+| 44 | Cancel before an error | Only at 5b |
+| 45–56 | Neuzulassung: identity check, power of attorney, scope, plates, price, failures, bank account, next steps, Zulex questions | Built and not on sale, on provisional answers: [registration-plan.md](registration-plan.md) |
 
 ### Placeholders
 
 | Item | Where |
 |---|---|
-| Price 50.00 € (and 29/99/89 € "ab" prices on the disabled cards) | `src/core/domain/pricing.ts`, `service-selection.tsx` |
-| Empty rejection catalogue; one general reason | `rejection-catalogue.ts` |
+| Legal-text versions `draft-1`, stored with every order as what the customer agreed to | `LEGAL_TEXT_VERSIONS` in `src/core/domain/application/consent.ts` |
+| Empty rejection catalogue; one general reason | `src/core/domain/registration/rejection-catalogue.ts` |
 | "AGB: In Vorbereitung"; Datenschutz and Impressum not lawyer-reviewed | `app/(marketing)/*` |
-| Code-locator photos: grey box "Foto: wo der Code steht" | `code-field.tsx` |
+| Code-locator photos: grey box "Foto: wo der Code steht" | `app/_components/locator-photo.tsx`, used by `code-field.tsx` |
 | Plate lettering: Kanit fallback until Euro Plate is licensed | `globals.css` |
-| One support address `kontakt@gm-gastro.com` | `contact.ts` |
+| One support address `kontakt@gm-gastro.com` | `src/core/domain/customer/contact.ts` |
 | Seeded demo orders and links | `db/seed/` |
 | "Testmodus" simulated payment | dev only |
 
@@ -360,20 +354,20 @@ Each is in [launch-plan.md](launch-plan.md) with "if the founder answers differe
 | Resend: domain `mail.gm-gastro.com` verified, production key | any real email |
 | Supabase production project; staging storage key and `STORAGE_DRIVER` flip (`provisioning.md` §9) | production data; documents on staging |
 | Vercel `zulexgo` project variables, domain, DNS (SPF/DKIM/DMARC) | production |
-| Verimi contract and credentials (only if Q4 says it is needed) | statuses 2–3 |
+| Verimi contract and credentials (a de-registration needs them only if Q4 says so; a Neuzulassung cannot go on sale without a real adapter, Q45) | the real identity adapter |
 | Euro Plate licence, locator photos, brand colour sign-off | design finish |
 | An alert channel and someone with Zulex portal access | Q27, Q40 |
 
 ### Not built
 
-Verimi and emails 2–3 · poller schedule · Zulex status webhook route · 5b auto-cancel deadline · consent storage (D9) · retention / deletion and `audit_log` · CSP and rate limits on eligibility and checkout (M7) · monitoring, stuck-order alerts, runbooks (M8) · beta gate / invite codes (M9) · withdrawal handling · SEPA · English UI · own copy of captured/refunded amounts.
+The Verimi adapter · poller schedule · Zulex status webhook route · 5b auto-cancel deadline · retention / deletion and `audit_log` · CSP and rate limits on eligibility and checkout (M7) · monitoring, stuck-order alerts, runbooks (M8) · beta gate / invite codes (M9) · withdrawal handling · SEPA · English UI · own copy of captured/refunded amounts.
 
 ---
 
 ## 16. What only staging or production can confirm
 
 - Real Zulex behaviour: error bodies, whether a replayed idempotency key returns the same `applicationId`, rejection as `ERROR` vs `FINISHED` + `REJECTION`, real `errorInfo` codes, `PATCH` and `retry` semantics, document content, 429 behaviour.
-- Stripe: a partial capture releases the remainder and that remainder is not counted as refunded (`payment/stripe/map.ts` assumes it); `capture_before` on real cards; refund timing.
-- Migrations `0006` and `0007` applying on the staging deploy.
+- Stripe: a partial capture releases the remainder and that remainder is not counted as refunded (`src/adapters/payment/stripe/map.ts` assumes it); `capture_before` on real cards; refund timing.
+- Migrations `0006` to `0012` applying on the staging deploy (CI's rehearsal runs them).
 - Anything needing the poller (nothing schedules it): hold checks, the daily 5b look, the 24 h resubmission, status changes after step 4.
 - How the emails render in real clients; that Resend shows the domain as verified.

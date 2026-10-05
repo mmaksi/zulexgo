@@ -58,9 +58,9 @@ than none, because it still gets trusted.
 
 ## Why `staging` and never `main`
 
-Today the two branches hold identical content, so a branch cut from `main` would
-appear to work. It breaks as soon as `staging` is ahead of `main`, which is its
-normal state between promotions:
+While the two branches hold identical content, a branch cut from `main` appears to
+work. It breaks as soon as `staging` is ahead of `main`, which is its normal state
+between promotions:
 
 - you would be building on the **last released** code, and your pull request
   would conflict with everything merged since — which the required
@@ -78,9 +78,11 @@ npm run lint && npm run typecheck && npm test && npm run build
 ```
 
 That is what CI runs, except for the Postgres suites (the migration runner, the
-Postgres repository and the migration rehearsal): without `TEST_DATABASE_URL`
-they are skipped locally, while CI always runs them against Postgres 17. To run
-them before CI does:
+Postgres repository and rate limiter, the database commands and the migration
+rehearsal): without `TEST_DATABASE_URL` they are skipped locally, while CI always
+runs them against Postgres 17. CI also rehearses the migrations through the npm
+scripts and, after the build, fails if a client chunk carries a server-secret canary
+(`.github/workflows/ci.yml`). To run the Postgres suites before CI does:
 
 ```bash
 docker run -d --rm --name zulexgo-test-pg -e POSTGRES_PASSWORD=postgres -p 55432:5432 postgres:17

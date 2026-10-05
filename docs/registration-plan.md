@@ -73,15 +73,15 @@ Every field is in the API's create request (`CreateRegistrationApplicationReques
 | eVB number (insurance confirmation) | `evbNumber` | 7 chars `[A-HJ-NP-Z0-9]` (no I, no O); we anchor the spec's unanchored pattern | yes |
 | Teil II number | `registrationCertificateInfo.registrationCertificatePart2Number` | 1–20 chars; exact format to confirm (Q56) | no |
 | Teil II security code | `registrationCertificateInfo.registrationCertificatePart2SecurityCode` | spec says only `minLength: 1`; format to confirm (Q56) | yes |
-| VIN | `vehicleInfo.vin` | `[A-Z0-9]{1,17}`; a new car has 17 | no |
+| VIN | `vehicleInfo.vin` | `[A-Z0-9]{1,17}` in the API; we require exactly 17, as a new car has | no |
 | Engine type | `vehicleInfo.engineType` | `ELECTRICAL`, `HYBRID`, `COMBUSTION` (`NO_ENGINE` not offered for a car) | no |
 | Vehicle type, usage | `vehicleInfo.vehicleType`, `vehicleUsage` | fixed `CAR`, `NORMAL` at launch | no |
 | Owner: first and last name, gender, birth date, birth place, phone, email | `ownerInfo.personalInfo` (`source: REQUEST_FOR_INDIVIDUAL_PERSON`) | all required by the API; gender `FEMALE`/`MALE`/`DIVERSE`/`UNSPECIFIED` | yes (birth date, birth place, phone) |
 | Owner address | `ownerInfo.personalInfo.address` | street, house number `^(\d{1,4})(?!\d)(.*)$`, 5-digit postcode, city | yes |
 | Delivery | `ownerInfo.deliveryInfo` | `SHIPPING` to the owner's name and address | — |
-| Bank account for vehicle tax | `ownerInfo.sepaInfo` | IBAN (checksum), BIC, bank name, country; optional in the spec, but vehicle tax is collected by direct debit, so treated as required until Zulex says otherwise (Q56) | yes |
+| Bank account for vehicle tax | `ownerInfo.sepaInfo` | German IBAN (checksum), BIC, bank name; the country is the IBAN's, not asked; optional in the spec, but vehicle tax is collected by direct debit, so treated as required until Zulex says otherwise (Q56) | yes |
 | Plate options | `admissionInfo.licencePlateInfo.licencePlateAttributes` | electric (only for `ELECTRICAL`), seasonal with months 1–12, historic always `false` | no |
-| Order email | ours, not the API's | as de-registration | no |
+| Order email | the keeper's email, `ownerInfo.personalInfo.email` | one field: it is also where the status link, the verification link and every status email go | no |
 
 Postcode of the owner's address also picks the authority: `GET /registration-authorities?postcode=…` (a car is registered where its keeper lives, not by plate prefix).
 
@@ -106,8 +106,8 @@ Postcode of the owner's address also picks the authority: `GET /registration-aut
 | Order shape | `request` becomes a union discriminated by `service` (built as `ServiceRequest`; the service is `request.service`, there is no `Application.service`) | The use cases that are already generic stay untouched; the compiler finds every place that assumed de-registration. |
 | Storing owner data | One AES-GCM blob `encrypted_details` (JSON of owner, address, phone, bank account, Teil II, eVB, plate choice), the order reference as associated data, through the existing `FieldCipher`; only `service` and `vin` in plain columns | Same scheme as the security codes since migration `0001`; the VIN stays plain for the duplicate warning. The GET response echoes all of this back, so the adapter never logs a response body. |
 | Authority lookup | `findAuthorities` takes `{ prefix }` or `{ postcode }`; the slowest status of several still wins (`combinedIkfzStatus`) | A postcode can span districts as a prefix can. |
-| Identity verification | The existing `IdentityVerification` port; `IDENTITY_DRIVER=fake\|verimi` added; production refuses `fake` only while `newRegistration` is on sale | De-registration can launch in production without Verimi; Neuzulassung cannot go on sale on a fake. |
-| Which services are sold | A domain list (`SERVICES_ON_SALE`) read by the landing page **and** checked by `submitCheckout` | Today `available: false` only hides a card; nothing on the server stops a crafted checkout for an unsold service. |
+| Identity verification | The existing `IdentityVerification` port; `IDENTITY_DRIVER` takes `fake` only until the Verimi adapter exists; production refuses `fake` while a service that verifies is on sale (`fakeIdentityProblem` in `src/config/env.ts`) | De-registration can launch in production without Verimi; Neuzulassung cannot go on sale on a fake. |
+| Which services are sold | A domain list (`SERVICES_ON_SALE`) read by the landing page **and** checked by `submitCheckout` | Before N1, `available: false` only hid a card; nothing on the server stopped a crafted checkout for an unsold service. |
 | Form state | In memory only, never in the URL or browser storage; a leave-page confirmation once the form has data | The form holds an IBAN and a birth date; keeping them out of storage outweighs losing a half-filled form on reload. |
 | Stripe Payment Element | Moves to `app/(funnel)/_components/stripe/`; lint and the `project-structure` and `external-services` skills follow | Both funnels pay the same way; the lint rule names one folder. |
 | Verimi adapter | Written only once Q1–Q3 are answered and a source for its API exists; no Verimi MCP exists today, so Mark is told before any adapter code | The `external-services-via-MCP` rule. |
@@ -129,7 +129,7 @@ N1 One order, many services (refactor; de-registration behaves exactly as before
    N10 Plates, sticker, shipping (after launch; Q41, Q50)
 ```
 
-N1 can start today: it needs neither the Zulex API nor the founder. Neuzulassung goes on sale only after de-registration is public (M9), because it needs M8's production stack, the poller's cron (launch plan D1) and stored consent (D9).
+N1 needed neither the Zulex API nor the founder. Neuzulassung goes on sale only after de-registration is public (M9), because it needs M8's production stack and the poller's cron (launch plan D1); stored consent (D9) is built.
 
 ---
 
@@ -185,7 +185,7 @@ N1 can start today: it needs neither the Zulex API nor the founder. Neuzulassung
   - `customer/`: `owner.ts` (names, gender, birth date checked against the `Clock` for 18+, birth place, phone), `postal-address.ts`, `bank-account.ts` (IBAN checksum, BIC, bank name, country).
   - Plate choice: assigned by the authority, attributes electric (only with `ELECTRICAL`) and seasonal (months 1–12). A wish plate with PIN only if Q51 says so.
   - Secret value objects print a placeholder from `toString` and `toJSON`, as `SecurityCode` does.
-- `application-status.ts`: `awaiting_identity_verification` (2) and `identity_verified` (3), events for verification started, verified, failed and expired; a per-service path so de-registration still goes 1 → 4. Status 2 joins `OPEN_STATUSES` and `POLLED_STATUSES` (deadline, reminder and hold checks).
+- `application-status.ts`: `awaiting_identity_verification` (2) and `identity_verified` (3), events for verification started, verified, failed and expired; a per-service path so de-registration still goes 1 → 4. Statuses 2 and 3 join `OPEN_STATUSES` and `POLLED_STATUSES` (deadline, reminder and hold checks at 2; filing resumed at 3).
 - `customer-steps.ts`: five rows for Neuzulassung (1, 2, 3, 4, outcome).
 - `correction.ts`: Neuzulassung corrects the eVB and the Teil II number and code (Q53), and, only before anything is filed, the owner's name and birth date after a verification mismatch (Q47); the form starts empty, as Q26 settled for de-registration.
 - Verification deadline and reminder as a pure function beside `hold-policy.ts` (Q48), with a test that the deadline plus `HOLD_CAPTURE_MARGIN_MS` ends inside a card hold's lifetime.
@@ -243,7 +243,7 @@ N1 can start today: it needs neither the Zulex API nor the founder. Neuzulassung
 - `IDENTITY_DRIVER` in `src/config/env.ts` with its guardrail test; `identity` joins `Dependencies`.
 - Verimi adapter `src/adapters/identity/verimi/` passing the existing contract — only once Q1–Q3 are answered and Mark has confirmed the source for Verimi's API. If the founder's answer to Q1 is that Zulex runs the verification, this milestone becomes a Zulex-backed adapter of the same port.
 
-**Tested:** `status-notifications.test.ts` drives Neuzulassung through every transition with exactly one email each; deadline and reminder with fake timers; failure → 5c with the right refund; deadline → full release; an unsigned callback is rejected; nothing reaches Zulex before status 3.
+**Tested:** `tests/integration/identity-verification.test.ts` drives Neuzulassung through every transition with exactly one email each; deadline and reminder with fake timers; failure → 5c with the right refund; deadline → full release; an unsigned callback is rejected; nothing reaches Zulex before status 3.
 
 **Exit criteria:** on fakes, an integration test runs a Neuzulassung order 1 → 2 → 3 → 4 → 5a end to end; the Verimi adapter passes the port contract, or is recorded as blocked.
 
@@ -255,7 +255,7 @@ N1 can start today: it needs neither the Zulex API nor the founder. Neuzulassung
 
 **How:** one decision per screen, as the site contract asks:
 1. **Voraussetzungen:** new car never registered; Teil II with a concealed code at hand; eVB from the insurer; customer will be the keeper, 18+, living in Germany; bank account for vehicle tax; postcode → authority availability notice. A "no" stops with the reason and the offline alternative.
-2. **Fahrzeug:** VIN, engine type, Teil II number and code, each with a locator image.
+2. **Fahrzeug:** VIN, engine type, Teil II number and code, eVB number, each with a locator image.
 3. **Halter:** name, gender, birth date and place, address, phone, email.
 4. **Kennzeichen:** assigned plate (wish plate only if Q51), E-plate offered only for electric cars, seasonal months.
 5. **Kfz-Steuer:** IBAN, BIC, bank name, the mandate wording (from the lawyer).
@@ -276,7 +276,7 @@ The checkout action is per service and stores consent, so launch-plan D9 is fixe
 
 **How:**
 - Status page for Neuzulassung: summary (car, VIN ending, the plate once known); five-row stepper; 5a with the documents (temporary certificate, confirmation, fee statement, Q28) and what arrives by post and what the customer does next (Q50, Q55); 5b with our reason, the correction form (eVB, Teil II) and cancel with the fee; 5c and cancelled with the refund.
-- Copy per service in `copy.ts` for emails 1, 4, 5a, 5b, 5c, 6 (2, 3 and the reminder from N5), each a reviewed snapshot; no personal data beyond the order reference and, once assigned, the plate.
+- Copy per service in `copy.ts` for emails 1, 4, 5a, 5b, 5c (email 6 reads the same for every service; 2, 3 and the reminder from N5), each a reviewed snapshot; no personal data beyond the order reference and, once assigned, the plate.
 - Correction: `PATCH /registration-applications/{id}`, or filed afresh after a 400 (Q37), which is why the full request is kept until the order ends.
 - If the assigned plate is not in the API (Q56), the page names the document it is printed in.
 
