@@ -40,7 +40,7 @@ const SERVICES: { service: Service; title: string; description: string }[] = [
     service: "newRegistration",
     title: "Neuzulassung",
     description:
-      "Neues Fahrzeug erstmals anmelden. Kennzeichen bestellen Sie auf Wunsch dazu.",
+      "Neues Fahrzeug erstmals zulassen — ohne Gang zur Zulassungsstelle.",
   },
   {
     service: "reRegistration",
