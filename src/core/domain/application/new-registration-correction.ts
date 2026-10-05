@@ -5,7 +5,7 @@ import type { Secret } from "@/src/core/domain/secret"
 import { validate } from "@/src/core/domain/validate"
 import { evbNumberSchema } from "@/src/core/domain/vehicle/evb-number"
 import { registrationCertificatePart2Schema } from "@/src/core/domain/vehicle/registration-certificate-part2"
-import type { NewRegistrationRequest } from "./new-registration-request"
+import type { StoredNewRegistrationRequest } from "./new-registration-request"
 
 /** What the Neuzulassung correction form sends: the fields the customer changed, as typed; blank means unchanged. */
 export interface NewRegistrationCorrectionInput {
@@ -73,7 +73,7 @@ export function parseNewRegistrationCorrection(
  * corrected field has been validated on its own, and none depends on another, so the result is a
  * valid request.
  */
-export function applyNewRegistrationCorrection(request: NewRegistrationRequest, correction: NewRegistrationCorrection): NewRegistrationRequest {
+export function applyNewRegistrationCorrection(request: StoredNewRegistrationRequest, correction: NewRegistrationCorrection): StoredNewRegistrationRequest {
   return {
     ...request,
     evbNumber: correction.evbNumber ?? request.evbNumber,

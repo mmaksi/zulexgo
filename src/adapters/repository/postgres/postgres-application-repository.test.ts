@@ -4,7 +4,9 @@ import { aNewRegistrationApplication, anApplication, FAKE_REQUEST } from "@/test
 import { FAKE_NEW_REGISTRATION } from "@/tests/fixtures/new-registration"
 import { loadSeed, seedFor } from "@/db/seed/seed"
 import { parseNewRegistrationRequest } from "@/src/core/domain/application/new-registration-request"
+import { applyEvent } from "@/src/core/domain/application/application"
 import { applicationRepositoryContract } from "@/src/core/ports/repository/application-repository.contract"
+import { FieldCipher } from "./field-cipher"
 import { Migrator, readMigrations } from "./migrator"
 import { PostgresApplicationRepository } from "./postgres-application-repository"
 import { createTestDatabase, describeWithPostgres, type TestDatabase } from "./test-database"
@@ -12,6 +14,7 @@ import { createTestDatabase, describeWithPostgres, type TestDatabase } from "./t
 const TOKEN = "faketoken-postgres-adapter-test-0000000001"
 
 describeWithPostgres("PostgresApplicationRepository", () => {
+  const encryptionKey = randomBytes(32).toString("base64")
   let database: TestDatabase
   let repository: PostgresApplicationRepository
 
@@ -20,7 +23,7 @@ describeWithPostgres("PostgresApplicationRepository", () => {
     await new Migrator(database.url, await readMigrations(join(process.cwd(), "db", "migrations"))).up()
     repository = new PostgresApplicationRepository({
       connectionString: database.url,
-      encryptionKey: randomBytes(32).toString("base64"),
+      encryptionKey,
     })
   })
   beforeEach(() => database.query("TRUNCATE applications CASCADE"))
@@ -133,6 +136,24 @@ describeWithPostgres("PostgresApplicationRepository", () => {
       `UPDATE applications SET encrypted_details = (SELECT encrypted_details FROM applications WHERE reference = '${created.reference}') WHERE reference = '${other.reference}'`,
     )
     await expect(repository.get(other.reference)).rejects.toThrow()
+  })
+
+  // The stored blob is ciphertext, so a missing account is proved by opening it with the key, as the app does.
+  it("holds a Neuzulassung's bank account in its encrypted details until the order ends, and not after", async () => {
+    const detailsOf = async (reference: string) => {
+      const [row] = await database.query(`SELECT encrypted_details FROM applications WHERE reference = '${reference}'`)
+      return new FieldCipher(encryptionKey).decrypt(row.encrypted_details as string, reference)
+    }
+    const created = await repository.create(aNewRegistrationApplication({ status: "submitted_to_kba" }))
+    expect(await detailsOf(created.reference)).toContain(FAKE_NEW_REGISTRATION.bankAccount.iban)
+
+    await repository.update(applyEvent(created, "kbaCompleted", new Date("2026-03-01T10:00:00.000Z")))
+
+    const afterwards = await detailsOf(created.reference)
+    expect(afterwards).not.toContain(FAKE_NEW_REGISTRATION.bankAccount.iban)
+    expect(afterwards).not.toContain(FAKE_NEW_REGISTRATION.bankAccount.bic)
+    // What else the order held is still there.
+    expect(afterwards).toContain(FAKE_NEW_REGISTRATION.evbNumber)
   })
 
   // The provider's id is part of the customer's start link at some providers, so it is held like a token: encrypted, bound to its order.

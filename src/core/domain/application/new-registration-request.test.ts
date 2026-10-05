@@ -1,7 +1,7 @@
 import { inspect } from "node:util"
 import { FAKE_NEW_REGISTRATION as FAKE, FAKE_NEW_REGISTRATION_NOW as NOW } from "@/tests/fixtures/new-registration"
 import { ValidationError } from "@/src/core/errors/validation-error"
-import { parseNewRegistrationRequest } from "./new-registration-request"
+import { parseNewRegistrationRequest, parseStoredNewRegistrationRequest, withoutBankAccount } from "./new-registration-request"
 
 const fieldsRejected = (input: unknown, now = NOW) => {
   try {
@@ -182,5 +182,30 @@ describe("parseNewRegistrationRequest", () => {
 
       expect(inspect(error)).not.toContain("DE89370400440532013001")
     })
+  })
+})
+
+// Launch plan Q54: the bank account is held only until the order ends, so a stored order may lack it where a checkout may not.
+describe("an order's request once its bank account is gone", () => {
+  const stored = () => parseStoredNewRegistrationRequest(without("bankAccount"), NOW)
+
+  it("reads back without a bank account, every other field kept", () => {
+    const request = stored()
+
+    expect(request.bankAccount).toBeUndefined()
+    expect(request.vin).toBe(FAKE.vin)
+    expect(request.evbNumber.reveal()).toBe(FAKE.evbNumber)
+    expect(request.owner.address.reveal()).toEqual(FAKE.owner.address)
+  })
+
+  it("is what withoutBankAccount leaves of a complete request, and what it leaves out reads back as it was", () => {
+    const ended = withoutBankAccount(parseNewRegistrationRequest(FAKE, NOW))
+
+    expect(ended).not.toHaveProperty("bankAccount")
+    expect(ended).toEqual(stored())
+  })
+
+  it("still refuses a bank account that is there but wrong, a stored order being validated like any request", () => {
+    expect(() => parseStoredNewRegistrationRequest({ ...FAKE, bankAccount: { ...FAKE.bankAccount, iban: "DE89370400440532013001" } }, NOW)).toThrow(ValidationError)
   })
 })
