@@ -1,4 +1,4 @@
-import { EVERY_TEMPLATE } from "@/src/core/ports/mail/mailer.contract"
+import { EVERY_TEMPLATE, labelOf, NEW_REGISTRATION_TEMPLATES } from "@/src/core/ports/mail/mailer.contract"
 import { Money } from "@/src/core/domain/payment/money"
 import type { EmailTemplate } from "@/src/core/ports/mail/mailer"
 import { renderEmail } from "./render"
@@ -33,7 +33,7 @@ describe("renderEmail", () => {
   })
 
   it("keeps the body of each email under the limit, without the fixed greeting and footer", async () => {
-    for (const template of EVERY_TEMPLATE) {
+    for (const template of [...EVERY_TEMPLATE, ...NEW_REGISTRATION_TEMPLATES]) {
       const { text } = await renderEmail(template)
       const body = text.split("\n\n").slice(2, -1).join("\n\n")
       expect(body.length).toBeLessThanOrEqual(BODY_LIMIT)
@@ -106,15 +106,87 @@ describe("renderEmail", () => {
     const template: EmailTemplate =
       name === "rejected"
         ? { name, service: "deregistration", reference, statusLink, reason, refund: Money.ofCents(5000), retained: Money.ofCents(1999) }
-        : { name, reference, statusLink, reason }
+        : { name, service: "deregistration", reference, statusLink, reason }
 
     expect((await renderEmail(template)).text).toContain(reason)
   })
 
   it("names the processing fee in the correction email, next to the cancel option", async () => {
-    const { text } = await renderEmail({ name: "correctionRequired", reference, statusLink, reason: "Grund." })
+    const { text } = await renderEmail({ name: "correctionRequired", service: "deregistration", reference, statusLink, reason: "Grund." })
 
     expect(text).toMatch(/stornieren/i)
     expect(text).toMatch(/19,99\s€/)
+  })
+})
+
+describe("renderEmail, for a Neuzulassung", () => {
+  const { reference } = NEW_REGISTRATION_TEMPLATES[0]
+  const [confirmation, , , papers, mismatch] = NEW_REGISTRATION_TEMPLATES
+
+  it.each(NEW_REGISTRATION_TEMPLATES.map((template) => [labelOf(template), template] as const))(
+    "%s: a subject with the order id within the limit, a body within the limit, German, and no other link than the status link",
+    async (_, template) => {
+      const { subject, html, text } = await renderEmail(template)
+
+      expect(subject).toContain(template.reference)
+      expect(subject.length).toBeLessThanOrEqual(SUBJECT_LIMIT)
+      expect(text.length).toBeLessThanOrEqual(BODY_LIMIT + 300)
+      expect(html).toContain('lang="de"')
+      expect(hrefsIn(html).filter((href) => href.startsWith("http"))).toEqual([(template as { statusLink: string }).statusLink])
+    },
+  )
+
+  it.each(NEW_REGISTRATION_TEMPLATES.map((template) => [labelOf(template), template] as const))("%s: reviewed HTML", async (_, template) => {
+    expect((await renderEmail(template)).html).toMatchSnapshot()
+  })
+
+  it("tells the customer in the first email that an identity check follows, before anything is filed", async () => {
+    expect((await renderEmail(confirmation)).text).toMatch(/Identität/)
+  })
+
+  describe("the KBA email", () => {
+    const submitted = (manualProcessing: boolean): EmailTemplate => ({ name: "submittedToKba", service: "newRegistration", reference, statusLink, manualProcessing })
+
+    it("promises minutes to hours when the authority is online", async () => {
+      expect((await renderEmail(submitted(false))).text).toMatch(/wenigen Minuten bis Stunden/)
+    })
+
+    it("warns of days when the authority works by hand", async () => {
+      expect((await renderEmail(submitted(true))).text).toMatch(/einige Tage/)
+    })
+  })
+
+  describe("the correction email", () => {
+    it("says nothing was filed, and that the identity is checked again, when the person who verified is not the owner", async () => {
+      const { text } = await renderEmail(mismatch)
+
+      expect(text).toMatch(/noch nichts eingereicht/)
+      expect(text).toMatch(/Identität/)
+      expect(text).not.toMatch(/Zulassungsstelle konnte/)
+    })
+
+    it("asks for the eVB number and the Teil II when the registration service sent the order back", async () => {
+      const { text } = await renderEmail(papers)
+
+      expect(text).toMatch(/eVB/)
+      expect(text).toMatch(/Teil II/)
+      expect(text).not.toMatch(/noch nichts eingereicht/)
+    })
+
+    it.each([papers, mismatch])("names the processing fee next to the cancel option (%#)", async (template) => {
+      const { text } = await renderEmail(template)
+
+      expect(text).toMatch(/stornieren/i)
+      expect(text).toMatch(/19,99\s€/)
+    })
+  })
+
+  describe("the rejection email", () => {
+    it("names the refund and the fee it keeps", async () => {
+      const { text } = await renderEmail(NEW_REGISTRATION_TEMPLATES[5])
+
+      expect(text).toMatch(/109,01\s€/)
+      expect(text).toMatch(/19,99\s€/)
+    })
   })
 })

@@ -102,7 +102,7 @@ const PATHS: Record<TextualField, string> = {
 }
 
 /** site-contract §2.3: human, action-oriented, never the API's text. */
-const MESSAGES: Record<Exclude<TextualField, "iban">, string> = {
+export const MESSAGES: Record<Exclude<TextualField, "iban">, string> = {
   vin: "Die FIN eines Neuwagens hat genau 17 Stellen: Buchstaben und Ziffern, Feld E im Fahrzeugschein.",
   engineType: "Wählen Sie, wie Ihr Fahrzeug angetrieben wird.",
   evbNumber: "Prüfen Sie die eVB-Nummer: 7 Zeichen aus Buchstaben und Ziffern, ohne I und O.",

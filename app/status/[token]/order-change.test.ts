@@ -1,5 +1,8 @@
 import { GatewayRejected } from "@/src/core/errors/registration/gateway-rejected"
+import { FAKE_NEW_REGISTRATION } from "@/tests/fixtures/new-registration"
+import { secretsOf } from "@/tests/fixtures/secrets"
 import { CODES, setupFlow } from "@/tests/integration/flow-harness"
+import { Secret } from "@/src/core/domain/secret"
 import { RATE_LIMITS } from "@/src/core/domain/rate-limit/rate-limits"
 import { GatewayUnavailable } from "@/src/core/errors/registration/gateway-unavailable"
 import { cancelOrder, correctOrder } from "./order-change"
@@ -162,6 +165,80 @@ describe("correctOrder", () => {
     const logged = error.mock.calls.flat().join(" ")
     expect(logged).toContain("Error")
     for (const secret of ["customer@example.test", "AAAAAA9", ...CODES]) expect(logged).not.toContain(secret)
+    error.mockRestore()
+  })
+})
+
+/** A Neuzulassung the identity check sent back: the customer typed "Erika", the provider found "Erik". Nothing is filed. */
+async function mismatchedNewRegistration() {
+  const flow = setupFlow()
+  const reference = await flow.checkoutAndPayNewRegistration()
+  await flow.customerVerifies(reference, { firstName: "Erik", lastName: "Mustermann", birthDate: new Secret(FAKE_NEW_REGISTRATION.owner.birthDate, "birth date") })
+  await flow.poll(1)
+  return { ...flow, reference, token: (await flow.deps.repository.getStatusToken(reference))! }
+}
+
+describe("correctOrder, for a Neuzulassung", () => {
+  it("corrects the name the identity check did not accept, and the order goes on to the KBA", async () => {
+    const { deps, stored, reference, token } = await mismatchedNewRegistration()
+
+    expect(await correctOrder(deps, headers, token, { firstName: "Erik" })).toEqual({ status: "done" })
+
+    expect((await stored(reference)).status).toBe("submitted_to_kba")
+  })
+
+  it("tells the customer the order was refused when the name still does not match", async () => {
+    const { deps, stored, reference, token } = await mismatchedNewRegistration()
+
+    expect(await correctOrder(deps, headers, token, { lastName: "Beispiel" })).toEqual({ status: "refused" })
+
+    expect((await stored(reference)).status).toBe("failed_correctable")
+  })
+
+  it("tells the customer the correction was taken, so the page refreshes, when the name matched and Zulex then refused the order", async () => {
+    const { deps, stored, reference, token } = await mismatchedNewRegistration()
+    deps.registration.failNext("submit", new GatewayRejected())
+
+    expect(await correctOrder(deps, headers, token, { firstName: "Erik" })).toEqual({ status: "done" })
+
+    expect((await stored(reference)).failure).toEqual({ kind: "rejected" })
+  })
+
+  it("names each wrong field in the funnel's own words, and never echoes a value", async () => {
+    const { deps, token } = await mismatchedNewRegistration()
+
+    const result = await correctOrder(deps, headers, token, { evbNumber: "FAKEEVI", part2Number: "A".repeat(21), part2SecurityCode: "NEWCODE", birthDate: "2020-01-01" })
+
+    expect(result).toMatchObject({ status: "invalid", errors: { evbNumber: expect.any(String), part2Number: expect.any(String), birthDate: expect.any(String) } })
+    expect(JSON.stringify(result)).not.toMatch(/FAKEEVI|AAAAAAAAAAAAAAAAAAAAA|NEWCODE|2020-01-01/)
+    expect(result).not.toMatchObject({ errors: { part2SecurityCode: expect.anything() } })
+  })
+
+  it("asks for at least one change, in a sentence for the whole form", async () => {
+    const { deps, token } = await mismatchedNewRegistration()
+
+    expect(await correctOrder(deps, headers, token, {})).toMatchObject({ status: "invalid", errors: {}, general: expect.any(String) })
+  })
+
+  it("ignores anything but text in the fields, since any POST can reach it", async () => {
+    const { deps, stored, reference, token } = await mismatchedNewRegistration()
+
+    const result = await correctOrder(deps, headers, token, { evbNumber: 1234567, firstName: { toString: "x" }, birthDate: null } as never)
+
+    expect(result).toMatchObject({ status: "invalid" })
+    expect((await stored(reference)).status).toBe("failed_correctable")
+  })
+
+  it("logs a failure by kind, never its message or anything the customer typed", async () => {
+    const error = jest.spyOn(console, "error").mockImplementation(() => {})
+    const { deps, stored, reference, token } = await mismatchedNewRegistration()
+    jest.spyOn(deps.repository, "update").mockRejectedValue(new Error("Postgres refused Erik FAKEEVC"))
+
+    expect(await correctOrder(deps, headers, token, { firstName: "Erik", evbNumber: "FAKEEVC" })).toEqual({ status: "failed" })
+
+    const logged = error.mock.calls.flat().join(" ")
+    expect(logged).toContain("Error")
+    for (const secret of [...secretsOf((await stored(reference)).request), "FAKEEVC"]) expect(logged).not.toContain(secret)
     error.mockRestore()
   })
 })

@@ -42,7 +42,7 @@ export async function mailCustomer(
       : name === "rejected"
         ? { name, service, ...common, reason: reason(), refund: extra.refund!, retained: extra.retained! }
         : name === "correctionRequired"
-          ? { name, ...common, reason: reason() }
+          ? { name, service, ...common, reason: reason(), identityMismatch: application.failure?.kind === "identityMismatch" }
           : name === "identityVerified"
             ? { name, ...common }
             : { name, service, ...common }

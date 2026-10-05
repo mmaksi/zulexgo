@@ -8,7 +8,7 @@ import {
 import { FAKE_NEW_REGISTRATION, FAKE_NEW_REGISTRATION_NOW } from "@/tests/fixtures/new-registration"
 import { applyEvent } from "@/src/core/domain/application/application"
 import { APPLICATION_STATUSES } from "@/src/core/domain/application/application-status"
-import { applyNewRegistrationCorrection } from "@/src/core/domain/application/correction"
+import { applyNewRegistrationCorrection } from "@/src/core/domain/application/new-registration-correction"
 import type { Failure } from "@/src/core/domain/registration/failure"
 import { parseDeregistrationRequest } from "@/src/core/domain/application/deregistration-request"
 import { parseNewRegistrationRequest } from "@/src/core/domain/application/new-registration-request"
@@ -301,6 +301,20 @@ export function applicationRepositoryContract(name: string, makeSubject: () => A
         expect(stored.request.evbNumber.reveal()).toBe("FAKEEV9")
         expect(stored.request.registrationCertificate.securityCode.reveal()).toBe("OTHERCODE")
         expect(stored.request.owner).toEqual(created.request.owner)
+      })
+
+      it("stores a corrected owner name and birth date, as a correction after an identity mismatch does, and the rest of the owner as it was", async () => {
+        const created = (await repository.create(aNewRegistrationApplication({ status: "failed_correctable" }))) as NewRegistrationApplication
+        const owner = request({ owner: { ...FAKE_NEW_REGISTRATION.owner, firstName: "Erik", birthDate: "1990-05-18" } }).owner
+        const corrected = applyNewRegistrationCorrection(created.request, { firstName: owner.firstName, birthDate: owner.birthDate })
+
+        await repository.update({ ...created, request: corrected })
+        const stored = ((await repository.get(created.reference)) as NewRegistrationApplication).request
+
+        expect(stored.owner.firstName).toBe("Erik")
+        expect(stored.owner.birthDate.reveal()).toBe("1990-05-18")
+        expect(stored.owner.lastName).toBe(created.request.owner.lastName)
+        expect(stored.owner.address.reveal()).toEqual(created.request.owner.address.reveal())
       })
 
       it("stores the verification the order starts waiting on, and keeps it while the order moves on", async () => {

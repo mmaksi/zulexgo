@@ -2,11 +2,13 @@ import { createElement } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 import { StatusView } from "@/app/status/[token]/_components/status-view"
 import { seedDocumentsFor, seedFor } from "@/db/seed/seed"
+import { aNewRegistrationApplication } from "@/tests/fixtures/applications"
 import { secretsOf } from "@/tests/fixtures/secrets"
 import { FakeClock } from "@/src/adapters/clock/fake/fake-clock"
 import { FakePaymentProvider } from "@/src/adapters/payment/fake/fake-payment-provider"
 import { InMemoryApplicationRepository } from "@/src/adapters/repository/fake/in-memory-application-repository"
 import { InMemoryDocumentStore } from "@/src/adapters/storage/fake/in-memory-document-store"
+import type { Application } from "@/src/core/domain/application/application"
 import { getStatusByToken } from "@/src/core/use-cases/status/get-status-by-token"
 
 jest.mock("next/navigation", () => ({ useRouter: () => ({ refresh: jest.fn() }) }))
@@ -46,5 +48,25 @@ describe("the rendered status page", () => {
 
       expect(html.includes("/documents/")).toBe(application.status === "completed")
     }
+  })
+
+  const at = (status: Application["status"], minutes: number) => ({ status, at: new Date(Date.UTC(2026, 0, 1, 0, minutes)) })
+
+  it.each([
+    ["after an identity mismatch, when the owner's name can be corrected", [at("submitted_and_paid", 0), at("awaiting_identity_verification", 1), at("failed_correctable", 2)]],
+    [
+      "after the registration service refused it",
+      [at("submitted_and_paid", 0), at("awaiting_identity_verification", 1), at("identity_verified", 2), at("submitted_to_kba", 3), at("failed_correctable", 4)],
+    ],
+  ])("shows no secret on a Neuzulassung's correction form, %s", async (_, history) => {
+    const order = aNewRegistrationApplication({ status: "failed_correctable", history })
+    const repository = new InMemoryApplicationRepository([{ application: order, statusToken: "faketoken-correction" }])
+    const view = await getStatusByToken({ repository, documents, payments }, "faketoken-correction")
+
+    const html = renderToStaticMarkup(createElement(StatusView, { view, documentHref: () => "#", cancelAction, correctAction }))
+
+    expect(html).toContain('id="correct-evbNumber"')
+    for (const secret of secretsOf(order.request)) expect(html).not.toContain(secret)
+    expect(html).not.toContain("faketoken-correction")
   })
 })

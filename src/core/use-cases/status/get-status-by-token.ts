@@ -44,13 +44,20 @@ export interface DeregistrationStatusView extends StatusViewBase {
 }
 
 /**
- * A Neuzulassung is known by the end of its VIN for now: it has no plate until the authority assigns
- * one, and what its customer typed (the owner, the address, the bank account, the eVB number and the
- * Teil II code) never leaves the server.
+ * A Neuzulassung is known by the end of its VIN: it has no plate until the authority assigns one
+ * (and the API does not say which), and what its customer typed (the owner, the address, the bank account,
+ * the eVB number and the Teil II code) never leaves the server.
  */
 export interface NewRegistrationStatusView extends StatusViewBase {
   readonly service: "newRegistration"
   readonly vinEnding: string
+  /**
+   * For an order at 5b: whether the owner's name and birth date can still be corrected, which is only while
+   * the order's identity was never verified (a verification found someone else than the owner).
+   */
+  readonly ownerCorrectable?: boolean
+  /** For an order waiting for the customer to verify their identity (status 2): when the wait ends and the order is cancelled. */
+  readonly verificationDeadline?: Date
 }
 
 /**
@@ -87,15 +94,19 @@ export async function getStatusByToken(
   const summary =
     request.service === "deregistration"
       ? { service: request.service, licencePlate: request.licencePlate, plateCount: request.plateCount, vinEnding }
-      : { service: request.service, vinEnding }
+      : {
+          service: request.service,
+          vinEnding,
+          ownerCorrectable: status === "failed_correctable" ? !application.history.some((change) => change.status === "identity_verified") : undefined,
+          verificationDeadline: status === "awaiting_identity_verification" ? application.identityVerification?.deadline : undefined,
+        }
   return {
     ...summary,
     reference,
     status,
     steps: customerSteps(application),
     failureReason: failureReasonOf(application, deps.errorCatalogue),
-    // Only a de-registration has a correction to offer; a Neuzulassung's is not built yet.
-    correctable: status === "failed_correctable" && request.service === "deregistration" ? await correctableOf(deps.payments, application) : undefined,
+    correctable: status === "failed_correctable" ? await correctableOf(deps.payments, application) : undefined,
     // A preview from the price, beside the cancel button: all but the fee would go back.
     cancellation: status === "failed_correctable" ? { returned: application.payment.total.subtract(PROCESSING_FEE), retained: PROCESSING_FEE } : undefined,
     documents: await documentsOf(deps.documents, application),

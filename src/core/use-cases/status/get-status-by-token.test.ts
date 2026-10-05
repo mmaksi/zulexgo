@@ -4,6 +4,7 @@ import type { Application } from "@/src/core/domain/application/application"
 import type { ApplicationReference } from "@/src/core/domain/application/application-reference"
 import type { DocumentRef } from "@/src/core/domain/registration/document"
 import { Money } from "@/src/core/domain/payment/money"
+import { SERVICE_PRICES } from "@/src/core/domain/payment/pricing"
 import { TokenInvalid } from "@/src/core/errors/application/token-invalid"
 import type { PaymentProvider } from "@/src/core/ports/payment/payment-provider"
 import { getStatusByToken } from "./get-status-by-token"
@@ -72,11 +73,57 @@ describe("getStatusByToken", () => {
       }
     })
 
-    it("offers no correction, since its form is not built yet, but still the cancellation", async () => {
+    it("offers the cancellation and a correction, while its money is whole", async () => {
+      const heldInFull = async () => ({ id: "p", status: "held" as const, amount: SERVICE_PRICES.newRegistration, captured: Money.ofCents(0), refunded: Money.ofCents(0) })
+
+      const view = await getStatusByToken({ ...newRegistrationDeps, payments: { getPayment: heldInFull } }, TOKEN)
+
+      expect(view.correctable).toBe(true)
+      expect(view.cancellation).toBeDefined()
+    })
+
+    it("cannot be corrected once part of its money has gone back", async () => {
       const view = await getStatusByToken(newRegistrationDeps, TOKEN)
 
-      expect(view.correctable).toBeUndefined()
-      expect(view.cancellation).toBeDefined()
+      expect(view.correctable).toBe(false)
+    })
+
+    describe("whether the owner's name and birth date can be corrected", () => {
+      const at = (status: Application["status"]) => ({ status, at: new Date("2026-03-01T09:00:00.000Z") })
+      const viewOf = (history: Application["history"]) =>
+        getStatusByToken({ ...deps, repository: { findByStatusToken: async () => aNewRegistrationApplication({ status: "failed_correctable", history }) } }, TOKEN)
+
+      it("can, while the identity was never verified: a mismatch sent the order back", async () => {
+        const view = await viewOf([at("submitted_and_paid"), at("awaiting_identity_verification"), at("failed_correctable")])
+
+        expect(view).toMatchObject({ service: "newRegistration", ownerCorrectable: true })
+      })
+
+      it("cannot once it was verified, whatever sent the order back", async () => {
+        const view = await viewOf([at("submitted_and_paid"), at("awaiting_identity_verification"), at("identity_verified"), at("submitted_to_kba"), at("failed_correctable")])
+
+        expect(view).toMatchObject({ ownerCorrectable: false })
+      })
+    })
+
+    describe("the wait for the customer's identity check", () => {
+      const deadline = new Date("2026-03-05T09:00:00.000Z")
+      const waiting = aNewRegistrationApplication({ status: "awaiting_identity_verification", identityVerification: { id: "fake-verification", deadline, reminderSent: false } })
+      const viewOf = (order: Application) => getStatusByToken({ ...deps, repository: { findByStatusToken: async () => order } }, TOKEN)
+
+      it("names the deadline the customer was given, which is the one enforced", async () => {
+        expect(await viewOf(waiting)).toMatchObject({ verificationDeadline: deadline })
+      })
+
+      it.each(["submitted_and_paid", "identity_verified", "submitted_to_kba", "completed"] as const)("names none at %s, when nobody is waiting", async (status) => {
+        const view = await viewOf({ ...waiting, status })
+
+        expect(view.service === "newRegistration" && view.verificationDeadline).toBeUndefined()
+      })
+
+      it("carries neither the verification's id nor a link to it", async () => {
+        expect(JSON.stringify(await viewOf(waiting))).not.toContain("fake-verification")
+      })
     })
   })
 

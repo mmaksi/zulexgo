@@ -263,6 +263,7 @@ describe("identity verification: a paid Neuzulassung waits for the customer's ve
       await flow.poll(1)
 
       const [email] = sent(flow, "correctionRequired")
+      expect(email).toMatchObject({ service: "newRegistration", identityMismatch: true })
       expect(email.reason).toMatch(/Name und Geburtsdatum/)
       expect(JSON.stringify(email)).not.toMatch(/Erik|Mustermann|1990/)
     })

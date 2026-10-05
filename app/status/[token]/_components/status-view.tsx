@@ -1,8 +1,11 @@
 import { Download } from "lucide-react"
 import Link from "next/link"
+import { FUNNELS } from "@/app/_components/funnels"
 import { SUPPORT_EMAIL } from "@/src/core/domain/customer/contact"
 import type { CustomerStep } from "@/src/core/domain/application/customer-steps"
+import { isOnSale } from "@/src/core/domain/application/service"
 import type { DocumentKind } from "@/src/core/domain/registration/document"
+import { NEW_REGISTRATION_NEXT_STEPS } from "@/src/core/domain/registration/new-registration-next-steps"
 import { formatEuros } from "@/src/core/domain/payment/money"
 import type { StatusView as View } from "@/src/core/use-cases/status/get-status-by-token"
 import { cn } from "@/src/lib/utils"
@@ -10,10 +13,18 @@ import { Alert } from "@/src/ui/alert"
 import { buttonLink } from "@/src/ui/button"
 import { PlateFrame } from "@/src/ui/plate-frame"
 import { CancelOrder, type CancelOrderAction } from "./cancel-order"
+import { CorrectNewRegistration, type CorrectNewRegistrationAction } from "./correct-new-registration"
 import { CorrectOrder, type CorrectOrderAction } from "./correct-order"
 
+/** The bound server action reads any input and answers for the order's own service, so one action serves either form. */
+type CorrectAction = CorrectOrderAction & CorrectNewRegistrationAction
+
+const when = (date: Date) =>
+  new Intl.DateTimeFormat("de-DE", { dateStyle: "medium", timeStyle: "short", timeZone: "Europe/Berlin" }).format(date)
+
 /** Titles are the customer statuses, status lines the internal labels (launch plan § Context). */
-function describe(step: CustomerStep, failureReason?: string): { title: string; line?: string; text?: string } {
+function describe(step: CustomerStep, view: View): { title: string; line?: string; text?: string } {
+  const { failureReason } = view
   if (step.id === "paid") {
     return step.state === "current"
       ? { title: "Antrag eingegangen", line: "Zahlung wird bestätigt" }
@@ -23,18 +34,46 @@ function describe(step: CustomerStep, failureReason?: string): { title: string; 
           text: "Wir haben Ihren Antrag erhalten. Ihre Karte wird belastet, sobald er eingereicht ist, spätestens kurz vor Ablauf der Kartenreservierung.",
         }
   }
+  // Their explanations are about waiting, so a finished step keeps only its status line.
+  if (step.id === "verification") {
+    if (step.rechecking) {
+      return { title: "Identität prüfen", line: "Angaben werden geprüft", text: "Wir gleichen Ihre korrigierten Angaben mit Ihrer Identitätsprüfung ab. Das dauert nur einen Moment." }
+    }
+    const deadline = view.service === "newRegistration" ? view.verificationDeadline : undefined
+    return {
+      title: "Identität prüfen",
+      line: step.state === "done" ? "Identität bestätigt" : "Wartet auf Ihre Bestätigung",
+      text:
+        step.state === "current"
+          ? `Wir reichen Ihren Antrag erst ein, wenn Sie Ihre Identität bestätigt haben. Den Link dazu haben wir Ihnen per E-Mail geschickt.${
+              deadline ? ` Bitte bestätigen Sie bis ${when(deadline)}. Danach stornieren wir den Auftrag, und Sie erhalten den vollen Betrag zurück.` : ""
+            }`
+          : undefined,
+    }
+  }
+  if (step.id === "verified") {
+    return {
+      title: "Identität bestätigt",
+      line: step.state === "done" ? "Bestätigt" : "Antrag wird eingereicht",
+      text: step.state === "current" ? "Wir reichen Ihren Antrag jetzt beim Kraftfahrt-Bundesamt ein." : undefined,
+    }
+  }
   if (step.id === "kba") {
     return { title: "An das KBA übermittelt", line: step.state === "pending" ? undefined : "KBA bearbeitet", text: "Ihr Antrag liegt beim Kraftfahrt-Bundesamt." }
   }
   switch (step.outcome) {
     case "completed":
-      return { title: "Abmeldung abgeschlossen", line: "Vorgang abgeschlossen", text: "Ihr Fahrzeug ist abgemeldet. Kfz-Steuer und Versicherung enden automatisch." }
+      return view.service === "newRegistration"
+        ? { title: "Neuzulassung abgeschlossen", line: "Vorgang abgeschlossen", text: "Das KBA hat Ihre Neuzulassung bestätigt. Ihre Unterlagen finden Sie unten." }
+        : { title: "Abmeldung abgeschlossen", line: "Vorgang abgeschlossen", text: "Ihr Fahrzeug ist abgemeldet. Kfz-Steuer und Versicherung enden automatisch." }
     case "failed_correctable":
       return { title: "Korrektur erforderlich", line: "Korrektur erforderlich", text: failureReason }
     case "failed_final":
       return { title: "Antrag abgelehnt", line: "Erstattung", text: `${failureReason ?? ""} Eine Korrektur ist nicht möglich.`.trim() }
     case "cancelled":
-      return { title: "Antrag storniert", line: "Storniert", text: "Sie haben den Antrag storniert." }
+      return step.verificationExpired
+        ? { title: "Antrag storniert", line: "Storniert", text: "Sie haben Ihre Identität nicht rechtzeitig bestätigt. Deshalb haben wir den Auftrag storniert, ohne etwas einzureichen." }
+        : { title: "Antrag storniert", line: "Storniert", text: "Sie haben den Antrag storniert." }
     default:
       return { title: "Ergebnis" }
   }
@@ -74,11 +113,11 @@ function Summary({ view }: { view: View }) {
 }
 
 /**
- * What the customer may correct, which fields the form asks for being the service's. A Neuzulassung
- * has none yet: its form is not built, so it shows nothing rather than a de-registration's.
+ * What the customer may correct, which fields the form asks for being the service's: a de-registration's VIN and
+ * codes, a Neuzulassung's eVB number and Teil II, and its owner's name and birth date while its identity was never
+ * verified.
  */
-function Correction({ view, action }: { view: View; action: CorrectOrderAction }) {
-  if (view.service !== "deregistration") return null
+function Correction({ view, action }: { view: View; action: CorrectAction }) {
   // An order whose provider has begun a cancel is offered no form: part of its money has gone back.
   if (view.correctable === false) {
     return (
@@ -88,11 +127,20 @@ function Correction({ view, action }: { view: View; action: CorrectOrderAction }
       </Alert>
     )
   }
+  const ownerCorrectable = view.service === "newRegistration" && view.ownerCorrectable === true
   return (
     <div className="flex flex-col gap-4">
       <h3 className="text-subtitle text-grau-dark">Angaben korrigieren</h3>
-      <p className="text-body text-grau">Korrigieren Sie Ihre Angaben und reichen Sie den Antrag erneut ein. Das kostet nichts extra.</p>
-      <CorrectOrder action={action} plateCount={view.plateCount} />
+      <p className="text-body text-grau">
+        {ownerCorrectable
+          ? "Korrigieren Sie Ihre Angaben. Wir prüfen Ihre Identität dann erneut. Das kostet nichts extra."
+          : "Korrigieren Sie Ihre Angaben und reichen Sie den Antrag erneut ein. Das kostet nichts extra."}
+      </p>
+      {view.service === "deregistration" ? (
+        <CorrectOrder action={action} plateCount={view.plateCount} />
+      ) : (
+        <CorrectNewRegistration action={action} ownerCorrectable={ownerCorrectable} />
+      )}
     </div>
   )
 }
@@ -105,8 +153,10 @@ const DOCUMENT_LABELS: Record<DocumentKind, string> = {
   unknown: "Dokument",
 }
 
-const when = (date: Date) =>
-  new Intl.DateTimeFormat("de-DE", { dateStyle: "medium", timeStyle: "short", timeZone: "Europe/Berlin" }).format(date)
+/** The kinds a Neuzulassung's documents call by another name: its confirmation is of the registration, not a de-registration. */
+const NEW_REGISTRATION_LABELS: Partial<Record<DocumentKind, string>> = { confirmation: "Bestätigung der Zulassung" }
+
+const documentLabel = (service: View["service"], kind: DocumentKind) => (service === "newRegistration" ? NEW_REGISTRATION_LABELS[kind] : undefined) ?? DOCUMENT_LABELS[kind]
 
 /**
  * site-contract §2.6: plate and the end of the VIN, never a security code; a
@@ -123,7 +173,7 @@ export function StatusView({
   view: View
   documentHref: (documentId: string) => string
   cancelAction: CancelOrderAction
-  correctAction: CorrectOrderAction
+  correctAction: CorrectAction
 }) {
   return (
     <div className="flex flex-col gap-(--heading-space-above)">
@@ -139,7 +189,7 @@ export function StatusView({
         </h2>
         <ol className="flex max-w-xl flex-col">
           {view.steps.map((step) => (
-            <Step key={step.id} step={step} failureReason={view.failureReason} />
+            <Step key={step.id} step={step} view={view} />
           ))}
         </ol>
       </section>
@@ -183,14 +233,21 @@ function OutcomeBlock({
   view: View
   documentHref: (documentId: string) => string
   cancelAction: CancelOrderAction
-  correctAction: CorrectOrderAction
+  correctAction: CorrectAction
 }) {
   const outcome = view.steps.find((step) => step.id === "outcome")?.outcome
   if (!outcome) return null
+  // Another try goes to the service's own funnel, once it is on sale; until then, to the start page.
+  const funnel = isOnSale(view.service) ? FUNNELS[view.service] : undefined
 
   switch (outcome) {
     case "completed":
-      return <Documents view={view} documentHref={documentHref} />
+      return (
+        <>
+          <Documents view={view} documentHref={documentHref} />
+          {view.service === "newRegistration" ? <NextSteps /> : null}
+        </>
+      )
     case "failed_correctable":
       return (
         <section aria-labelledby="status-options" className="measure flex flex-col gap-8">
@@ -213,8 +270,8 @@ function OutcomeBlock({
           <Alert variant={outcome === "failed_final" ? "error" : "info"} className="w-full">
             <RefundInfo refund={view.refund} />
           </Alert>
-          <Link href="/deregister" className={buttonLink({ variant: "outline" })}>
-            Neuen Antrag stellen
+          <Link href={funnel?.href ?? "/"} className={buttonLink({ variant: "outline" })}>
+            {funnel ? "Neuen Antrag stellen" : "Zur Startseite"}
           </Link>
         </div>
       )
@@ -232,11 +289,33 @@ function RefundInfo({ refund }: { refund: View["refund"] }) {
   )
 }
 
+/** What the downloads section says while the documents are not there yet, up to where it points to the support address. */
+const NO_DOCUMENTS_YET: Record<View["service"], string> = {
+  deregistration: "Die Bestätigung steht hier zum Download bereit, sobald sie vorliegt. Fehlt sie länger, schreiben Sie uns an",
+  newRegistration: "Ihre Unterlagen stehen hier zum Download bereit, sobald sie vorliegen. Fehlen sie länger, schreiben Sie uns an",
+}
+
+/** What happens after a Neuzulassung is completed: what arrives by post, where the plate is, and that plates are made locally. */
+function NextSteps() {
+  return (
+    <section aria-labelledby="status-next-steps" className="measure flex flex-col gap-4">
+      <h2 id="status-next-steps" className="text-h4 text-grau-dark">
+        Wie geht es weiter?
+      </h2>
+      <ul className="flex list-disc flex-col gap-2 pl-5 text-body text-grau">
+        {NEW_REGISTRATION_NEXT_STEPS.map((step) => (
+          <li key={step}>{step}</li>
+        ))}
+      </ul>
+    </section>
+  )
+}
+
 function Documents({ view, documentHref }: { view: View; documentHref: (documentId: string) => string }) {
   return (
     <section aria-labelledby="status-documents" className="flex flex-col gap-4">
       <h2 id="status-documents" className="text-h4 text-grau-dark">
-        Ihre Bestätigung
+        {view.service === "newRegistration" ? "Ihre Unterlagen" : "Ihre Bestätigung"}
       </h2>
       {view.documents.length > 0 ? (
         <ul className="flex flex-col items-start gap-3">
@@ -244,14 +323,14 @@ function Documents({ view, documentHref }: { view: View; documentHref: (document
             <li key={id}>
               <a href={documentHref(id)} className={buttonLink({ variant: "outline", className: "h-auto min-h-12 py-3 text-left whitespace-normal" })}>
                 <Download aria-hidden="true" />
-                {DOCUMENT_LABELS[kind]} herunterladen
+                {documentLabel(view.service, kind)} herunterladen
               </a>
             </li>
           ))}
         </ul>
       ) : (
         <p className="measure text-body text-grau">
-          Die Bestätigung steht hier zum Download bereit, sobald sie vorliegt. Fehlt sie länger, schreiben Sie uns an <MailLink />.
+          {NO_DOCUMENTS_YET[view.service]} <MailLink />.
         </p>
       )}
     </section>
@@ -279,8 +358,8 @@ const STATE_LABELS: Record<CustomerStep["state"], string> = {
   failed: "nicht erfolgreich",
 }
 
-function Step({ step, failureReason }: { step: CustomerStep; failureReason?: string }) {
-  const { title, line, text } = describe(step, failureReason)
+function Step({ step, view }: { step: CustomerStep; view: View }) {
+  const { title, line, text } = describe(step, view)
   return (
     <li aria-current={step.state === "current" ? "step" : undefined} className={cn("flex gap-4 rounded-md p-4", ROWS[step.state])}>
       <span aria-hidden="true" className={cn("mt-1 size-3 shrink-0 rounded-full", MARKS[step.state])} />

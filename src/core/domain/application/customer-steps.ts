@@ -24,6 +24,13 @@ export interface CustomerStep {
   readonly at?: Date
   /** Which outcome, on the outcome step once it has one. */
   readonly outcome?: Outcome
+  /** On the outcome step of an order cancelled because the customer did not verify in time, not because they gave up. */
+  readonly verificationExpired?: true
+  /**
+   * On the verification step of an order sent back to be checked again after a correction: the customer already
+   * verified, so nothing is theirs to do and the wait is ours, which the page says in place of the deadline.
+   */
+  readonly rechecking?: true
 }
 
 /** What the stepper reads of an order: where it is, how it got there, and which service it is for. */
@@ -57,17 +64,21 @@ export function customerSteps({ status, history, request }: SteppedOrder): Custo
         ? { id: "kba", state: "done", at: kbaAt }
         : { id: "kba", state: "pending" }
 
+  // A customer cancels from 5b; only a verification that ran out cancels an order straight from status 2.
+  const ranOut = status === "cancelled" && history.at(-2)?.status === "awaiting_identity_verification"
   const outcome: CustomerStep = isOutcome(status)
-    ? { id: "outcome", state: status === "completed" ? "done" : "failed", at: reachedAt(status), outcome: status }
+    ? { id: "outcome", state: status === "completed" ? "done" : "failed", at: reachedAt(status), outcome: status, ...(ranOut ? { verificationExpired: true } : {}) }
     : { id: "outcome", state: "pending" }
 
   if (!requiresIdentityVerification(request.service)) return [paid, kba, outcome]
 
   const verifiedAt = reachedAt("identity_verified")
 
+  // Only a correction sends an order from 5b back to status 2.
+  const rechecking = status === "awaiting_identity_verification" && history.at(-2)?.status === "failed_correctable"
   const verification: CustomerStep =
     status === "awaiting_identity_verification"
-      ? { id: "verification", state: "current", at: reachedAt("awaiting_identity_verification") }
+      ? { id: "verification", state: "current", at: reachedAt("awaiting_identity_verification"), ...(rechecking ? { rechecking: true } : {}) }
       : verifiedAt
         ? { id: "verification", state: "done", at: reachedAt("awaiting_identity_verification") }
         : { id: "verification", state: "pending" }
