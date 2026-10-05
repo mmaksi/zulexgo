@@ -12,7 +12,8 @@ export const metadata: Metadata = { title: "Ihr Antrag — ZulexGO", robots: { i
 
 export default async function StatusPage({ params }: PageProps<"/status/[token]">) {
   const { token } = await params
-  const lookup = await lookupStatus(getContainer(), await headers(), token)
+  const container = getContainer()
+  const lookup = await lookupStatus(container, await headers(), token)
 
   // Every invalid link gets the same page: nothing says whether one ever existed.
   if (lookup.kind === "invalid") notFound()
@@ -32,6 +33,7 @@ export default async function StatusPage({ params }: PageProps<"/status/[token]"
     <>
       <StatusView
         view={view}
+        servicesOnSale={container.servicesOnSale}
         documentHref={(documentId) => `/status/${encodeURIComponent(token)}/documents/${documentId}`}
         cancelAction={cancelOrderAction.bind(null, token)}
         correctAction={correctOrderAction.bind(null, token)}

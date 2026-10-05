@@ -1,7 +1,8 @@
 import "server-only"
 import { z } from "zod"
 import { requiresIdentityVerification } from "@/src/core/domain/application/application-status"
-import { SERVICES_ON_SALE, type Service } from "@/src/core/domain/application/service"
+import { type Beta, MIN_INVITE_LENGTH, normaliseInvite } from "@/src/core/domain/application/beta"
+import { isOrderable, type OrderableService, type Service } from "@/src/core/domain/application/service"
 
 /**
  * The single place this application interprets `process.env`; the container
@@ -32,6 +33,32 @@ const CODES_KEY_BYTES = 32
 /** Never defaulted: an unset secret stays unset, and the guardrails require it where it is used. */
 const secret = z.string().min(1).optional()
 
+/** A comma-separated list in the environment, an array of trimmed entries here. */
+const commaList = (list: string) => list.split(",").map((entry) => entry.trim()).filter(Boolean)
+
+const inviteCodes = (list: string) => commaList(list).map(normaliseInvite)
+
+const orderableService = z.custom<OrderableService>(isOrderable, { message: "is not a service an order can be made for." })
+
+/**
+ * What the deployment sells. These are read by pages built ahead of any request as well as by the
+ * container, so they are a schema of their own (`parseSales`).
+ */
+const salesFields = {
+  // The services checkout takes an order for. De-registration alone until a stage says otherwise, so
+  // a deploy that sets nothing sells what it always sold; the card on the landing page and the funnel's
+  // route follow this list, and `submitCheckout` refuses anything else.
+  SERVICES_ON_SALE: z.string().default("deregistration").transform(commaList).pipe(z.array(orderableService).min(1)),
+  // The services on sale to people with an invite code only. One not listed here is open to everyone.
+  BETA_SERVICES: z.string().default("").transform(commaList).pipe(z.array(orderableService)),
+  // Checkouts a day for each service in beta.
+  BETA_DAILY_CAP: z.coerce.number().int().min(1).default(5),
+  // The invite codes of each service, one per person in the beta. Secrets: never in an error or a log.
+  INVITE_CODES_DEREGISTRATION: z.string().default("").transform(inviteCodes),
+  INVITE_CODES_NEW_REGISTRATION: z.string().default("").transform(inviteCodes),
+}
+const salesSchema = z.object(salesFields)
+
 /**
  * Every variable the application reads. Most are optional in the type and
  * required by the guardrails only when the feature that uses them is switched
@@ -41,6 +68,8 @@ const secret = z.string().min(1).optional()
 const schema = z
   .object({
     APP_ENV: z.enum(STAGES),
+
+    ...salesFields,
 
     // Public origin the status links are built on; defaulted in dev, https-only elsewhere.
     APP_BASE_URL: z.url().optional(),
@@ -69,10 +98,7 @@ const schema = z
     RESEND_API_KEY: secret,
     MAIL_FROM: z.string().min(1).optional(),
     // A comma-separated list in the environment, an array of trimmed addresses here.
-    MAIL_ALLOWLIST: z
-      .string()
-      .default("")
-      .transform((list) => list.split(",").map((entry) => entry.trim()).filter(Boolean)),
+    MAIL_ALLOWLIST: z.string().default("").transform(commaList),
 
     // The app connects through the transaction pooler (DATABASE_URL); the db commands
     // (migrate, seed) use the session connection (DIRECT_DATABASE_URL).
@@ -125,6 +151,7 @@ function applyGuardrails(env: Parsed, ctx: Ctx) {
   checkRepository(env, ctx)
   checkStorage(env, ctx)
   checkIdentity(env, ctx)
+  checkBeta(env, ctx)
 }
 
 function requireDeployedStageVariables(env: Parsed, ctx: Ctx) {
@@ -261,8 +288,45 @@ export function fakeIdentityProblem(stage: Stage, servicesOnSale: readonly Servi
 }
 
 function checkIdentity(env: Parsed, ctx: Ctx) {
-  const problem = env.IDENTITY_DRIVER === "fake" ? fakeIdentityProblem(env.APP_ENV, SERVICES_ON_SALE) : undefined
+  const problem = env.IDENTITY_DRIVER === "fake" ? fakeIdentityProblem(env.APP_ENV, env.SERVICES_ON_SALE) : undefined
   if (problem) reject(ctx, "IDENTITY_DRIVER", problem)
+}
+
+/** Where each service's invite codes are set. */
+const INVITE_CODES = {
+  deregistration: "INVITE_CODES_DEREGISTRATION",
+  newRegistration: "INVITE_CODES_NEW_REGISTRATION",
+} as const satisfies Record<OrderableService, keyof Parsed>
+
+/**
+ * A service in beta needs codes (or nobody could order it), and codes need a service in beta: a list set
+ * for a service that is not listed would leave it open to everyone while the operator believes it is
+ * invite-only. A service in beta that is not on sale is allowed: taking it off sale is one change, never
+ * two, so stopping sales in a hurry cannot stop the deploy. The messages name variables, never a code.
+ */
+function checkBeta(env: Parsed, ctx: Ctx) {
+  for (const service of env.BETA_SERVICES) {
+    if (env[INVITE_CODES[service]].length === 0) {
+      reject(ctx, INVITE_CODES[service], `required while ${service} is in BETA_SERVICES: nobody could order it.`)
+    }
+  }
+
+  for (const [service, variable] of Object.entries(INVITE_CODES) as [OrderableService, keyof Parsed][]) {
+    const codes = env[variable] as string[]
+    if (codes.length > 0 && !env.BETA_SERVICES.includes(service)) {
+      reject(ctx, variable, `is set but ${service} is not in BETA_SERVICES, so anyone could order it.`)
+    }
+    if (codes.some((code) => code.length < MIN_INVITE_LENGTH)) {
+      reject(ctx, variable, `holds a code shorter than ${MIN_INVITE_LENGTH} characters, which is too easy to guess.`)
+    }
+  }
+}
+
+/** The beta the deployment runs, if any service is in it: what checkout and the funnels read. */
+export function betaOf(env: Pick<Env, "BETA_SERVICES" | "BETA_DAILY_CAP" | typeof INVITE_CODES[OrderableService]>): Beta | undefined {
+  if (env.BETA_SERVICES.length === 0) return undefined
+  const invites = Object.fromEntries(env.BETA_SERVICES.map((service) => [service, env[INVITE_CODES[service]]]))
+  return { invites, dailyPlaces: env.BETA_DAILY_CAP }
 }
 
 export class EnvironmentError extends Error {
@@ -280,15 +344,30 @@ const withoutBlanks = (source: EnvSource): EnvSource =>
 
 const DEV_DEFAULTS = { APP_BASE_URL: "http://localhost:3000" } as const
 
+/** Every problem is reported against its variable; the value itself never appears. */
+const environmentError = (error: z.ZodError) =>
+  new EnvironmentError(error.issues.map((issue) => `${issue.path.join(".") || "(root)"}: ${issue.message}`))
+
 export function parseEnv(source: EnvSource): Env {
   const provided = withoutBlanks(source)
   const candidate = provided.APP_ENV === "dev" ? { ...DEV_DEFAULTS, ...provided } : provided
   const result = schema.safeParse(candidate)
 
   if (result.success) return result.data
-
-  // Every problem is reported against its variable; the value itself never appears.
-  throw new EnvironmentError(
-    result.error.issues.map((issue) => `${issue.path.join(".") || "(root)"}: ${issue.message}`)
-  )
+  throw environmentError(result.error)
 }
+
+/**
+ * What the deployment sells, without the rest of the environment: for a page that is built before any
+ * request (the landing page's cards), where building the container would open adapters for nothing. It
+ * is the same setting `parseEnv` validates, so the two cannot disagree.
+ */
+export function parseSales(source: EnvSource): { servicesOnSale: OrderableService[]; betaServices: OrderableService[] } {
+  const result = salesSchema.safeParse(withoutBlanks(source))
+
+  if (!result.success) throw environmentError(result.error)
+  return { servicesOnSale: result.data.SERVICES_ON_SALE, betaServices: result.data.BETA_SERVICES }
+}
+
+/** What this deployment sells, read from the process's environment. */
+export const salesOfDeployment = () => parseSales(process.env)

@@ -51,6 +51,7 @@ export function setupFlow() {
     tokens: new FakeTokenGenerator(),
     statusLink: (token: string) => `https://zulexgo.example.test/status/${token}`,
     errorCatalogue: CATALOGUE,
+    servicesOnSale: ["deregistration"] as const,
   }
 
   const emails = () => deps.mailer.sent.map((message) => message.template.name)

@@ -16,6 +16,8 @@ import { StripePaymentFields } from "./stripe/stripe-payment-fields"
 export type StartCheckoutResult =
   | { ok: true; reference: string; clientSecret: string }
   | { ok: false; reason: "invalid" | "consent" | "duplicate" | "unavailable" }
+  /** The service is in its beta: the customer's invite no longer opens it, or the day's places are all taken. */
+  | { ok: false; reason: "invite" | "full" }
   /** The address opened too many checkouts: it may try again after `retryAfterMinutes`. */
   | { ok: false; reason: "limited"; retryAfterMinutes: number }
 
@@ -98,6 +100,8 @@ export function CheckoutPanel({
           return undefined
         }
         if (started.reason === "limited") return tooManyAttempts(started.retryAfterMinutes)
+        if (started.reason === "full") return "Heute sind alle Plätze vergeben. Bitte versuchen Sie es morgen noch einmal."
+        if (started.reason === "invite") return "Ihre Einladung gilt nicht mehr. Bitte schreiben Sie uns, wenn Sie weiter bestellen möchten."
         return started.reason === "invalid"
           ? "Einige Angaben sind nicht gültig. Bitte gehen Sie einen Schritt zurück und prüfen Sie sie."
           : "Das hat gerade nicht geklappt. Bitte versuchen Sie es in ein paar Minuten noch einmal."

@@ -14,7 +14,7 @@ Out of scope for MVP: fleet managers, dealers (served by B2B), legal entities.
 
 ## 3. Feature List
 **Must-Have**
-- Guided service selection (de-registration is the only service on sale; the others, Neuzulassung included, are shown as "coming soon")
+- Guided service selection (what a stage sells is its `SERVICES_ON_SALE` setting, de-registration alone by default; the others, Neuzulassung included, are shown as "coming soon")
 - Early eligibility check: German plate, documents & plate seals with intact security codes, one-vs-two plates, authority availability (sets processing-time expectation)
 - Contextual form: front-plate code shown only for two-plate vehicles; plate reservation removed from the MVP
 - Full client-side validation matching API patterns before payment

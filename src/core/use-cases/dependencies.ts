@@ -1,4 +1,5 @@
-import type { Service } from "@/src/core/domain/application/service"
+import type { Beta } from "@/src/core/domain/application/beta"
+import type { OrderableService } from "@/src/core/domain/application/service"
 import type { RejectionCatalogue } from "@/src/core/domain/registration/rejection-catalogue"
 import type { ApplicationRepository } from "@/src/core/ports/repository/application-repository"
 import type { Clock } from "@/src/core/ports/clock/clock"
@@ -44,8 +45,13 @@ export interface Dependencies {
    */
   readonly errorCatalogue?: RejectionCatalogue
   /**
-   * Replaces `SERVICES_ON_SALE` for checkout. The composition root leaves it unset, so what the
-   * domain says is on sale applies; tests set it to take an order for a service that is not sold yet.
+   * What checkout takes an order for (`SERVICES_ON_SALE`, set per stage): a service that is not listed is
+   * refused, whatever the landing page shows. Tests list the services they place orders for.
    */
-  readonly servicesOnSale?: readonly Service[]
+  readonly servicesOnSale: readonly OrderableService[]
+  /**
+   * The services in their beta, with the invite codes that open each. Unset when no service is: everything
+   * on sale is open to everyone.
+   */
+  readonly beta?: Beta
 }

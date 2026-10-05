@@ -33,4 +33,6 @@ export const RATE_LIMITS = {
    * the same order, so a few tries are plenty; a crowd behind one address (a carrier's shared one) still fits.
    */
   checkout: { max: 10, windowMs: HOUR },
+  /** Redeeming an invite code, per caller, every attempt counted: the codes are the secret, and they are short. */
+  inviteAttempt: { max: 10, windowMs: HOUR },
 } as const satisfies Record<string, RateLimit>

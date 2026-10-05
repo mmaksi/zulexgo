@@ -4,6 +4,7 @@ import { Money } from "@/src/core/domain/payment/money"
 import type { StatusView as View } from "@/src/core/use-cases/status/get-status-by-token"
 import type { Application } from "@/src/core/domain/application/application"
 import { aNewRegistrationApplication, anApplication } from "@/tests/fixtures/applications"
+import type { OrderableService } from "@/src/core/domain/application/service"
 import { StatusView } from "./status-view"
 
 jest.mock("next/navigation", () => ({ useRouter: () => ({ refresh: jest.fn() }) }))
@@ -22,8 +23,8 @@ const at5b = (correctable: boolean): View => ({
   cancellation: { returned: Money.ofCents(5000), retained: Money.ofCents(1999) },
 })
 
-const show = (view: View) =>
-  render(<StatusView view={view} documentHref={() => "#"} cancelAction={jest.fn()} correctAction={jest.fn()} />)
+const show = (view: View, servicesOnSale: readonly OrderableService[] = ["deregistration"]) =>
+  render(<StatusView view={view} servicesOnSale={servicesOnSale} documentHref={() => "#"} cancelAction={jest.fn()} correctAction={jest.fn()} />)
 
 describe("a 5b on the status page", () => {
   it("offers correcting and cancelling while the money is whole", () => {
@@ -157,6 +158,12 @@ describe("a Neuzulassung that ended without a registration", () => {
     for (const link of screen.getAllByRole("link")) expect(link).not.toHaveAttribute("href", "/deregister")
   })
 
+  it("sends a Neuzulassung back to its own funnel once the service is on sale", () => {
+    show(newRegistrationView("cancelled", { refund: cancellation }), ["deregistration", "newRegistration"])
+
+    expect(screen.getByRole("link", { name: "Neuen Antrag stellen" })).toHaveAttribute("href", "/register")
+  })
+
   it("still sends a de-registration back to its own funnel", () => {
     const cancelled = anApplication({ status: "cancelled", history: [{ status: "cancelled", at: T0 }] })
     show({ ...at5b(false), status: "cancelled", steps: customerSteps(cancelled), cancellation: undefined })
@@ -172,7 +179,7 @@ describe("a completed Neuzulassung", () => {
   ] as const
 
   it("offers each document under its own name, behind the link the page was given", () => {
-    render(<StatusView view={newRegistrationView("completed", { documents })} documentHref={(id) => `/doc/${id}`} cancelAction={jest.fn()} correctAction={jest.fn()} />)
+    render(<StatusView view={newRegistrationView("completed", { documents })} servicesOnSale={["deregistration"]} documentHref={(id) => `/doc/${id}`} cancelAction={jest.fn()} correctAction={jest.fn()} />)
 
     expect(screen.getByRole("link", { name: /Vorläufiger Zulassungsnachweis/ })).toHaveAttribute("href", "/doc/2")
     expect(screen.getByRole("link", { name: /Bestätigung der Zulassung/ })).toHaveAttribute("href", "/doc/1")

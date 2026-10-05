@@ -591,6 +591,27 @@ describe("Neuzulassung funnel", () => {
       expect(await screen.findByText("ZG-ABC123")).toBeInTheDocument()
     })
 
+    it("tells a customer of the beta that today's places are gone, and that tomorrow they can try again", async () => {
+      const { user } = setup({ startCheckout: jest.fn(async () => ({ ok: false as const, reason: "full" as const })) })
+      await reachReview(user)
+      await tickAll(user)
+
+      await user.click(payButton())
+
+      expect(await screen.findByRole("alert")).toHaveTextContent(/Heute sind alle Plätze vergeben/)
+      expect(payButton()).toBeEnabled()
+    })
+
+    it("tells a customer whose invite no longer works, instead of calling it a fault", async () => {
+      const { user } = setup({ startCheckout: jest.fn(async () => ({ ok: false as const, reason: "invite" as const })) })
+      await reachReview(user)
+      await tickAll(user)
+
+      await user.click(payButton())
+
+      expect(await screen.findByRole("alert")).toHaveTextContent(/Einladung/)
+    })
+
     it("tells the customer when the server refuses the details, and lets them go back to fix them", async () => {
       const { user } = setup({ startCheckout: jest.fn(async () => ({ ok: false as const, reason: "invalid" as const })) })
       await reachReview(user)

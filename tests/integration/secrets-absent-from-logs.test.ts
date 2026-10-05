@@ -57,6 +57,7 @@ async function runEveryPath(revealStatusLinks: boolean): Promise<string[]> {
     tokens: new FakeTokenGenerator(),
     statusLink: (token: string) => `https://zulexgo.example.test/status/${token}`,
     errorCatalogue: { 202: { class: "final" as const, reason: "Das Fahrzeug ist bereits abgemeldet." } },
+    servicesOnSale: ["deregistration"] as const,
   }
   const poll = (minutes: number) => {
     clock.advance(minutes * 60_000)

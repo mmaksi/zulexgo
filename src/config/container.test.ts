@@ -47,6 +47,24 @@ describe("createContainer", () => {
   })
 })
 
+describe("what the container sells", () => {
+  it("is de-registration to everyone unless the stage says otherwise", () => {
+    expect(createContainer(staging)).toMatchObject({ servicesOnSale: ["deregistration"], beta: undefined })
+  })
+
+  it("is what the stage's settings say, with its beta", () => {
+    const container = createContainer({
+      ...staging,
+      SERVICES_ON_SALE: "deregistration,newRegistration",
+      BETA_SERVICES: "newRegistration",
+      INVITE_CODES_NEW_REGISTRATION: "K7M2-QX9P",
+    })
+
+    expect(container.servicesOnSale).toEqual(["deregistration", "newRegistration"])
+    expect(container.beta).toEqual({ invites: { newRegistration: ["K7M2-QX9P"] }, dailyPlaces: 5 })
+  })
+})
+
 describe("container ports", () => {
   it("wires a fake for every port in dev, so the whole flow runs locally", async () => {
     const container = createContainer(dev)

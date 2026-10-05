@@ -4,7 +4,7 @@ Consumer-facing (B2C) web app for German vehicle registration services, built on
 B2B Zulex API. The MVP covers one service: vehicle de-registration
 (Außerbetriebsetzung), from eligibility check through payment to the official KBA
 confirmation. A second service, Neuzulassung (new registration), is built but not on
-sale: `SERVICES_ON_SALE` lists only de-registration. There are no user accounts —
+sale: a stage's `SERVICES_ON_SALE` setting lists only de-registration by default. There are no user accounts —
 order status is reached through a personal status link sent by email.
 
 ## Getting started

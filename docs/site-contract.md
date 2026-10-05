@@ -7,7 +7,7 @@ Page structure, section content, site behaviour. Business rules: [launch-plan.md
 **Landing page (`/`)**
 1. Header — brand, minimal nav; orientation and trust.
 2. Hero — value proposition; routes into the funnel.
-3. Service selection — a service is actionable only while it is in `SERVICES_ON_SALE` (de-registration); the others, Neuzulassung included, are visible-but-disabled.
+3. Service selection — a service is actionable only while it is in the stage's `SERVICES_ON_SALE` (de-registration alone by default); the others are visible-but-disabled. A service in its beta also says "Nur mit Einladung" and stays linked.
 4. Trust strip — answers "is this official/safe?" before the funnel.
 5. How it works — effort and document expectations in four steps.
 6. FAQ — objections that would otherwise become support tickets.
@@ -40,7 +40,7 @@ Per section, page order: fields with constraints (length / format / tone). Tone:
 - **Headline** — value proposition ("De-register your vehicle online"). ≤60 chars.
 - **Subline** — how it works, one sentence, mentions "official, via KBA". ≤140 chars.
 - **Hero seal** — the founder's "KBA-zertifiziert" seal (`public/kba-zertifiziert.png`), shown unaltered, never rounded, tinted or recoloured: beside the headline from 1024 px, below the buttons on smaller screens so it never pushes the CTA down. The alt text repeats the claim the seal prints.
-- **Service cards** (1 active + disabled "coming soon") — title ≤30, one-line description ≤90, fixed final price from the price list, CTA ≤20 chars. A note under the cards lists the add-on prices and says plates and sticker are ordered and charged only after the KBA has completed the service.
+- **Service cards** (those on sale active, the rest disabled "coming soon"; one in beta also carries the note "Nur mit Einladung", ≤20 chars) — title ≤30, one-line description ≤90, fixed final price from the price list, CTA ≤20 chars. A note under the cards lists the add-on prices and says plates and sticker are ordered and charged only after the KBA has completed the service.
 - **Trust strip** — 3 items (official process, secure payment, status tracking): icon + label ≤40 chars.
 - **How-it-works steps** — exactly 4: title ≤30, text ≤120 chars.
 - **FAQ** — 5–8 items: question ≤80, answer ≤400 chars.
@@ -129,9 +129,11 @@ Eight emails (trigger, subject, content): table in `launch-plan.md` § M5, plus 
 
 ## 4. Neuzulassung Funnel (`/register`)
 
-Built on the shared funnel frame and payment panel (`app/(funnel)/_components/`), so §3's navigation, scroll, mobile and transition rules apply unchanged. **Not on sale:** while `newRegistration` is not in `SERVICES_ON_SALE` (`registration-plan.md` N9) the route and its confirmation page are not found, because the funnel collects an IBAN and a birth date for an order checkout would refuse. Business rules: `registration-plan.md` and [launch-plan.md](launch-plan.md); the provisional answers it builds are Q46, Q49, Q51, Q54 and Q56.
+Built on the shared funnel frame and payment panel (`app/(funnel)/_components/`), so §3's navigation, scroll, mobile and transition rules apply unchanged. **Not on sale:** while a stage's `SERVICES_ON_SALE` does not list `newRegistration` (the default; `registration-plan.md` N9) the route is not found there, because the funnel collects an IBAN and a birth date for an order checkout would refuse. Its confirmation page stays: it collects nothing, and Stripe sends a customer who has paid to it. Business rules: `registration-plan.md` and [launch-plan.md](launch-plan.md); the provisional answers it builds are Q46, Q49, Q51, Q54 and Q56.
 
 **Form state** lives in memory only, never in the URL or browser storage; leaving through a link asks first, closing the tab gets the browser's warning, going back keeps what was entered. The form is checked against the server's own request schema (`newRegistrationRequestSchema`), so it says no exactly where checkout would. Error wording follows §2.3 (≤120 chars, human, action-oriented). A caller who asks too often (the postcode check 30 an hour, the checkout 10 an hour, per address) is told how long to wait and stays on the step; the order is not lost, and the pay button works again once the time has passed.
+
+**Invite gate (both funnels, N9).** While the service is in `BETA_SERVICES`, a browser that has not redeemed a code `submitCheckout` still accepts sees one screen in place of the funnel: the heading "Nur mit Einladung", one sentence, one field "Einladungscode" and "Weiter". A wrong code is said at the field and keeps what was typed; an address that tries too often (10 an hour) is told how long to wait; a check that cannot run says so and does not call the code wrong. A code is accepted whatever its case or spacing, kept in an HttpOnly cookie for a week, and checked again at checkout, so a revoked code stops working at once and the customer is told their invite no longer applies. When the day's places are taken the pay button says so and that tomorrow they can try again.
 
 ### 4.1 Steps
 

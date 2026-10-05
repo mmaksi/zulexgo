@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { ArrowRight } from "lucide-react"
-import { isOnSale, type Service } from "@/src/core/domain/application/service"
+import { isOrderable, type OrderableService, type Service } from "@/src/core/domain/application/service"
 import { formatEuros } from "@/src/core/domain/payment/money"
 import {
   CARBON_SURCHARGE,
@@ -23,7 +23,7 @@ import {
 import { Section, SectionHeading } from "@/src/ui/section"
 
 /**
- * prd.md §3 — a card is actionable only for a service on sale (`SERVICES_ON_SALE`); every
+ * prd.md §3 — a card is actionable only for a service on sale (`SERVICES_ON_SALE`, per stage); every
  * other service is visible but disabled, so the roadmap is legible without being clickable.
  * site-contract.md §2.1 — title <=30, description <=90 chars.
  * Prices come from the price list, so a card can never quote what the
@@ -62,9 +62,20 @@ const SERVICES: { service: Service; title: string; description: string }[] = [
   },
 ]
 
-const CARDS = SERVICES.map((card) => ({ ...card, funnel: isOnSale(card.service) ? FUNNELS[card.service] : undefined }))
+export function ServiceSelection({
+  servicesOnSale,
+  betaServices = [],
+}: {
+  servicesOnSale: readonly OrderableService[]
+  /** The services on sale to invited customers only: they stay linked, since an invited customer starts from here. */
+  betaServices?: readonly OrderableService[]
+}) {
+  const cards = SERVICES.map((card) => ({
+    ...card,
+    funnel: isOrderable(card.service) && servicesOnSale.includes(card.service) ? FUNNELS[card.service] : undefined,
+    inBeta: isOrderable(card.service) && betaServices.includes(card.service),
+  }))
 
-export function ServiceSelection() {
   return (
     <Section id="leistungen" className="bg-white">
       <SectionHeading
@@ -74,7 +85,7 @@ export function ServiceSelection() {
       />
 
       <ul className="grid gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 xl:grid-cols-5">
-        {CARDS.map((service) => (
+        {cards.map((service) => (
           <li key={service.service} className="flex">
             <Card
               aria-disabled={!service.funnel || undefined}
@@ -90,6 +101,11 @@ export function ServiceSelection() {
 
               <CardContent className="flex-1">
                 <CardDescription>{service.description}</CardDescription>
+                {service.funnel && service.inBeta ? (
+                  <Badge variant="secondary" className="mt-4">
+                    Nur mit Einladung
+                  </Badge>
+                ) : null}
               </CardContent>
 
               {/* The price and the action slot are the same height in every
