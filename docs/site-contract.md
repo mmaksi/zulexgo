@@ -18,7 +18,7 @@ Page structure, section content, site behaviour. Business rules: [launch-plan.md
 2. Eligibility check — stops ineligible users before effort or money.
 3. Application form — exactly the API-required fields, contextually.
 4. Review & payment — confirm data, full price, 19.99 € processing-fee notice, consent, payment.
-5. Confirmation — order ID, status link; announces the identity-verification email once Verimi is added.
+5. Confirmation — order ID, status link; announces the identity-verification email once Verimi is added. `/deregister/bestaetigung` shows it where Stripe redirects a payment.
 
 The Neuzulassung funnel (`/register`) has seven steps; its contract is §4.
 
@@ -27,16 +27,16 @@ The Neuzulassung funnel (`/register`) has seven steps; its contract is §4.
 2. Status stepper — customer statuses 1 → 4 → 5a | 5b | 5c, current position; a Neuzulassung has 2 (identity check) and 3 (identity confirmed) between 1 and 4 (§5).
 3. Outcome block — 5a: success documents; 5b: reason, correct-or-cancel choice, fee notice; 5c/cancelled: reason, refund info, new-application CTA.
 4. Correction form (conditional) — fix and resubmit rejected data in place.
-5. Help block — lost-link recovery, support.
+5. Help block — lost-link recovery (`/status/link-anfordern`), support.
 
 **Legal pages (`/impressum`, `/agb`, `/datenschutz`)** — single-column static text; statutory duties.
 
 ## 2. Content Model
 
-Per section, page order: fields with constraints (length / format / tone). Tone: plain German, reassuring, no unexplained Amtsdeutsch. Statuses, emails, refund rules per [launch-plan.md](launch-plan.md); open points are its Q1–Q18. Scope: Must-Have only.
+Per section, page order: fields with constraints (length / format / tone). Tone: plain German, reassuring, no unexplained Amtsdeutsch. Statuses, emails, refund rules per [launch-plan.md](launch-plan.md); open points are its numbered open questions (Qn). Scope: Must-Have only.
 
 ### 2.1 Landing / Service Selection
-- **Header** — logo, nav links, language toggle. Nav ≤3 items, labels ≤20 chars.
+- **Header** — logo, nav links, the primary action; no language toggle (the German + English UI is a Should-Have in `prd.md`). Nav ≤3 items, labels ≤20 chars.
 - **Headline** — value proposition ("De-register your vehicle online"). ≤60 chars.
 - **Subline** — how it works, one sentence, mentions "official, via KBA". ≤140 chars.
 - **Hero seal** — the founder's "KBA-zertifiziert" seal (`public/kba-zertifiziert.png`), shown unaltered, never rounded, tinted or recoloured: beside the headline from 1024 px, below the buttons on smaller screens so it never pushes the CTA down. The alt text repeats the claim the seal prints.
@@ -50,7 +50,7 @@ Per section, page order: fields with constraints (length / format / tone). Tone:
 - **Progress indicator** (whole funnel) — 4 step labels ≤20 chars.
 - **Intro text** — prerequisites (Teil I document, intact plate seals). ≤300 chars.
 - **Questions** (radio/toggle): plate count (1/2), documents at hand (y/n), plate prefix (1–3 letters `[A-ZÄÖÜ]`).
-- **Authority availability notice** — from `ikfzStatus`: 3 variants (online / unavailable / offline), ≤200 chars each; sets processing-time expectation.
+- **Authority availability notice** — shown on the next step, from `ikfzStatus`: 3 variants (online / unavailable / offline), ≤200 chars each; sets processing-time expectation.
 - **Stop message** — if ineligible; explains offline alternative. ≤300 chars.
 
 ### 2.3 Application Form (contextual)
@@ -82,7 +82,7 @@ Per field: label ≤40, helper ≤150, locator image (where to find it), error �
   - *5c* — reason ≤300; refund info (amount minus 19.99 €) ≤200; CTA "Start a new application" ≤30 chars.
   - *Cancelled* — refund info (amount minus 19.99 €) ≤200; CTA "Start a new application" ≤30 chars.
 - **Correction form** — the VIN and the security codes (the front code only for two plates), with the constraints and wording of §2.3; it starts empty, so no stored value is put back on the page, and a field left blank stays as it was; the plate is not correctable (Q26); "Erneut einreichen" sends a `PATCH` of the changed fields, or files the order afresh when Zulex holds nothing to patch (Q37). A correction costs nothing extra (Q11).
-- **Documents list** — per document: type label (enum map: confirmation, fee, rejection, unknown→"Document") ≤40 chars, download button.
+- **Documents list** — per document: type label (enum map: confirmation, temporary certificate, fee, rejection, unknown→"Document") ≤40 chars, download button.
 - **Help block** — support email + "resend link" entry (needs email + order ID), ≤150 chars.
 
 ### 2.7 Transactional Emails
@@ -129,7 +129,7 @@ Eight emails (trigger, subject, content): table in `launch-plan.md` § M5, plus 
 
 ## 4. Neuzulassung Funnel (`/register`)
 
-Built on the shared funnel frame and payment panel (`app/(funnel)/_components/`), so §3's navigation, scroll, mobile and transition rules apply unchanged. **Not on sale:** while `newRegistration` is not in `SERVICES_ON_SALE` (launch plan N9) the route and its confirmation page are not found, because the funnel collects an IBAN and a birth date for an order checkout would refuse. Business rules: `registration-plan.md` and [launch-plan.md](launch-plan.md); the provisional answers it builds are Q46, Q49, Q51, Q54 and Q56.
+Built on the shared funnel frame and payment panel (`app/(funnel)/_components/`), so §3's navigation, scroll, mobile and transition rules apply unchanged. **Not on sale:** while `newRegistration` is not in `SERVICES_ON_SALE` (`registration-plan.md` N9) the route and its confirmation page are not found, because the funnel collects an IBAN and a birth date for an order checkout would refuse. Business rules: `registration-plan.md` and [launch-plan.md](launch-plan.md); the provisional answers it builds are Q46, Q49, Q51, Q54 and Q56.
 
 **Form state** lives in memory only, never in the URL or browser storage; leaving through a link asks first, closing the tab gets the browser's warning, going back keeps what was entered. The form is checked against the server's own request schema (`newRegistrationRequestSchema`), so it says no exactly where checkout would. Error wording follows §2.3 (≤120 chars, human, action-oriented).
 
