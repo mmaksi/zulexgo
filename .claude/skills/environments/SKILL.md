@@ -58,9 +58,13 @@ These are code, not policy — each one is a startup assertion or a runtime chec
 - A **live** Stripe key throws at boot unless `APP_ENV=production`; a **test** key throws in production.
 - `ZULEX_BASE_URL` must be the production host when `APP_ENV=production` and the integration host otherwise.
 - Destructive scripts (`db:migrate:down`, and any reset or truncate) refuse to run when `APP_ENV` is not `dev`.
-- Production refuses the fake identity check (`IDENTITY_DRIVER=fake`) once a service that verifies the customer (`requiresIdentityVerification`) is on `SERVICES_ON_SALE`: a fake proves nobody's identity, and the KBA registers a car in the name the order gives. De-registration alone needs none.
+- Production refuses the fake identity check (`IDENTITY_DRIVER=fake`) once a service that verifies the customer (`requiresIdentityVerification`) is in the stage's `SERVICES_ON_SALE` setting: a fake proves nobody's identity, and the KBA registers a car in the name the order gives. De-registration alone needs none.
 - Outbound email is hard-blocked in dev (`MAIL_DRIVER` must be `console`) and allowlisted in staging (a staging `MAIL_DRIVER` other than `console` needs a non-empty `MAIL_ALLOWLIST`), so a seeded address can never be mailed for real. In production `MAIL_ALLOWLIST` must be empty: a list there silently drops customer mail.
 - Debug output, verbose error bodies, and any dump of a request payload are `dev`-only. Security codes are never logged in any stage. Status tokens are logged only in dev, where the console mailer prints the status link; everywhere else it masks them (see CLAUDE.md non-negotiables). The same goes for the link that starts an identity verification.
+
+## What a stage sells
+
+`SERVICES_ON_SALE` (default `deregistration`) is a setting like any other: the landing cards, the funnel routes and `submitCheckout` follow it, so staging can sell a service on fakes while production still refuses it. `BETA_SERVICES` puts services of that list behind invite codes (`INVITE_CODES_DEREGISTRATION`, `INVITE_CODES_NEW_REGISTRATION`, secrets) with `BETA_DAILY_CAP` checkouts a day; the environment refuses a beta service with no codes, codes for a service not in beta (it would be open to everyone) and a code shorter than 8 characters. The landing page is static, so its cards take these settings when it is built.
 
 ## Secrets
 

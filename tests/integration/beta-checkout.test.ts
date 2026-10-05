@@ -78,6 +78,15 @@ describe("a checkout for a service in its beta", () => {
     await expect(checkout(INVITE, { ...FAKE_NEW_REGISTRATION, vin: "FAKEVIN0000000099" })).resolves.toMatchObject({ reference: expect.any(String) })
   })
 
+  it("refuses the checkout, never lets it through, when the limiter that counts the places cannot answer", async () => {
+    const { deps, checkout, createPayment } = setup()
+    jest.spyOn(deps.rateLimiter, "consume").mockRejectedValue(new Error("connection lost"))
+
+    await expect(checkout(INVITE)).rejects.toThrow("connection lost")
+
+    expect(createPayment).not.toHaveBeenCalled()
+  })
+
   it("leaves a service outside the beta open to everyone, without an invite and without counting", async () => {
     const { deps, createPayment } = setup()
 

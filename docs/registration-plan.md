@@ -21,7 +21,7 @@ The second service after de-registration: **Neuzulassung**, registering a brand-
 
 ## Status (2026-10-05)
 
-N1 to N7 are built and merged into `staging`, and N8 but for its lawyer texts; N0, N9 and N10 are not. **Neuzulassung is not on sale**: `newRegistration` is not in `SERVICES_ON_SALE`, so `/register` is not found, the landing card says "Bald verfügbar" and `submitCheckout` refuses the service. It runs end to end on the fakes and the msw doubles; no real order has gone through it.
+N1 to N7 are built and merged into `staging`, N8 but for its lawyer texts, and N9's code (the part that needs no outside system); N0 and N10 are not, and N9's staging run, beta and gate-opening are not. **Neuzulassung is not on sale unless a stage says so**: what a stage sells is its `SERVICES_ON_SALE` setting, de-registration alone by default. Where `newRegistration` is not listed, `/register` is not found, the landing card says "Bald verfügbar" and `submitCheckout` refuses the service. Staging may list it, on the fakes; production refuses to boot with it listed while the identity check is the fake. It runs end to end on the fakes and the msw doubles; no real order has gone through it.
 
 | Milestone | State | Pull requests | What was built, and where it differs from the text below |
 |---|---|---|---|
@@ -34,7 +34,7 @@ N1 to N7 are built and merged into `staging`, and N8 but for its lawyer texts; N
 | N6 | Merged 2026-10-05 | #76 | The funnel `/register` and the parts both funnels share (`app/(funnel)/_components/`); consent stored with the order (D9) with a third checkbox for the power of attorney; migration `0012_record_consent`; `docs/site-contract.md` §4. |
 | N7 | Merged 2026-10-05 | #77 | The status page, the correction form, cancel and emails 1, 4, 5a, 5b and 5c for a Neuzulassung; `docs/site-contract.md` §5. `new-registration-correction.ts` became its own module. |
 | N8 | Built but for the lawyer texts, 2026-10-05 | #80 | A Neuzulassung's bank account is dropped when its order ends (`applyEvent`, `withoutBankAccount`; Q54); the postcode check and the checkout are rate limited per address; `docs/threat-model.md`. **Not done:** the lawyer texts and the impact-assessment decision (the founder deferred them: placeholders stay and the service stays off sale), retention of the rest of the data (Q22), and the PAngV display, which needed no change. |
-| N9 | Not started | none | Needs the production stack (launch-plan M8), the Zulex API with Neuzulassung enabled and a real identity adapter; production already refuses the fake identity check while a service that verifies is on sale. |
+| N9 | Code built 2026-10-05; the runs are not done | #NN | **Built:** what is on sale is a per-stage setting (`SERVICES_ON_SALE`); a service can be in beta (`BETA_SERVICES`, `INVITE_CODES_<SERVICE>`, `BETA_DAILY_CAP`) with an invite gate in front of its funnel and the same check in `submitCheckout`; `GET /api/internal/report` counts what an operator watches; `docs/runbooks/new-registration-beta.md`. **Not done, because each needs something outside the repo:** the staging run through Verimi's test mode (no Verimi adapter) and against the Zulex integration environment (no key, Neuzulassung not confirmed enabled), the beta orders, every exit criterion below, and adding `newRegistration` to production's `SERVICES_ON_SALE`. |
 | N10 | Not started | none | Plates, sticker and shipping (Q41, Q50). |
 
 Where the built code departs from the text of this plan:
@@ -46,6 +46,9 @@ Where the built code departs from the text of this plan:
 - **The bank account is erased when the order ends, not on a schedule**: `applyEvent` is where every order moves, so it drops the account from the request of an order that reaches 5a, 5c or `cancelled`, and the repository stores the details without it. No `Clock` is involved and no job runs. An order abandoned at checkout is never ended, so it keeps its IBAN, as it keeps everything (Q22): erasing it means voiding its payment first.
 - **Rate limits** cover the Neuzulassung's two server actions only (the postcode check 30 an hour, the checkout 10 an hour, per address, `RATE_LIMITS`); de-registration's two are unlimited until launch-plan M7. The server actions' logic moved to `app/(funnel)/register/requests.ts` so it can be tested, as the status page's is.
 - **PAngV**: the price is already shown as a final price "inkl. Behördengebühr und MwSt." (Q19) in the review step and on the landing page, from `SERVICE_PRICES`. The landing card for Neuzulassung no longer says plates can be ordered with it (Q50).
+- **What is on sale is a setting, not a constant** (N9): `SERVICES_ON_SALE` replaced the domain constant, so staging can sell Neuzulassung on the fakes while production stays closed, with no code change between them. It defaults to de-registration, so an unset stage sells what it always sold. `fakeIdentityProblem` reads the setting, so production cannot boot with a service that verifies on the fake check. The landing page stays static: its cards take the setting when it is built, and the funnels and checkout read it per request.
+- **The beta is per service, with invite codes and a daily number of checkouts** (N9), not a `LAUNCH_MODE=beta|public` flag: `BETA_SERVICES` names the services that need a code, `INVITE_CODES_DEREGISTRATION` and `INVITE_CODES_NEW_REGISTRATION` hold the codes (one per person, revoked by deleting it and redeploying), `BETA_DAILY_CAP` the checkouts a day per service. The check is in `submitCheckout` (`InviteRequired`, `BetaFull`); the gate in front of a funnel is only a convenience that spares a visitor typing an IBAN into a form that would refuse them. A place is taken when a payment is opened, after the form validated and the duplicate warning passed, whether or not it is paid; a day is the rate limiter's 24-hour window from the first place taken. The environment refuses a beta with no codes and codes for a service that is not in beta (it would be open to everyone).
+- **Monitoring is a report to read, not an alert** (N9): `GET /api/internal/report?days=30`, behind the cron secret, gives per service the orders by status, those waiting for identity verification and those past their deadline (`stuck`: the poller should have ended them), how first verifications ended with failure and abandonment rates, and the share of decided orders that ended as a 5c. Counts only. No tool scrapes it yet and no threshold is set: launch-plan M8 picks the tool, and the founder sets the thresholds after the first beta orders.
 - **Seeded orders**: one Neuzulassung per status (`ZG-SEED11` to `ZG-SEED19`). There is none for "5b after an identity mismatch" or "cancelled because the verification ran out", which the status page also shows.
 
 Every answer the code gives to Q45–Q56 is a provisional one, listed with its "if the founder answers differently" pointers in [launch-plan.md](launch-plan.md).
@@ -318,6 +321,8 @@ The checkout action is per service and stores consent, so launch-plan D9 is fixe
 
 **Exit criteria:** every beta order's status matched Zulex's at every check; each 5a's documents downloaded from production; the assigned plate shown or pointed to correctly; one deliberate 5b corrected (e.g. a wrong eVB) and resubmitted; zero personal-data findings in logs, emails or status pages; then the gate opens.
 
+**State (2026-10-05):** built are the per-stage on-sale setting, the beta gate (the invite-only rule of the beta bullet), the monitoring numbers and the runbook; not built are the staging run and the beta itself. The staging run and every exit criterion are unmet and cannot be met from the repository: they need Verimi live, the Zulex API with Neuzulassung enabled, production (launch-plan M8) and real cars. Opening the gate is two settings on the production project (`SERVICES_ON_SALE` gains `newRegistration`, which production accepts only with a real identity adapter, and `BETA_SERVICES` keeps it in beta until the exit criteria are met), then removing it from `BETA_SERVICES` for the public launch.
+
 ---
 
 ### N10 — Plates, sticker, shipping (after launch)
@@ -375,6 +380,7 @@ From `docs/api-1.yaml`; confirm or correct in the N4 spike.
 - `app/(funnel)/register/`, `app/(funnel)/_components/stripe/`, `docs/site-contract.md` — N6
 - `app/status/[token]/_components/`, `src/adapters/mail/resend/` snapshots, `tests/integration/new-registration-*.test.ts` — N7
 - Legal pages, retention job, `docs/runbooks/` — N8, N9
+- `src/config/env.ts` (the sales settings), `src/core/domain/application/{beta,order-report}.ts`, `src/core/use-cases/checkout/beta-access.ts`, `src/core/use-cases/monitoring/report-orders.ts`, `app/(funnel)/{on-sale,beta-gate,redeem-invite,invite-cookie}.ts*`, `app/api/internal/report/`, `docs/runbooks/new-registration-beta.md` — N9
 
 ## Verification
 

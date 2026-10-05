@@ -22,7 +22,8 @@ app/                    Next.js App Router. Routing, layouts, pages, route handl
   status/               Account-free pages: the status dashboard (`[token]/`) and the request for a new
                         link (`link-anfordern/`).
   api/                  Route handlers: webhooks (`webhooks/stripe`, `webhooks/identity`), the scheduler's
-                        `internal/poll`, and any client-callable endpoint.
+                        `internal/poll`, the operator's `internal/report` (both behind the cron secret), and any
+                        client-callable endpoint.
   _components/          App-level UI shared across route groups (header, footer, landing sections).
                         Underscore = never a route. A route group may keep its own `_components/`
                         for UI only it uses.
@@ -41,7 +42,8 @@ src/
     use-cases/          One file per business operation, grouped by the part of the order's life it
                         belongs to: checkout/, payment/, registration/ (filing, polling, failures),
                         identity/ (starting and checking a customer's identity verification),
-                        application/ (cancel, correct), status/ (what the customer reads), mail/.
+                        application/ (cancel, correct), status/ (what the customer reads), monitoring/ (the numbers an operator
+                        reads, counts only), mail/.
                         `dependencies.ts` stays at the root.
     errors/             Domain error types the whole app throws and maps, in the same folders as the
                         area that throws them. `domain-error.ts` and `validation-error.ts` stay at

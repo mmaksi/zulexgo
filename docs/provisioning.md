@@ -195,6 +195,17 @@ The secret key bypasses row-level security. It stays server-side (`SUPABASE_STOR
 
 ---
 
+## 10. What a stage sells, and the beta  *(N9)*
+
+Each stage decides what it sells with settings in its own Vercel project; none is a secret except the invite codes. Production stays as it is until you change it: with none of them set, a stage sells de-registration to everyone.
+
+1. **Staging, to try Neuzulassung on the fakes:** in `zulexgo-staging`, environment Production, add `SERVICES_ON_SALE=deregistration,newRegistration` and redeploy. `/register` then exists on staging and the landing page shows its card. Staging's identity check, registration service and (until its keys are set) payments are fakes or sandboxes, so no real order can be made.
+2. **A beta on a stage:** add `BETA_SERVICES`, `INVITE_CODES_<SERVICE>` (mark it Sensitive) and optionally `BETA_DAILY_CAP`. [docs/runbooks/new-registration-beta.md](runbooks/new-registration-beta.md) says how to make codes and take them back.
+3. **Production:** `SERVICES_ON_SALE` gains `newRegistration` only once a real identity adapter exists (until then the production deploy refuses to boot with it) and the N9 exit criteria in `registration-plan.md` are met; start it in `BETA_SERVICES`.
+4. **The report:** `GET /api/internal/report` uses the same `CRON_SECRET` as the poller. The runbook reads it.
+
+The landing page is built ahead of any request, so its cards take these settings at build: a change shows on the landing page after the redeploy, which Vercel needs for any variable anyway.
+
 ## Rotating a secret
 
 Change it in the Vercel project and redeploy. If rotation ever needs a code change, the config layer is wrong.

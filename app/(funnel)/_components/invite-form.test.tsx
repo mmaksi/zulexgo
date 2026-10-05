@@ -42,6 +42,15 @@ describe("InviteForm", () => {
     expect(refresh).not.toHaveBeenCalled()
   })
 
+  it("puts the cursor back in the field after a code that did not work, as a funnel does for its first invalid field", async () => {
+    const { user } = setup({ status: "refused" })
+
+    await redeem(user, "WRONG-CODE")
+
+    await screen.findByText(/nicht gültig/)
+    expect(screen.getByLabelText("Einladungscode")).toHaveFocus()
+  })
+
   it("asks for a code instead of sending nothing", async () => {
     const { action, user } = setup({ status: "accepted" })
 

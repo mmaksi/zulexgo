@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useState, type FormEvent } from "react"
+import { useRef, useState, type FormEvent } from "react"
 import { TextField } from "@/app/_components/text-field"
 import { tooManyAttempts } from "@/app/(funnel)/too-many-attempts"
 import { Alert } from "@/src/ui/alert"
@@ -25,18 +25,23 @@ export function InviteForm({ service, action }: { service: string; action: (code
   const router = useRouter()
   const [answer, setAnswer] = useState<InviteAnswer | { status: "empty" }>()
   const [pending, setPending] = useState(false)
+  const field = useRef<HTMLInputElement>(null)
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (pending) return
     const code = String(new FormData(event.currentTarget).get("invite") ?? "")
-    if (!code.trim()) return setAnswer({ status: "empty" })
+    if (!code.trim()) {
+      setAnswer({ status: "empty" })
+      return field.current?.focus()
+    }
 
     setPending(true)
     try {
       const result = await action(code)
       setAnswer(result)
       if (result.status === "accepted") router.refresh()
+      if (result.status === "refused") field.current?.focus()
     } catch {
       setAnswer({ status: "unavailable" })
     } finally {
@@ -58,6 +63,7 @@ export function InviteForm({ service, action }: { service: string; action: (code
         <TextField
           id="invite"
           name="invite"
+          ref={field}
           label="Einladungscode"
           error={error}
           autoComplete="off"
