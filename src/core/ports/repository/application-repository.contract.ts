@@ -288,6 +288,19 @@ export function applicationRepositoryContract(name: string, makeSubject: () => A
         expect(identityVerification).toBeUndefined()
       })
 
+      // Launch plan Q54: the account is for the vehicle tax; once the order has ended, it is not stored any more.
+      it("stores an order that has ended without its bank account and reads it back so, the rest of the request kept", async () => {
+        const created = (await repository.create(aNewRegistrationApplication({ status: "submitted_to_kba" }))) as NewRegistrationApplication
+
+        await repository.update(applyEvent(created, "kbaCompleted", minutes(1)))
+        const { request: stored } = (await repository.get(created.reference)) as NewRegistrationApplication
+
+        expect(stored).not.toHaveProperty("bankAccount")
+        expect(stored.evbNumber.reveal()).toBe(FAKE_NEW_REGISTRATION.evbNumber)
+        expect(stored.owner.address.reveal()).toEqual(FAKE_NEW_REGISTRATION.owner.address)
+        expect(stored.plate).toEqual({ electric: false })
+      })
+
       it("stores a correction of the eVB number and the Teil II code, as one that is patched or refiled does", async () => {
         const created = (await repository.create(aNewRegistrationApplication({ status: "failed_correctable" }))) as NewRegistrationApplication
         const corrected = applyNewRegistrationCorrection(created.request, {

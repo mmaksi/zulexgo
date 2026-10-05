@@ -91,7 +91,7 @@ describe("applyNewRegistrationCorrection", () => {
     expect(corrected.owner.firstName).toBe("Erika")
     expect(corrected.owner.birthDate.reveal()).toBe(FAKE_NEW_REGISTRATION.owner.birthDate)
     expect(corrected.owner.address.reveal()).toEqual(FAKE_NEW_REGISTRATION.owner.address)
-    expect(corrected.bankAccount.reveal().iban).toBe(FAKE_NEW_REGISTRATION.bankAccount.iban)
+    expect(corrected.bankAccount?.reveal().iban).toBe(FAKE_NEW_REGISTRATION.bankAccount.iban)
     expect(corrected.vin).toBe(request.vin)
     expect(corrected.service).toBe("newRegistration")
   })

@@ -22,4 +22,15 @@ export const RATE_LIMITS = {
   resendLinkPerOrder: { max: 3, windowMs: HOUR },
   /** Cancelling or correcting an order. Every attempt counts, invalid ones too. */
   orderChange: { max: 10, windowMs: HOUR },
+  /**
+   * Asking the Neuzulassung funnel which authority handles a postcode. Every call reaches the registration
+   * service, and a customer asks once or twice, so only a caller trying postcodes in bulk meets the limit.
+   */
+  eligibilityLookup: { max: 30, windowMs: HOUR },
+  /**
+   * Opening a Neuzulassung checkout, which stores the customer's details and opens a payment at the
+   * provider. Every attempt counts, invalid ones too. A customer opens one and retries a declined card on
+   * the same order, so a few tries are plenty; a crowd behind one address (a carrier's shared one) still fits.
+   */
+  checkout: { max: 10, windowMs: HOUR },
 } as const satisfies Record<string, RateLimit>

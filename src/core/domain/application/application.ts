@@ -1,6 +1,7 @@
-import { advance, type ApplicationEvent, type ApplicationStatus } from "./application-status"
+import { advance, isTerminal, type ApplicationEvent, type ApplicationStatus } from "./application-status"
 import type { ApplicationReference } from "./application-reference"
 import type { Consent } from "./consent"
+import { withoutBankAccount, type StoredNewRegistrationRequest } from "./new-registration-request"
 import type { Service, ServiceRequest } from "./service"
 import type { Email } from "@/src/core/domain/customer/email"
 import type { Failure } from "@/src/core/domain/registration/failure"
@@ -105,15 +106,27 @@ type Moving = Pick<Application, "status" | "history"> & { readonly request: { re
 
 /**
  * Moves the application one event along the status machine and records when. Only `status`
- * and `history` change; the caller sets `failure`, `polling` and the rest. An event that
+ * and `history` change, but for what ending the order takes with it (below); the caller sets `failure`, `polling` and the rest. An event that
  * keeps the status returns the same object and adds no history. Throws `InvalidTransition`
  * if the status refuses the event on the path of the order's service, given whether its
  * identity was ever verified (it has been when its history shows status 3).
+ *
+ * An order that ends (completed, failed for good or cancelled) forgets a Neuzulassung's bank account:
+ * it is for the vehicle tax, which is set up when the order is filed, and a correction at 5b may still
+ * file the order afresh with it, so it goes only when no event can move the order on (launch plan Q54,
+ * provisional). Every status change passes here, so no way of ending an order keeps it.
  */
 export function applyEvent<Order extends Moving>(application: Order, event: ApplicationEvent, now: Date): Order {
   const identityVerified = application.history.some(({ status }) => status === "identity_verified")
   const status = advance(application.status, event, { service: application.request.service, identityVerified })
   if (status === application.status) return application
 
-  return { ...application, status, history: [...application.history, { status, at: now }] }
+  const moved = { ...application, status, history: [...application.history, { status, at: now }] }
+  return isTerminal(status) ? withoutAccount(moved) : moved
+}
+
+function withoutAccount<Order extends Moving>(order: Order): Order {
+  if (order.request.service !== "newRegistration") return order
+  // `Moving` names only the service, so the request is the Neuzulassung's by the check above.
+  return { ...order, request: withoutBankAccount(order.request as StoredNewRegistrationRequest) }
 }

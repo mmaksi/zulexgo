@@ -1,5 +1,5 @@
 import type { DeregistrationRequest } from "@/src/core/domain/application/deregistration-request"
-import type { NewRegistrationRequest } from "@/src/core/domain/application/new-registration-request"
+import type { NewRegistrationRequest, StoredNewRegistrationRequest } from "@/src/core/domain/application/new-registration-request"
 import type { OrderableService, ServiceRequest } from "@/src/core/domain/application/service"
 import type { Correction, Corrections, NewRegistrationPatch } from "@/src/core/ports/registration/registration-gateway"
 
@@ -28,8 +28,12 @@ function deregistrationBody({ licencePlate, vin, codes }: DeregistrationRequest)
  * (a car, normal use, a standard registration, shipping to the owner's name and address, the vehicle
  * tax by direct debit from the owner's account, no H-plate, no wish plate). The plate is the one the
  * authority assigns. Every secret is revealed here and nowhere else, only to be sent.
+ *
+ * An order that has ended no longer holds its bank account (`withoutBankAccount`), and nothing files an
+ * ended order, so a request without one is a mistake in the caller, named without a word of the request.
  */
-function newRegistrationBody({ vin, engineType, evbNumber, registrationCertificate, owner, bankAccount, plate }: NewRegistrationRequest) {
+function newRegistrationBody({ vin, engineType, evbNumber, registrationCertificate, owner, bankAccount, plate }: StoredNewRegistrationRequest) {
+  if (!bankAccount) throw new Error("A Neuzulassung without its bank account cannot be filed: its order has ended")
   const { street, houseNumber, postcode, city } = owner.address.reveal()
   const address = { street, houseNumber, zipCode: postcode, city }
   const { iban, bic, bankName, country } = bankAccount.reveal()
