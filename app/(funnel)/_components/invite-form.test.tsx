@@ -31,6 +31,15 @@ describe("InviteForm", () => {
     expect(refresh).toHaveBeenCalledTimes(1)
   })
 
+  it("tells a visitor whose browser did not keep the code, when the page has loaded again and still asks for it", async () => {
+    const { user } = setup({ status: "accepted" })
+
+    await redeem(user, "K7M2-QX9P")
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/Cookies/)
+    expect(screen.getByRole("button", { name: "Weiter" })).toBeEnabled()
+  })
+
   it("puts a refused code's error at the field, described by it, and keeps what was typed", async () => {
     const { user } = setup({ status: "refused" })
 

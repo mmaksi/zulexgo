@@ -13,7 +13,9 @@ export function requireInvite(deps: Pick<Dependencies, "beta">, service: Orderab
 /**
  * Takes one of the day's places in `service`'s beta, or `BetaFull`. A day is the limiter's longest
  * window, counted from the first place taken. Called once the order is known to be valid, so a form
- * the customer has to correct costs no place; a place is spent when a payment is opened, paid or not.
+ * the customer has to correct costs no place. A place is spent when the payment is attempted, whether
+ * it then succeeds, is paid or not: the limiter cannot give one back, so a provider outage during
+ * checkout uses places up too.
  */
 export async function takeBetaPlace(deps: Pick<Dependencies, "beta" | "rateLimiter">, service: OrderableService): Promise<void> {
   if (!isInBeta(deps.beta, service)) return

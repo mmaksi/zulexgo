@@ -17,9 +17,9 @@ curl -s -H "Authorization: Bearer $CRON_SECRET" "https://<stage host>/api/intern
 | `verification.stuck` | At the verification step **past the deadline**: the poller should have cancelled these (`checkIdentityVerification` expires them) | Anything above 0 means the poller is not running or is failing: `docs/provisioning.md` §5, then `GET /api/internal/poll` with the same bearer token by hand and read its `failed` count |
 | `verification.verified`, `mismatched`, `failed`, `expired`, `unresolved` | How the **first** verification of each order ended. A mismatch that was corrected and then verified still counts as the mismatch it first was | `mismatched`: the name on the order is not the one verified (Q47); `failed`: the provider refused; `expired`: the customer never verified |
 | `verification.failureRate`, `abandonmentRate` | `(mismatched + failed)` and `expired`, each over the verifications that ended; absent while none has | Abandonment is the drop-off after payment: the reminder email is the one lever (registration plan, Risks) |
-| `completed`, `failedFinal`, `failedFinalShare` | Of the orders decided, how many ended as a 5c (refused for good, 109.01 € back) | Typos in data that cannot be corrected after filing (registration plan, API finding 6) |
+| `completed`, `failedFinal`, `failedFinalShare` | Of the orders decided, how many ended as a 5c: refused for good by the KBA, refused by Zulex before filing, or a failed identity verification (which `verification.failed` counts too). 109.01 € back | Typos in data that cannot be corrected after filing (registration plan, API finding 6) |
 
-An order created before the window does not count even if it ends inside it.
+The window is by when an order was **created**: one created before it does not count even if it ends inside it, and an order stuck for longer than `days` drops out of `stuck` and `byStatus`. A stuck order is recent when it first appears (the deadline is days, the default window 30), so reading the report regularly catches it; `days=365` is the longest look back.
 
 ## Letting people in
 
@@ -35,7 +35,7 @@ openssl rand -hex 5 | tr a-f A-F   # one code, 10 characters
 
 Redeploy. The deploy refuses to boot, naming the variable, if a service is in beta with no codes, if codes are set for a service that is not in `BETA_SERVICES`, or if a code is shorter than 8 characters.
 
-The cap counts checkouts that reached the payment step, paid or not, in a 24-hour window that starts at the first of them. A customer who meets it is told today's places are gone and to try tomorrow.
+The cap counts checkouts that reached the payment step, in a 24-hour window that starts at the first of them. A place is spent when the payment is attempted, paid or not and even if the attempt fails, and the limiter cannot give one back: a payment provider outage during checkout uses places up too, and then customers are told today's places are gone. Raise `BETA_DAILY_CAP` and redeploy if that happens. A customer who meets the cap is told to try tomorrow.
 
 ## Taking someone out
 
@@ -47,7 +47,7 @@ Remove the service from `BETA_SERVICES` and delete its codes (the deploy refuses
 
 ## Stopping sales
 
-Take the service out of `SERVICES_ON_SALE` and redeploy. Its funnel is then not found, its landing card says "Bald verfügbar" and checkout refuses it. Orders already paid carry on: the poller, the identity callback and the status pages do not depend on the setting.
+Take the service out of `SERVICES_ON_SALE` and redeploy; that one change is enough, and `BETA_SERVICES` and the codes can stay for when it returns. Its funnel is then not found, its landing card says "Bald verfügbar" and checkout refuses it. Orders already paid carry on: the poller, the identity callback, the status pages and the confirmation page a customer returning from Stripe lands on do not depend on the setting.
 
 ## What a live run still has to show
 

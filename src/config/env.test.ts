@@ -221,8 +221,11 @@ describe("the beta", () => {
     expect(() => parseEnv({ ...onSale, INVITE_CODES_NEW_REGISTRATION: "K7M2-QX9P" })).toThrow(/INVITE_CODES_NEW_REGISTRATION/)
   })
 
-  it("refuses a service in beta that is not on sale", () => {
-    expect(() => parseEnv({ ...staging, BETA_SERVICES: "newRegistration", INVITE_CODES_NEW_REGISTRATION: "K7M2-QX9P" })).toThrow(/BETA_SERVICES/)
+  it("lets a service in beta be taken off sale by that change alone, so stopping sales never needs the beta settings touched too", () => {
+    const env = parseEnv({ ...inBeta, SERVICES_ON_SALE: "deregistration" })
+
+    expect(env.SERVICES_ON_SALE).toEqual(["deregistration"])
+    expect(env.BETA_SERVICES).toEqual(["newRegistration"])
   })
 
   it("refuses a code that is too short to be hard to guess", () => {

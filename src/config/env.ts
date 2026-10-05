@@ -301,11 +301,11 @@ const INVITE_CODES = {
 /**
  * A service in beta needs codes (or nobody could order it), and codes need a service in beta: a list set
  * for a service that is not listed would leave it open to everyone while the operator believes it is
- * invite-only. The messages name variables, never a code.
+ * invite-only. A service in beta that is not on sale is allowed: taking it off sale is one change, never
+ * two, so stopping sales in a hurry cannot stop the deploy. The messages name variables, never a code.
  */
 function checkBeta(env: Parsed, ctx: Ctx) {
   for (const service of env.BETA_SERVICES) {
-    if (!env.SERVICES_ON_SALE.includes(service)) reject(ctx, "BETA_SERVICES", `lists ${service}, which is not in SERVICES_ON_SALE.`)
     if (env[INVITE_CODES[service]].length === 0) {
       reject(ctx, INVITE_CODES[service], `required while ${service} is in BETA_SERVICES: nobody could order it.`)
     }

@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useRef, useState, useSyncExternalStore, type FormEvent } from "react"
+import { useRef, useState, useSyncExternalStore, useTransition, type FormEvent } from "react"
 import { TextField } from "@/app/_components/text-field"
 import { tooManyAttempts } from "@/app/(funnel)/too-many-attempts"
 import { Alert } from "@/src/ui/alert"
@@ -27,6 +27,7 @@ export function InviteForm({ service, action }: { service: string; action: (code
   const router = useRouter()
   const [answer, setAnswer] = useState<InviteAnswer | { status: "empty" }>()
   const [pending, setPending] = useState(false)
+  const [refreshing, startRefresh] = useTransition()
   const field = useRef<HTMLInputElement>(null)
   // False in the server's HTML and until the page has hydrated: the button stays off, so the browser's own
   // submit never sends the code as a query string (a blocked or failing script leaves it off for good).
@@ -45,7 +46,7 @@ export function InviteForm({ service, action }: { service: string; action: (code
     try {
       const result = await action(code)
       setAnswer(result)
-      if (result.status === "accepted") router.refresh()
+      if (result.status === "accepted") startRefresh(() => router.refresh())
       if (result.status === "refused") field.current?.focus()
     } catch {
       setAnswer({ status: "unavailable" })
@@ -75,9 +76,15 @@ export function InviteForm({ service, action }: { service: string; action: (code
           autoCapitalize="characters"
           spellCheck={false}
         />
-        <Button type="submit" disabled={!hydrated || pending} className="self-start">
+        <Button type="submit" disabled={!hydrated || pending || refreshing} className="self-start">
           {pending ? "Wird geprüft …" : "Weiter"}
         </Button>
+        {answer?.status === "accepted" && !pending && !refreshing ? (
+          // The page has loaded again and still asks: the server took the code and the browser did not keep it.
+          <Alert variant="warning" role="alert">
+            Ihr Browser hat den Code nicht gespeichert. Bitte erlauben Sie Cookies für diese Seite und versuchen Sie es erneut.
+          </Alert>
+        ) : null}
         {answer?.status === "limited" ? (
           <Alert variant="warning" role="alert">
             {tooManyAttempts(answer.retryAfterMinutes)}
