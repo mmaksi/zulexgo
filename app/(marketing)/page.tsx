@@ -8,9 +8,9 @@ import { ServiceSelection } from "@/app/_components/service-selection"
 import { TrustStrip } from "@/app/_components/trust-strip"
 
 export const metadata: Metadata = {
-  title: "ZulexGO — Fahrzeug online abmelden",
+  title: "ZulexGO — Fahrzeug online an- und abmelden",
   description:
-    "Außerbetriebsetzung in unter 10 Minuten: offiziell über das KBA, ohne Termin bei der Zulassungsstelle.",
+    "Abmeldung, Neuzulassung, Ummeldung und mehr: offiziell über das KBA, ohne Termin bei der Zulassungsstelle.",
 }
 
 // site-contract.md §1 — landing page section order. The page stays static: its cards take what the

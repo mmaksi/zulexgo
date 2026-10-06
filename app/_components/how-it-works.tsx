@@ -5,12 +5,12 @@ import { Section, SectionHeading } from "@/src/ui/section"
 // site-contract.md §2.1 — exactly four steps, title <=30, text <=120 chars.
 const STEPS = [
   {
-    title: "Voraussetzungen prüfen",
-    text: "Wir prüfen in wenigen Klicks, ob Ihr Fahrzeug online abgemeldet werden kann.",
+    title: "Leistung wählen und prüfen",
+    text: "Wir prüfen in wenigen Klicks, ob sich Ihr Anliegen online erledigen lässt.",
   },
   {
     title: "Daten und Codes eingeben",
-    text: "Kennzeichen, FIN und die Sicherheitscodes von Bescheinigung und Plakettensiegel.",
+    text: "Je nach Leistung: Kennzeichen, FIN, Sicherheitscodes und die Angaben aus Ihren Fahrzeugpapieren.",
   },
   {
     title: "Sicher bezahlen",
@@ -18,7 +18,7 @@ const STEPS = [
   },
   {
     title: "Bestätigung erhalten",
-    text: "Jeden Schritt im Status-Link verfolgen, bis die Abmeldung bestätigt ist.",
+    text: "Jeden Schritt im Status-Link verfolgen, bis Ihr Antrag bestätigt ist.",
   },
 ]
 

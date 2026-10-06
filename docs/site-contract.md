@@ -37,8 +37,9 @@ Per section, page order: fields with constraints (length / format / tone). Tone:
 
 ### 2.1 Landing / Service Selection
 - **Header** — logo, nav links, the primary action; no language toggle (the German + English UI is a Should-Have in `prd.md`). Nav ≤3 items, labels ≤20 chars.
-- **Headline** — value proposition ("De-register your vehicle online"). ≤60 chars.
-- **Subline** — how it works, one sentence, mentions "official, via KBA". ≤140 chars.
+- **Headline** — value proposition for every service ("Fahrzeug online an- und abmelden"). ≤60 chars; its words must fit a 320 px screen on one line each, because H1 breaks a longer word mid-letter (design-standard §3.2).
+- **Subline** — names the services and says "official, via KBA", one sentence. ≤140 chars.
+- **Service-neutral copy** — hero, header action ("Leistung wählen"), how-it-works, FAQ and footer hold for every service and never say which are on sale: that differs per stage, and only the service cards show it. What one service alone needs (the de-registration documents) is named as that service's.
 - **Hero seal** — the founder's "KBA-zertifiziert" seal (`public/kba-zertifiziert.png`), shown unaltered, never rounded, tinted or recoloured: beside the headline from 1024 px, below the buttons on smaller screens so it never pushes the CTA down. The alt text repeats the claim the seal prints.
 - **Service cards** (those on sale active, the rest disabled "coming soon"; one in beta also carries the note "Nur mit Einladung", ≤20 chars) — title ≤30, one-line description ≤90, fixed final price from the price list, CTA ≤20 chars. A note under the cards lists the add-on prices and says plates and sticker are ordered and charged only after the KBA has completed the service.
 - **Trust strip** — 3 items (official process, secure payment, status tracking): icon + label ≤40 chars.

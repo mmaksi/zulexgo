@@ -51,7 +51,7 @@ export function SiteHeader() {
               className: "hidden sm:inline-flex",
             })}
           >
-            Jetzt abmelden
+            Leistung wählen
           </Link>
           <MobileNav items={NAV} />
         </div>
