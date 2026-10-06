@@ -4,7 +4,7 @@ import { KbaSeal } from "./kba-seal"
 
 // site-contract.md §2.1 — headline <=60, subline <=140, CTA <=25 chars, verb-first.
 const STATS = [
-  { value: "10 Min.", label: "Ausfüllen und bezahlen" },
+  { value: "24/7", label: "Online beauftragen, wann Sie wollen" },
   { value: "0", label: "Termine bei der Behörde" },
   { value: "100 %", label: "Online, ohne Kundenkonto" },
 ]
@@ -20,17 +20,17 @@ export function Hero() {
             </p>
 
             <h1 className="mt-5 max-w-[18ch] text-grau-dark sm:mt-6">
-              Fahrzeug online abmelden
+              Fahrzeug online an- und abmelden
             </h1>
 
             <p className="measure mt-(--heading-space-below) text-subtitle text-grau">
-              Die Außerbetriebsetzung erledigen Sie in unter 10 Minuten —
-              offiziell über das KBA, ohne Termin bei der Zulassungsstelle.
+              Abmeldung, Neuzulassung, Ummeldung und mehr: offiziell über das
+              KBA, ohne Termin bei der Zulassungsstelle.
             </p>
 
             <div className="mt-8 flex flex-col gap-3 sm:mt-10 sm:flex-row sm:items-start">
               <a href="#leistungen" className={buttonLink()}>
-                Jetzt abmelden
+                Leistung wählen
                 <ArrowRight aria-hidden="true" />
               </a>
               <a href="#ablauf" className={buttonLink({ variant: "outline" })}>

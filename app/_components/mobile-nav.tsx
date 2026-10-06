@@ -75,7 +75,7 @@ export function MobileNav({ items }: { items: readonly NavItem[] }) {
             onClick={close}
             className={buttonLink({ className: "w-full" })}
           >
-            Jetzt abmelden
+            Leistung wählen
             <ArrowRight aria-hidden="true" />
           </Link>
         </SheetFooter>

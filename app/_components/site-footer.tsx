@@ -60,7 +60,7 @@ export function SiteFooter() {
 
         <div className="page-frame border-t border-white/10 py-6">
           <p className="text-small text-white/60">
-            © <CurrentYear /> ZulexGO. Außerbetriebsetzung über die
+            © <CurrentYear /> ZulexGO. Fahrzeugzulassung über die
             amtliche i-Kfz-Schnittstelle des Kraftfahrt-Bundesamtes.
           </p>
         </div>

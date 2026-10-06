@@ -11,10 +11,10 @@ describe("Hero stats", () => {
     const values = screen.getAllByRole("definition").map((value) => value.textContent)
 
     expect(terms).toEqual([
-      "Ausfüllen und bezahlen",
+      "Online beauftragen, wann Sie wollen",
       "Termine bei der Behörde",
       "Online, ohne Kundenkonto",
     ])
-    expect(values).toEqual(["10 Min.", "0", "100 %"])
+    expect(values).toEqual(["24/7", "0", "100 %"])
   })
 })

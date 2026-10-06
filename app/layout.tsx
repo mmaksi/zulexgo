@@ -22,7 +22,7 @@ const kanitWordmark = Kanit({
 
 export const metadata: Metadata = {
   title: "ZulexGO",
-  description: "Fahrzeug online abmelden — schnell, sicher, offiziell.",
+  description: "Fahrzeug online an- und abmelden — schnell, sicher, offiziell.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

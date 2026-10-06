@@ -19,7 +19,7 @@ describe("Faq", () => {
     render(<Faq />)
 
     const question = screen.getByRole("button", {
-      name: /Ist die Online-Abmeldung offiziell gültig\?/,
+      name: /Sind die Online-Leistungen offiziell gültig\?/,
     })
     await user.click(question)
 

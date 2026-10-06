@@ -41,7 +41,7 @@ describe("MobileNav", () => {
     render(<MobileNav items={ITEMS} />)
     await open()
 
-    expect(screen.getByRole("link", { name: /jetzt abmelden/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /leistung wählen/i })).toHaveAttribute(
       "href",
       "/#leistungen"
     )

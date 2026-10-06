@@ -24,7 +24,7 @@ describe("SiteHeader", () => {
       "href",
       "/"
     )
-    expect(screen.getByRole("link", { name: /jetzt abmelden/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /leistung wählen/i })).toHaveAttribute(
       "href",
       "/#leistungen"
     )
