@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
+import { renderToStaticMarkup } from "react-dom/server"
 import type { ResendFormState } from "@/app/status/link-anfordern/resend-form-state"
 import { ResendLinkForm } from "./resend-link-form"
 
@@ -59,5 +60,22 @@ describe("ResendLinkForm", () => {
 
     expect(action).toHaveBeenCalledTimes(1)
     finish({ status: "accepted" })
+  })
+
+  /**
+   * The form is on screen before its script has run, and for good where the script is blocked or fails.
+   * A native submit then sends the order reference and the email address as a query string: they would
+   * end up in the address bar, the history and the server's logs.
+   */
+  describe("before its script has run", () => {
+    const html = () => renderToStaticMarkup(<ResendLinkForm action={jest.fn()} />)
+
+    it("cannot be submitted, so the details are never sent by the browser's own submit", () => {
+      expect(html()).toMatch(/<button[^>]*type="submit"[^>]*\sdisabled=""/)
+    })
+
+    it("would send the details in the body, never in the address, if it somehow were", () => {
+      expect(html()).toMatch(/<form[^>]*method="post"/)
+    })
   })
 })

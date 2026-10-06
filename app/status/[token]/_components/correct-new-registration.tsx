@@ -8,6 +8,7 @@ import { TextField } from "@/app/_components/text-field"
 import type { NewRegistrationCorrectionField, OrderChangeState } from "@/app/status/[token]/order-change-state"
 import { parseNewRegistrationCorrection } from "@/src/core/domain/application/new-registration-correction"
 import { ValidationError } from "@/src/core/errors/validation-error"
+import { useHydrated } from "@/src/hooks/use-hydrated"
 import { Button } from "@/src/ui/button"
 import { ChangeOutcome } from "./change-outcome"
 
@@ -49,6 +50,7 @@ export function CorrectNewRegistration({ action, ownerCorrectable }: { action: C
   const [errors, setErrors] = useState<Errors>({})
   const [outcome, setOutcome] = useState<OrderChangeState>()
   const [pending, setPending] = useState(false)
+  const hydrated = useHydrated()
   const running = useRef(false)
   const focusFirstError = useRef(false)
 
@@ -109,7 +111,7 @@ export function CorrectNewRegistration({ action, ownerCorrectable }: { action: C
     : "Der Antrag wurde mit diesen Angaben erneut nicht angenommen. Bitte prüfen Sie Ihre Eingaben noch einmal genau."
 
   return (
-    <form noValidate onSubmit={submit} className="flex flex-col gap-(--field-gap)">
+    <form noValidate method="post" onSubmit={submit} className="flex flex-col gap-(--field-gap)">
       <p className="text-body text-grau">Ändern Sie nur, was nicht stimmt. Felder, die Sie leer lassen, bleiben wie sie sind.</p>
 
       {ownerCorrectable ? (
@@ -147,7 +149,7 @@ export function CorrectNewRegistration({ action, ownerCorrectable }: { action: C
 
       <ChangeOutcome state={outcome} refused={refused} />
       <div>
-        <Button type="submit" disabled={pending}>
+        <Button type="submit" disabled={!hydrated || pending}>
           {pending ? "Wird gesendet …" : "Korrektur absenden"}
         </Button>
       </div>

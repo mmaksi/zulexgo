@@ -6,6 +6,7 @@ import { CodeField } from "@/app/_components/code-field"
 import { TextField } from "@/app/_components/text-field"
 import { validateField } from "@/app/_components/vehicle-data"
 import type { DeregistrationCorrectionField as CorrectionField, OrderChangeState } from "@/app/status/[token]/order-change-state"
+import { useHydrated } from "@/src/hooks/use-hydrated"
 import { Button } from "@/src/ui/button"
 import { ChangeOutcome } from "./change-outcome"
 
@@ -30,6 +31,7 @@ export function CorrectOrder({ action, plateCount }: { action: CorrectOrderActio
   const [errors, setErrors] = useState<Errors>({})
   const [outcome, setOutcome] = useState<OrderChangeState>()
   const [pending, setPending] = useState(false)
+  const hydrated = useHydrated()
   const running = useRef(false)
   const focusFirstError = useRef(false)
 
@@ -97,7 +99,7 @@ export function CorrectOrder({ action, plateCount }: { action: CorrectOrderActio
       : undefined
 
   return (
-    <form noValidate onSubmit={submit} className="flex flex-col gap-(--field-gap)">
+    <form noValidate method="post" onSubmit={submit} className="flex flex-col gap-(--field-gap)">
       <p className="text-body text-grau">Ändern Sie nur, was nicht stimmt. Felder, die Sie leer lassen, bleiben wie sie sind.</p>
 
       <TextField
@@ -122,7 +124,7 @@ export function CorrectOrder({ action, plateCount }: { action: CorrectOrderActio
 
       <ChangeOutcome state={outcome} refused="Der Antrag wurde mit diesen Angaben erneut nicht angenommen. Bitte prüfen Sie Ihre Eingaben noch einmal genau." />
       <div>
-        <Button type="submit" disabled={pending}>
+        <Button type="submit" disabled={!hydrated || pending}>
           {pending ? "Wird gesendet …" : "Erneut einreichen"}
         </Button>
       </div>
