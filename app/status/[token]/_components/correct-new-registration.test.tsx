@@ -1,5 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
+import { renderToStaticMarkup } from "react-dom/server"
 import type { OrderChangeState } from "@/app/status/[token]/order-change-state"
 import { CorrectNewRegistration } from "./correct-new-registration"
 
@@ -180,5 +181,22 @@ describe("CorrectNewRegistration", () => {
     await submit(user)
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/nicht geklappt/)
+  })
+
+  /**
+   * The form is on screen before its script has run, and for good where the script is blocked or fails.
+   * A native submit then sends every field as a query string: the eVB number, the Teil II number and its
+   * security code would end up in the status page's address, the history and the server's logs.
+   */
+  describe("before its script has run", () => {
+    const html = () => renderToStaticMarkup(<CorrectNewRegistration action={jest.fn()} ownerCorrectable />)
+
+    it("cannot be submitted, so the codes are never sent by the browser's own submit", () => {
+      expect(html()).toMatch(/<button[^>]*type="submit"[^>]*\sdisabled=""/)
+    })
+
+    it("would send the codes in the body, never in the address, if it somehow were", () => {
+      expect(html()).toMatch(/<form[^>]*method="post"/)
+    })
   })
 })

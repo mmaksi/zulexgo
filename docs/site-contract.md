@@ -121,6 +121,9 @@ Eight emails (trigger, subject, content): table in `launch-plan.md` § M5, plus 
 - Stepper vertical at all sizes (incl. desktop); locator images open full-width in bottom sheet, not tooltip.
 - Correct keyboards (`inputmode`), auto-uppercase plate/VIN/codes; tap targets ≥44 px.
 
+**Forms**
+- A form the server renders with personal data or security codes is `method="post"`, and its submit button stays disabled until the page has hydrated (`useHydrated`). Before that, the browser's own submit would send every field as a query string: into the address bar, the history and the server's logs. The funnel's later steps only appear after client-side interaction, and each funnel's first step starts disabled until its questions are answered.
+
 **Transitions & animations**
 - Step change: 150 ms fade/slide; skipped under `prefers-reduced-motion`.
 - Stepper: current step pulses subtly while polling; on status change, completed steps get one-time 200 ms check-draw (page revalidates on focus/interval — no manual refresh).

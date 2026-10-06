@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react"
 import { TextField } from "@/app/_components/text-field"
 import type { ResendFormState } from "@/app/status/link-anfordern/resend-form-state"
+import { useHydrated } from "@/src/hooks/use-hydrated"
 import { Alert } from "@/src/ui/alert"
 import { Button } from "@/src/ui/button"
 
@@ -12,6 +13,7 @@ export type ResendLinkAction = (input: { reference: string; email: string }) => 
 export function ResendLinkForm({ action }: { action: ResendLinkAction }) {
   const [state, setState] = useState<ResendFormState>()
   const [pending, setPending] = useState(false)
+  const hydrated = useHydrated()
   const errors = state?.status === "invalid" ? state.errors : {}
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -29,7 +31,7 @@ export function ResendLinkForm({ action }: { action: ResendLinkAction }) {
   }
 
   return (
-    <form noValidate onSubmit={submit} className="measure flex flex-col gap-6">
+    <form noValidate method="post" onSubmit={submit} className="measure flex flex-col gap-6">
       <TextField
         id="resend-reference"
         name="reference"
@@ -50,7 +52,7 @@ export function ResendLinkForm({ action }: { action: ResendLinkAction }) {
         error={errors.email}
         autoComplete="email"
       />
-      <Button type="submit" disabled={pending} className="self-start">
+      <Button type="submit" disabled={!hydrated || pending} className="self-start">
         {pending ? "Wird gesendet …" : "Link senden"}
       </Button>
       <Outcome state={state} />
