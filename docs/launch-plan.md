@@ -412,6 +412,7 @@ Nothing below is decided here. Numbers are stable — milestones refer to them. 
 | 3 — blocks launch, not the skeleton | Q10–Q16, Q19–Q44 | Needed for M5–M7; earlier work proceeds on fakes and placeholders. |
 | 4 — non-blocking | Q17 | A placeholder processing time can ship and be replaced. |
 | 5 — Neuzulassung only | Q45–Q56 | Not needed for the de-registration launch. Q45, Q46, Q50 and Q56 shape the Neuzulassung plan first (`docs/registration-plan.md`). |
+| 6 — Wiederzulassung only | Q57–Q67 | Not needed for the de-registration or Neuzulassung launch. Q59, Q60, Q66 and Q67 shape the Wiederzulassung plan first (`docs/re-registration-plan.md`). |
 
 **Identity verification (Verimi)**
 
@@ -591,7 +592,7 @@ Nothing below is decided here. Numbers are stable — milestones refer to them. 
 43. **When do the other services launch, and in which order?** The landing page shows Neuzulassung, Wiederzulassung, Ummeldung and Adressänderung with their prices as "Bald verfügbar". The add-ons (Q41) and the THG-Quote (Q42) belong to them, so their answers wait on this one.
    **Blocks:** nothing in the MVP.
    **Provisional answer in code (not approved by the founder):** only de-registration is sold unless a stage says otherwise: the `SERVICES_ON_SALE` setting (`src/config/env.ts`, default `deregistration`) is what the landing cards, the funnel routes and `submitCheckout` read, and `submitCheckout` refuses a service that is not on it. Neuzulassung is built (request, Zulex adapter, identity step, funnel, status page, emails) and not sold: on a stage that does not list it, `/register` is not found. Staging may list it, on the fakes; production refuses to boot with it listed while the identity check is the fake.
-   **If the founder answers differently:** each service needs its own request type beside `DeregistrationRequest` and `NewRegistrationRequest` in `src/core/domain/application/` (a member of `ServiceRequest`), its Zulex call on the `RegistrationGateway` port with a fake and a contract case, a funnel under `app/(funnel)/` and an entry in `FUNNELS` (`app/_components/funnels.ts`); the price is already in `SERVICE_PRICES`. Register its parser in `REQUEST_PARSERS` (`service.ts`) first, and add the service to a stage's `SERVICES_ON_SALE` (the setting, in the deployment platform) last. The tests that pin which services a list sells are `service-selection.test.tsx` and `app/(funnel)/register/page.test.ts`. The plan for Neuzulassung is `docs/registration-plan.md`.
+   **If the founder answers differently:** each service needs its own request type beside `DeregistrationRequest` and `NewRegistrationRequest` in `src/core/domain/application/` (a member of `ServiceRequest`), its Zulex call on the `RegistrationGateway` port with a fake and a contract case, a funnel under `app/(funnel)/` and an entry in `FUNNELS` (`app/_components/funnels.ts`); the price is already in `SERVICE_PRICES`. Register its parser in `REQUEST_PARSERS` (`service.ts`) first, and add the service to a stage's `SERVICES_ON_SALE` (the setting, in the deployment platform) last. The tests that pin which services a list sells are `service-selection.test.tsx` and `app/(funnel)/register/page.test.ts`. The plan for Neuzulassung is `docs/registration-plan.md`, for Wiederzulassung `docs/re-registration-plan.md`.
 44. **Can the customer cancel before an error, or only after one?** The price calculation says a processing fee of 19.99 € is retained "bei Abbruch durch den Kunden" and the rest refunded within 3–5 Werktagen, and the notice must be visible before payment. The application filed at Zulex cannot be withdrawn (the API has no cancellation endpoint, `docs/deregistration-user-journeys.md` § API & business problems, item 8), so today a customer can only cancel at 5b, after a correctable failure. Does "Abbruch" mean exactly that, or also giving up while the KBA is still processing?
    **Blocks:** M7 (the AGB fee clause, with Q13).
    **Provisional answer in code (not approved by the founder):** "Abbruch" is the cancel at 5b, as in the business logic document §3. The fee, the refund and the 3–5 Werktage are shown before payment (`app/(funnel)/_components/checkout-panel.tsx`, shared by both funnels), on the status page and in the refund email.
@@ -649,6 +650,55 @@ Each answer below is what milestones N1–N7 of the plan (merged 2026-10-03 to 2
    **Blocks:** N4, N7, N9.
    **Provisional answer in code (not approved by the founder):** `sepaInfo` always sent; the assigned plate is not read from the API (the response does not carry it), so 5a says it is printed in the temporary certificate, an assumption until the spike shows where it appears; Teil II number 1–20 characters and code at least 1, as the spec says; one `REJECTION_CATALOGUE` for both services. The spike has not been run: it needs a `ZULEX_API_KEY` for the integration environment, and its findings are to go to `docs/registration-user-journeys.md`, which does not exist yet.
    **If the founder answers differently:** each answer lands in the Zulex adapter's schemas and `new-registration-request.ts`; findings go into `docs/registration-user-journeys.md` (N4).
+
+**Added 2026-10-07 (Wiederzulassung plan, `docs/re-registration-plan.md`)**
+
+Wiederzulassung (the Zulex API's *reactivation*) is not built yet. Each answer below is the plan's default, chosen as the safest option and to be built in the milestone named; none is approved by the founder. Where a default was built, its line becomes a "Provisional answer in code" with the files, as for Q45–Q56.
+
+57. **Who and what can be re-registered at launch?** The API takes all four change types (the keeper in Teil I or a new keeper, the same district or another), cars and other vehicles, private persons and legal entities.
+   **Blocks:** W2, W6.
+   **Provisional answer (not approved by the founder; to be built in W2 and W6):** any private person aged 18 or over, living in Germany, who has the papers and codes: the keeper in Teil I or a new keeper such as a buyer, in the same district or after a move. The change type is derived from one question and the authority lookups, never typed. Cars only, normal use; no legal entities (PRD).
+   **If the founder answers differently:** a narrower set of change types is a refusal in `changeTypeOf` (`src/core/domain/registration/change-type.ts`) and a stop in the funnel's first step; other vehicles or legal entities widen `re-registration-request.ts` as Q49 describes for Neuzulassung.
+58. **Does Wiederzulassung need identity verification before filing (Q45 for this service)?** The request registers a car in a person's name and sets up a direct debit for vehicle tax; without a check, anyone holding the papers and codes could do that in someone else's name.
+   **Blocks:** W5, W9; with Q1–Q3.
+   **Provisional answer (not approved by the founder; to be built in W5):** yes. `reRegistration` stays out of `DIRECT_SERVICES` (`application-status.ts`), so it runs 1 → 2 → 3 → 4 like a Neuzulassung, and production refuses the fake identity adapter while it is on sale (`fakeIdentityProblem`).
+   **If the founder answers differently:** add `reRegistration` to `DIRECT_SERVICES`; a check only for a new keeper needs the status path to depend on the order, not only on its service.
+59. **May the customer keep the old number?** The API's `isLicencePlateTransfer` is required and undocumented; nothing says how the authority answers when the number is no longer free, and `PATCH` cannot change the choice. De-registration sends `reserveLicencePlate: false` (Q23).
+   **Blocks:** W2, W6, W7; with Q67.
+   **Provisional answer (not approved by the founder; to be built in W2, W6 and W7):** every customer chooses: keep the number (`isLicencePlateTransfer: true`) or take a new one assigned by the authority. The plate step says what happens if the number is no longer free. A refusal at submission goes to 5b and is refiled with a new number under a new key (Q37's path); a refusal after filing can only be cancelled, fee kept, until Q67 says a fresh application may follow.
+   **If the founder answers differently:** offering only a new number removes the choice from the plate step and sends `false` always (`request-bodies.ts`); a refusal of a kept number that costs the customer nothing is a new `PaymentOutcome` in `refund-policy.ts` that returns everything, as `verificationExpired` does.
+60. **Which cars are eligible, and what does the first step ask?** The request carries nothing the KBA checks eligibility against (no HU, no de-registration date). Is there a limit on how long ago the car was de-registered (seven years?), must the HU be valid, must the Teil I be one issued with a security code, and what about a car reported stolen?
+   **Blocks:** W2, W6.
+   **Provisional answer (not approved by the founder; to be built in W2 and W6):** the funnel's first step asks each one and stops on a "no" with the reason and the offline alternative; none is checked by us beyond the customer's answer.
+   **If the founder answers differently:** the eligibility questions are data in the domain (W2), the step renders them.
+61. **Which Wiederzulassung failures are correctable (Q53 for this service)?** Zulex's `PATCH` can change only the eVB, the Teil I number and code, the Teil II number and code, and a wish plate.
+   **Blocks:** W2, W7.
+   **Provisional answer (not approved by the founder; to be built in W2 and W7):** an error in a field `PATCH` can change is corrected at 5b; a kept number no longer free as Q59 says; keeper data, address, VIN, old plate, seal codes and change type cannot be corrected once filed, so with `REJECTION_CATALOGUE` empty such a refusal ends at 5b and the customer cancels (fee kept). A failed identity verification is 5c, a mismatch 5b (Q47).
+   **If the founder answers differently:** entries in `REJECTION_CATALOGUE`, keyed by service if Zulex's codes differ per service.
+62. **Is 99 € the final price for every variant?** Authority fees may differ for keeping a number, a move or an E-plate.
+   **Blocks:** W8 (PAngV display).
+   **Provisional answer (not approved by the founder; to be built in W6):** 99 € flat (`SERVICE_PRICES.reRegistration`), no surcharge, shown as Q19 says.
+   **If the founder answers differently:** a surcharge goes into `pricing.ts` as a priced basket line (`quote()`), and the review step shows it.
+63. **What does the customer receive after 5a, and what must they do?** Who sends the seals and the new Teil I, whether kept plates are reused, where a new number's plates come from, and what the temporary certificate allows until the post arrives.
+   **Blocks:** W7, W10.
+   **Provisional answer (not approved by the founder; to be built in W7):** documents shipped to the keeper (`SHIPPING`); 5a lists the documents under their own names, says the authority posts the rest, that plates for a new number are made at a local plate maker, and claims nothing about driving before the post arrives (as Q55).
+   **If the founder answers differently:** the shared wording of what follows 5a (W7) and email 5a in `copy.ts`; selling seals or plates is W10 with Q41 and Q50.
+64. **Power of attorney and vehicle-tax mandate for Wiederzulassung (Q46 for this service):** does the Neuzulassung wording cover it, or does it need its own text?
+   **Blocks:** W6, W8.
+   **Provisional answer (not approved by the founder; to be built in W2 and W6):** the same three checkboxes as a Neuzulassung (AGB with the withdrawal notice, the early-start waiver, a power of attorney carrying the direct-debit mandate), with text versions of their own (`LEGAL_TEXT_VERSIONS` keyed by service, `draft-1`), written by us, not by the lawyer.
+   **If the founder answers differently:** `REQUIRED` and `LEGAL_TEXT_VERSIONS` in `consent.ts`, and the labels in the Wiederzulassung review step.
+65. **Offering a Wiederzulassung after a de-registration:** may a completed de-registration offer the follow-up with its plate and VIN, and may we remind a customer later (a seasonal car)? A reminder is advertising and needs the customer's consent.
+   **Blocks:** W10.
+   **Provisional answer (not approved by the founder):** nothing is built; no reminder is sent.
+   **If the founder answers differently:** W10 adds the offer on the de-registration's 5a and, with a consent checkbox the lawyer words, a reminder email.
+66. **Zulex provider questions on papers and codes for reactivation:** what is the Teil I number of 18–20 characters, and where is it printed? Are a Teil I security code and seal codes already uncovered by an online de-registration accepted again? What is sent as `rearPlateSecurityCode` when the seals were removed at an office de-registration? When is the Teil II security code required?
+   **Blocks:** W2, W4, W6.
+   **Provisional answer (not approved by the founder; to be built in W2 and W4):** the Teil I number 18–20 characters, as the spec says; every code asked for whether uncovered or not; a customer who cannot read the seal codes stops at the first step; the Teil II code asked only when the keeper changes.
+   **If the founder answers differently:** `registration-certificate-part1.ts` and `re-registration-request.ts`, the eligibility questions, and the Zulex adapter's body; findings go into `docs/re-registration-user-journeys.md` (W4).
+67. **Zulex provider questions on plates, change type and documents for reactivation:** is reactivation enabled for private persons on our account and in the integration environment? What does `isLicencePlateTransfer` mean, and is it allowed with an owner change or a move? How is a number no longer free reported (a 400 at submission or an `ERROR` later, with which code), and may a fresh application follow a rejected one? Is `changeType` validated, and what does a wrong one return? Which document confirms a reactivation, and where does the kept or assigned plate appear? The reactivation error codes.
+   **Blocks:** W4, W7, W9.
+   **Provisional answer (not approved by the founder; to be built in W4):** `isLicencePlateTransfer` read as "keep the current number"; `changeType` derived as Q57 says and trusted; the document kinds of a Neuzulassung; one `REJECTION_CATALOGUE`. The spike needs a `ZULEX_API_KEY` for the integration environment.
+   **If the founder answers differently:** each answer lands in the Zulex adapter's schemas, `request-bodies.ts` and `re-registration-request.ts`; findings go into `docs/re-registration-user-journeys.md` (W4).
 
 ## Verification
 
