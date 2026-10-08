@@ -1,4 +1,4 @@
-import { timingSafeEqual } from "node:crypto"
+import { hasBearer } from "@/app/api/internal/bearer"
 
 const BATCH = 50
 
@@ -11,14 +11,6 @@ export async function handlePoll(
   deps: { cronSecret: string | undefined; poll: (limit: number) => Promise<{ checked: number; failed: number }> },
   request: Request,
 ): Promise<Response> {
-  if (!deps.cronSecret || !matches(request.headers.get("authorization"), `Bearer ${deps.cronSecret}`)) {
-    return new Response(null, { status: 401 })
-  }
+  if (!hasBearer(request, deps.cronSecret)) return new Response(null, { status: 401 })
   return Response.json(await deps.poll(BATCH))
-}
-
-function matches(given: string | null, expected: string): boolean {
-  const a = Buffer.from(given ?? "")
-  const b = Buffer.from(expected)
-  return a.length === b.length && timingSafeEqual(a, b)
 }

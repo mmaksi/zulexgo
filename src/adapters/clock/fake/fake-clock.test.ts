@@ -1,4 +1,4 @@
-import { clockContract } from "@/src/core/ports/clock.contract"
+import { clockContract } from "@/src/core/ports/clock/clock.contract"
 import { FakeClock } from "./fake-clock"
 
 clockContract("FakeClock", () => new FakeClock())

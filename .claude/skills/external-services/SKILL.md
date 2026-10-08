@@ -19,25 +19,27 @@ If swapping a vendor requires editing a file outside `src/adapters/` and one lin
 
 ## The four rules
 
-1. **A vendor SDK may be imported in exactly one folder.** `import Stripe from 'stripe'` is legal only inside `src/adapters/payment/stripe/`. Anywhere else it is a bug, enforced by lint (see below). One exception: Stripe's browser SDK (`@stripe/*`) renders the Payment Element in `app/(funnel)/deregister/_components/stripe/`, the only folder lint allows it in.
-2. **Ports speak domain language, not vendor language.** `PaymentProvider.authorize()`, not `createPaymentIntent()`. `RegistrationGateway.submitDeregistration()`, not `postDeregistrationApplication()`. If a port method name would change when you swap vendors, rename it.
+1. **A vendor SDK may be imported in exactly one folder.** `import Stripe from 'stripe'` is legal only inside `src/adapters/payment/stripe/`. Anywhere else it is a bug, enforced by lint (see below). One exception: Stripe's browser SDK (`@stripe/*`) renders the Payment Element in `app/(funnel)/_components/stripe/`, shared by every funnel and the only folder lint allows it in.
+2. **Ports speak domain language, not vendor language.** `PaymentProvider.createPayment()`, not `createPaymentIntent()`. `RegistrationGateway.submit()`, not `postApplication()`. If a port method name would change when you swap vendors, rename it.
 3. **Vendor types never cross the boundary.** No `Stripe.PaymentIntent` in a function signature outside the adapter. The adapter maps vendor shapes to domain types at its edge and throws domain errors, not SDK errors.
 4. **Every port ships with at least two adapters:** the real one and an in-memory fake used by tests, and by dev where the `environments` skill wires it. A port with one implementation has not been proven swappable.
 
 ## Defining a port
 
-Ports live in `src/core/ports/`, one file per capability. They are pure TypeScript — no imports from `adapters/`, `app/`, or any SDK.
+Ports live in `src/core/ports/`, one folder per capability (`payment/`, `registration/`, `mail/`…, the same names as the folders in `src/adapters/`), holding the port and its `*.contract.ts` suite. They are pure TypeScript — no imports from `adapters/`, `app/`, or any SDK.
 
 ```ts
-// src/core/ports/payment-provider.ts
+// src/core/ports/payment/payment-provider.ts
 export interface PaymentProvider {
-  /** Reserve funds without capturing. Returns our own reference, not the vendor's. */
-  authorize(input: AuthorizeInput): Promise<Authorization>;
-  /** Take the reserved funds. Idempotent on authorizationId. */
-  capture(authorizationId: AuthorizationId): Promise<Capture>;
+  /** Repeatable per reference: a retried checkout never creates a second payment. */
+  createPayment(input: { reference: ApplicationReference; service: Service; amount: Money; email: Email }): Promise<{ paymentId: string; clientSecret: string }>;
+  /** Take `amount` from a hold. Happens once: a second call returns the payment unchanged. */
+  capture(paymentId: string, amount: Money): Promise<Payment>;
   /** Release an uncaptured hold. Safe to call twice. */
-  release(authorizationId: AuthorizationId): Promise<void>;
-  refund(captureId: CaptureId, amount: Money): Promise<Refund>;
+  release(paymentId: string): Promise<Payment>;
+  /** Give captured money back. The same idempotency key refunds once. */
+  refund(paymentId: string, amount: Money, idempotencyKey: string): Promise<Payment>;
+  // ...and getPayment, recordRegistration, readNotification
 }
 ```
 
@@ -52,10 +54,10 @@ src/adapters/payment/
   stripe/
     stripe-payment-provider.ts     # implements PaymentProvider
     stripe-payment-provider.test.ts
-    map.ts                         # vendor shape → domain type, and back
-    errors.ts                      # vendor error → domain error
+    map.ts                         # vendor shape → domain type
   fake/
-    fake-payment-provider.ts       # in-memory; used by tests
+    fake-payment-provider.ts       # in-memory; used by tests, and by dev
+    fake-payment-provider.test.ts
 ```
 
 The adapter owns: SDK construction, auth/credentials, retries and backoff, vendor error translation, and mapping. It owns nothing about business rules — an adapter must never decide *whether* to capture a payment, only *how*.
@@ -65,8 +67,8 @@ The adapter owns: SDK construction, auth/credentials, retries and backoff, vendo
 Each port has one shared test suite that every adapter must pass. This is what guarantees the fake behaves like the real thing, and what makes the next vendor cheap.
 
 ```ts
-// src/core/ports/payment-provider.contract.ts
-export function paymentProviderContract(name: string, makeSubject: () => PaymentProvider) {
+// src/core/ports/payment/payment-provider.contract.ts
+export function paymentProviderContract(name: string, makeSubject: () => PaymentProviderSubject) {
   describe(`PaymentProvider contract: ${name}`, () => {
     it('release() after release() does not throw', async () => { /* ... */ });
     it('capture() twice captures once', async () => { /* ... */ });
@@ -75,30 +77,32 @@ export function paymentProviderContract(name: string, makeSubject: () => Payment
 }
 ```
 
-Both `stripe-payment-provider.test.ts` and `fake-payment-provider.test.ts` call it. The Stripe run is driven through MSW or stripe-mock — never live Stripe. When you add a vendor, you write its adapter and call the existing contract; if it passes, the core already works with it.
+Both `stripe-payment-provider.test.ts` and `fake-payment-provider.test.ts` call it, passing the provider plus what only the customer and the vendor can do (`customerPays`, `notificationOfPayment`). The Stripe run is driven through MSW or stripe-mock — never live Stripe. When you add a vendor, you write its adapter and call the existing contract; if it passes, the core already works with it.
 
 ## Wiring — the composition root
 
-Adapters are selected in exactly one place, `src/config/container.ts`, based on environment (see the `environments` skill). Nothing else constructs an adapter.
+Adapters are selected in exactly one place, `src/config/container.ts`, by each port's `*_DRIVER` variable, which `APP_ENV` constrains (see the `environments` skill). Nothing else constructs an adapter.
 
 ```ts
 // src/config/container.ts
 export function createContainer(source: EnvSource = process.env): Container {
   const env = parseEnv(source)
+  const clock = new SystemClock()
   return {
     env,
+    clock,
+    tokens: new CryptoTokenGenerator(),
     payments: env.PAYMENT_DRIVER === "stripe"
-      ? new StripePaymentProvider(env.STRIPE_SECRET_KEY)
-      : new FakePaymentProvider(),
+      ? new StripePaymentProvider({ secretKey: env.STRIPE_SECRET_KEY!, webhookSecret: env.STRIPE_WEBHOOK_SECRET! })
+      : new FakePaymentProvider(clock, seedPaymentsFor(env.APP_ENV)),
     registration: /* ... */,
     mailer: /* ... */,
-    clock: new SystemClock(),
-    tokens: new CryptoTokenGenerator(),
+    // ...and repository, rateLimiter, documents, identity, statusLink
   }
 }
 ```
 
-Use cases receive their ports as constructor arguments or function parameters. They never reach for a global, never import the container, and are therefore trivially testable with fakes.
+Use cases receive their ports as a function parameter, `Dependencies` (`src/core/use-cases/dependencies.ts`, which the container's `Container` extends). They never reach for a global, never import the container, and are therefore trivially testable with fakes.
 
 ## Ports this project needs
 
@@ -106,10 +110,11 @@ Use cases receive their ports as constructor arguments or function parameters. T
 |---|---|---|---|
 | `PaymentProvider` | Stripe (manual capture for cards; SEPA Direct Debit captured at checkout) | Hold expiry is a documented port guarantee; partial refunds for the 19.99 € processing fee | Stripe MCP (docs search, API details, sandbox reads) |
 | `RegistrationGateway` | Zulex API | Also the KBA status source; see `docs/launch-plan.md` | `docs/api-1.yaml`, local only (confidential, gitignored); no MCP |
-| `Mailer` | Resend | The six status and refund emails (eight once Verimi is added), status link delivery | The `resend`, `react-email` and `email-best-practices` skills; no MCP connected |
+| `Mailer` | Resend; `ConsoleMailer` prints instead of sending (`MAIL_DRIVER=console`) | The status and refund emails (including Verimi's two and the verification reminder), status link delivery | The `resend`, `react-email` and `email-best-practices` skills; no MCP connected |
 | `ApplicationRepository` | Postgres | Owns our status machine, not the vendor's | `supabase` and `supabase-postgres-best-practices` skills, Supabase MCP |
-| `DocumentStore` | Zulex `/documents/{id}` + Supabase Storage cache | Returns bytes + a domain document type | as above, per vendor |
-| `IdentityVerification` | Verimi — added later (launch plan Q1–Q4); port and fake exist | Status 2 → 3; a failed verification leads to 5c | none yet |
+| `DocumentStore` | Supabase Storage (private bucket) | Our copy of the KBA documents: bytes arrive through `RegistrationGateway.fetchDocument`, and the store returns bytes + a domain document type | as above, per vendor |
+| `IdentityVerification` | Verimi — added later (launch plan Q1–Q3); the port, its contract and the fake exist and run the Neuzulassung flow | Status 2 → 3; reports who was verified, so a mismatch with the owner is caught; a failed verification leads to 5c; a signed callback names the order and nothing else | none yet: tell Mark before writing the adapter |
+| `RateLimiter` | Postgres (`src/adapters/repository/postgres/postgres-rate-limiter.ts`) | Bounds the entry points that take a status link or an address; counts are shared by every instance, so it follows `REPOSITORY_DRIVER` (in-memory fake only with the in-memory repository) | as `ApplicationRepository` |
 | `Clock` | System clock | Injected so polling/expiry tests are deterministic | — |
 | `TokenGenerator` | Crypto RNG | Injected so status link tests are seeded | — |
 
@@ -119,7 +124,7 @@ Vendor code is written against the source in the last column, never from memory.
 
 `Clock` and `TokenGenerator` are ports for the same reason as Stripe: they are sources of non-determinism the core should not reach for directly.
 
-The core never calls `new Date()` or `randomBytes()` itself. Three small classes exist so it does not have to:
+The core never calls `new Date()` or `randomBytes()` itself. Four small classes exist so it does not have to:
 
 | Class | What it is | Why it exists |
 |---|---|---|
@@ -136,25 +141,18 @@ This is not ceremony. A Stripe pre-authorisation hold expires after roughly seve
 
 ## Enforcement
 
-Add to `eslint.config.mjs` — a rule beats a convention:
+`eslint.config.mjs` enforces it — a rule beats a convention. Every vendor SDK is declared once, in its `VENDORS` table:
 
 ```js
-{
-  files: ["src/core/**/*.ts", "app/**/*.{ts,tsx}"],
-  rules: {
-    "no-restricted-imports": ["error", {
-      paths: [
-        { name: "stripe", message: "Import the PaymentProvider port; Stripe lives in src/adapters/payment/stripe/." },
-      ],
-      patterns: [
-        { group: ["@/src/adapters/*"], message: "Depend on a port from src/core/ports/, not on a concrete adapter." },
-      ],
-    }],
-  },
-}
+const VENDORS = [
+  { sdks: [{ name: "stripe" }], folder: "src/adapters/payment/stripe", port: "PaymentProvider" },
+  { sdks: [{ name: "pg" }], folder: "src/adapters/repository/postgres", port: "ApplicationRepository" },
+  { sdks: [{ name: "resend" }, { name: "react-email" }], folder: "src/adapters/mail/resend", port: "Mailer" },
+  { sdks: [{ group: ["@supabase/*"] }], folder: "src/adapters/storage/supabase", port: "DocumentStore" },
+]
 ```
 
-Extend `paths` for every SDK you add. When a new vendor arrives, the lint rule is part of the change.
+Each SDK is banned everywhere except its own `folder`; Stripe's browser SDK (`@stripe/*`) has its one exception in `app/(funnel)/_components/stripe/`. `@/src/adapters/*` is banned in `src/core/`, `app/` and `src/ui/`, and an adapter may not import another adapter, `@/app`, `@/src/ui` or `@/src/config`. A relative `../` import is banned everywhere, so no import slips past the alias-based rules. `no-restricted-imports` does not merge across config blocks, so every block is built with `restrict()`; add a vendor to `VENDORS` instead of writing a block of its own. When a new vendor arrives, the lint rule is part of the change.
 
 `src/core/` additionally carries a `no-restricted-syntax` block for the non-determinism ports — a zero-argument `new Date()`, `Date.now()` and `Math.random()` are errors there. `new Date(value)` to parse a stored instant is untouched; it is reaching for *the current* time that is banned.
 
@@ -165,5 +163,5 @@ Extend `paths` for every SDK you add. When a new vendor arrives, the lint rule i
 3. Write the in-memory fake; make it pass the contract.
 4. Write the real adapter; make it pass the same contract with the network stubbed.
 5. Wire it in `src/config/container.ts` and add the env vars (see `environments`).
-6. Add the SDK to the `no-restricted-imports` list.
+6. Add the SDK to `VENDORS` in `eslint.config.mjs`.
 7. Only now use it from a use case.

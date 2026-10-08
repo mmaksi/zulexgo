@@ -1,10 +1,11 @@
 "use client"
 
 import { useState, type FormEvent } from "react"
-import type { IkfzStatus } from "@/src/core/domain/registration-authority"
+import type { IkfzStatus } from "@/src/core/domain/registration/registration-authority"
 import { Button } from "@/src/ui/button"
-import { RadioGroup, RadioGroupItem } from "@/src/ui/radio-group"
+import { RadioGroup } from "@/src/ui/radio-group"
 import type { CheckoutActions } from "./checkout-actions"
+import { Choice } from "@/app/(funnel)/_components/choice"
 import { TextField } from "@/app/_components/text-field"
 import type { PlateCount } from "@/app/_components/vehicle-data"
 import { Alert } from "@/src/ui/alert"
@@ -35,19 +36,28 @@ export function EligibilityStep({
 
   async function submit(event: FormEvent) {
     event.preventDefault()
-    if (!plateCount || hasDocuments !== true) return
+    // A second submit while a check is pending is ignored.
+    if (!plateCount || hasDocuments !== true || checking) return
     setChecking(true)
-    const result = await checkEligibility(prefix)
-    setChecking(false)
-    if (!result.ok) {
-      setError(
-        result.reason === "invalidPrefix"
-          ? "Für dieses Ortskürzel finden wir keine Zulassungsstelle. Prüfen Sie die 1 bis 3 Buchstaben vor dem ersten Leerzeichen."
-          : "Die Zulassungsstelle ist gerade nicht zu erreichen. Bitte versuchen Sie es in ein paar Minuten noch einmal.",
-      )
-      return
+    try {
+      const result = await checkEligibility(prefix)
+      if (!result.ok) {
+        setError(
+          result.reason === "invalidPrefix"
+            ? "Für dieses Ortskürzel finden wir keine Zulassungsstelle. Prüfen Sie die 1 bis 3 Buchstaben vor dem ersten Leerzeichen."
+            : "Die Zulassungsstelle ist gerade nicht zu erreichen. Bitte versuchen Sie es in ein paar Minuten noch einmal.",
+        )
+        return
+      }
+      onEligible({ plateCount, prefix: result.prefix, ikfzStatus: result.ikfzStatus })
+    } catch {
+      // The request itself rejected (a lost connection, a server error): the customer hears the same as for an
+      // unreachable authority and can try again.
+      setError("Die Zulassungsstelle ist gerade nicht zu erreichen. Bitte versuchen Sie es in ein paar Minuten noch einmal.")
+    } finally {
+      // Always, so that no failure leaves the button busy for good.
+      setChecking(false)
     }
-    onEligible({ plateCount, prefix: result.prefix, ikfzStatus: result.ikfzStatus })
   }
 
   return (
@@ -116,14 +126,5 @@ export function EligibilityStep({
         </Button>
       </div>
     </form>
-  )
-}
-
-function Choice<Value>({ value, label }: { value: Value; label: string }) {
-  return (
-    <label className="flex min-h-12 cursor-pointer items-center gap-3 text-body text-grau-dark">
-      <RadioGroupItem value={value} />
-      {label}
-    </label>
   )
 }

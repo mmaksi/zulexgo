@@ -4,14 +4,14 @@
 
 ## Project identity
 
-B2C web app for German vehicle registration services, built on the B2B Zulex API. MVP: one service, vehicle de-registration (Außerbetriebsetzung), from eligibility check through payment to the official KBA confirmation. No user accounts: order status is reached by a personal status link sent by email.
+B2C web app for German vehicle registration services, built on the B2B Zulex API. MVP: one service, vehicle de-registration (Außerbetriebsetzung), from eligibility check through payment to the official KBA confirmation. A second service, Neuzulassung (`app/(funnel)/register`), is built but not on sale: a stage's `SERVICES_ON_SALE` setting lists only de-registration by default, and a service can be put in beta (invite codes, a daily cap). No user accounts: order status is reached by a personal status link sent by email.
 
 ## Stack
 
 - **Next.js 16.3.5** (App Router, `app/`) · **React 19.2** · **TypeScript 5** · **Tailwind CSS v4** · **ESLint 9**
 - Next.js 16 and Tailwind v4 differ from most training data. Read `node_modules/next/dist/docs/` before writing framework code (see `AGENTS.md`). Tailwind is configured CSS-first via `@theme` in `app/globals.css`; there is no `tailwind.config.js`.
 - **All Zulex API calls are server-side only.** The `X-Api-Key` is a merchant credential and must never reach the browser; the app calls the API through its own route handlers/server actions.
-- **No vendor is imported outside its own adapter.** Stripe, the Zulex API, email, storage and identity verification (Verimi, added later) sit behind ports in `src/core/ports/`, wired in one composition root. Stripe is the first payment adapter, not a core dependency. See the `external-services` skill.
+- **No vendor is imported outside its own adapter.** Stripe, the Zulex API, email, storage and identity verification (a fake today, Verimi added later) sit behind ports in `src/core/ports/`, wired in one composition root. Stripe is the first payment adapter, not a core dependency. See the `external-services` skill.
 - Stages `dev`, `staging`, `production`, selected by `APP_ENV`, never `NODE_ENV`.
 - Cards use manual capture (pre-authorization); SEPA Direct Debit cannot be held and is captured at checkout.
 - Business logic and integration constraints (the statuses, error algorithm, polling, idempotency, payment and refunds, GDPR and German consumer law) are in `docs/launch-plan.md`, which wins when documents disagree. Do not re-derive them here.
@@ -58,7 +58,7 @@ Write the test first for logic and fixes. Static presentation needs no test.
 ### Naming and location
 
 - One test file per resource: **`resource.test.ts`**, or `.test.tsx` when it renders React. Jest matches nothing else; a `.test.js` never runs.
-- Unit tests sit **next to the file under test**: `src/core/domain/eligibility.ts` → `src/core/domain/eligibility.test.ts`.
+- Unit tests sit **next to the file under test**: `src/core/use-cases/checkout/check-eligibility.ts` → `src/core/use-cases/checkout/check-eligibility.test.ts`.
 - Integration tests live in **`tests/integration/`**, named for the flow: `deregistration-checkout.test.ts`, `status-polling.test.ts`.
 - Shared fixtures in `tests/fixtures/`, MSW handlers in `tests/msw/`; never duplicate a Zulex payload inline across files.
 
@@ -130,6 +130,8 @@ Authoritative; read before deciding in their area. This file does not repeat the
 | [docs/prd.md](docs/prd.md) | Vision, personas, prioritised features, success criteria, with pointers to where each rule lives. | Starting a feature, or deciding if something is MVP. |
 | [docs/design-standard.md](docs/design-standard.md) | Visual spec from the Zulex Style Guide: colour, type, spacing, brand wedge, elevation, motion. | Any visual decision, CSS or new component. |
 | [docs/site-contract.md](docs/site-contract.md) | Page structure, content fields with length/format/tone limits, behaviour spec (navigation, scroll, hover, mobile, transitions). | Building a page, writing copy, defining props/schemas, implementing interaction. |
-| [docs/launch-plan.md](docs/launch-plan.md) | Milestones M0–M9 with exit criteria, default technical decisions, fallbacks for blocked items, open questions Q1–Q18. **Source of truth when documents disagree.** | Choosing what to build next, checking exit criteria, implementing any status, error, payment or refund rule. |
+| [docs/launch-plan.md](docs/launch-plan.md) | Milestones M0–M9 with exit criteria, default technical decisions, fallbacks for blocked items, open questions Q1–Q56. **Source of truth when documents disagree.** | Choosing what to build next, checking exit criteria, implementing any status, error, payment or refund rule. |
+| [docs/registration-plan.md](docs/registration-plan.md) | The Neuzulassung plan: scope, milestones N0–N10 with exit criteria and what each built, risks. Its open questions Q45–Q56 live in `launch-plan.md`. | Working on Neuzulassung. |
 | [docs/deregistration-user-journeys.md](docs/deregistration-user-journeys.md) | Success, failure and edge-case journeys J1–J12, plus problems found in the Zulex API spec. | Handling a failure path or edge case. |
+| [docs/threat-model.md](docs/threat-model.md) | What each control stops and what it leaves open for the Neuzulassung, with the shared controls beneath it; every claim names its file or test. | Adding or changing a control, a stored personal datum or a public endpoint. |
 | [docs/domain-glossary.md](docs/domain-glossary.md) | German registration and payment terms: KBA, Teil I, Sicherheitscode, Verimi, processing fee, pre-authorization. | Meeting an unknown domain term, or naming something in code. |

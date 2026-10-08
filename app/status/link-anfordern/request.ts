@@ -1,7 +1,7 @@
-import { applicationReferenceSchema } from "@/src/core/domain/application-reference"
-import { emailSchema } from "@/src/core/domain/email"
-import type { RateLimiter } from "@/src/core/ports/rate-limiter"
-import { limitResend, resendStatusLink } from "@/src/core/use-cases/resend-status-link"
+import { applicationReferenceSchema } from "@/src/core/domain/application/application-reference"
+import { emailSchema } from "@/src/core/domain/customer/email"
+import type { RateLimiter } from "@/src/core/ports/rate-limit/rate-limiter"
+import { limitResend, resendStatusLink } from "@/src/core/use-cases/status/resend-status-link"
 import { clientAddress } from "@/src/lib/client-address"
 import type { ResendFormState } from "./resend-form-state"
 

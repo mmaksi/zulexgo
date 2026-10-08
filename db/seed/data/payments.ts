@@ -1,8 +1,8 @@
-import type { ApplicationReference } from "@/src/core/domain/application-reference"
-import type { ApplicationStatus } from "@/src/core/domain/application-status"
-import { Money } from "@/src/core/domain/money"
-import { PROCESSING_FEE } from "@/src/core/domain/pricing"
-import type { PaymentStatus } from "@/src/core/ports/payment-provider"
+import type { ApplicationReference } from "@/src/core/domain/application/application-reference"
+import type { ApplicationStatus } from "@/src/core/domain/application/application-status"
+import { Money } from "@/src/core/domain/payment/money"
+import { PROCESSING_FEE } from "@/src/core/domain/payment/pricing"
+import type { PaymentStatus } from "@/src/core/ports/payment/payment-provider"
 import { SEEDED_APPLICATIONS } from "./applications"
 
 export interface SeededPayment {
@@ -18,8 +18,8 @@ const NOTHING = Money.ofCents(0)
 
 /**
  * Where each seeded order's money stands, as the real flow would have left it:
- * a card is held while the order is with the KBA or waits for a correction,
- * captured on completion, and on a cancel or a final failure captured with all
+ * a card is held while the order waits for the customer to verify their identity,
+ * is with the KBA or waits for a correction, captured on completion, and on a cancel or a final failure captured with all
  * but the fee sent back. Only the fake payment provider reads these, so dev's
  * seeded status pages can show refund amounts and the cancel button works; on
  * staging the payment provider is Stripe, which has never heard of them.
@@ -29,6 +29,8 @@ function stand(status: ApplicationStatus, total: Money): Pick<SeededPayment, "st
     case "awaiting_payment":
       return { status: "awaitingCustomer", captured: NOTHING, refunded: NOTHING }
     case "submitted_and_paid":
+    case "awaiting_identity_verification":
+    case "identity_verified":
     case "submitted_to_kba":
     case "failed_correctable":
       return { status: "held", captured: NOTHING, refunded: NOTHING }

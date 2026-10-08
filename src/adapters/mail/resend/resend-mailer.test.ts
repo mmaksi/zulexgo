@@ -2,8 +2,8 @@ import { HttpResponse } from "msw"
 import { setupServer } from "msw/node"
 import { anApplication } from "@/tests/fixtures/applications"
 import { RESEND_TEST_API_KEY, ResendDouble } from "@/tests/msw/resend"
-import { Money } from "@/src/core/domain/money"
-import { mailerContract } from "@/src/core/ports/mailer.contract"
+import { Money } from "@/src/core/domain/payment/money"
+import { mailerContract } from "@/src/core/ports/mail/mailer.contract"
 import { ResendMailer } from "./resend-mailer"
 
 let resend = new ResendDouble()
@@ -24,7 +24,7 @@ mailerContract("ResendMailer", () => mailer())
 
 const { reference, email } = anApplication()
 const statusLink = "https://zulexgo.example.test/status/faketoken-resend-test"
-const orderConfirmation = { name: "orderConfirmation", reference, statusLink } as const
+const orderConfirmation = { name: "orderConfirmation", service: "deregistration", reference, statusLink } as const
 
 describe("ResendMailer", () => {
   it("sends the order confirmation with its status link, from our sender, keyed against resending", async () => {
@@ -60,6 +60,7 @@ describe("ResendMailer", () => {
   it("states in the rejection email the amount that is returned", async () => {
     const rejected = {
       name: "rejected",
+      service: "deregistration",
       reference,
       statusLink: "https://zulexgo.example.test/status/t",
       reason: "Das Fahrzeug ist bereits abgemeldet.",

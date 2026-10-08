@@ -1,9 +1,9 @@
 import { handlePaymentNotification } from "@/app/api/webhooks/stripe/handle"
 import { handlePoll } from "@/app/api/internal/poll/handle"
 import { seedFor } from "@/db/seed/seed"
-import { FAKE_REQUEST } from "@/tests/fixtures/applications"
-import { pollDueApplications } from "@/src/core/use-cases/poll-due-applications"
-import { submitCheckout } from "@/src/core/use-cases/submit-checkout"
+import { FAKE_CONSENTS, FAKE_REQUEST } from "@/tests/fixtures/applications"
+import { pollDueApplications } from "@/src/core/use-cases/registration/poll-due-applications"
+import { submitCheckout } from "@/src/core/use-cases/checkout/submit-checkout"
 import { webhookRequest, withVendorsAtTheNetwork } from "./network-harness"
 
 /** M4: the poll heartbeat advances a filed application from what Zulex reports, on the backoff schedule. */
@@ -21,7 +21,7 @@ const heartbeat = (afterMinutes: number, authorization = `Bearer ${CRON_SECRET}`
 }
 
 async function filedApplication() {
-  const { reference } = await submitCheckout(world.deps, { request: FAKE_REQUEST, email: "customer@example.test" })
+  const { reference } = await submitCheckout(world.deps, { service: "deregistration", request: FAKE_REQUEST, email: "customer@example.test", consents: FAKE_CONSENTS })
   const { payment } = await stored(reference)
   world.stripe.customerPays(payment.id, "card")
   await handlePaymentNotification(world.deps, webhookRequest(world.stripe.event("payment_intent.amount_capturable_updated", payment.id)))

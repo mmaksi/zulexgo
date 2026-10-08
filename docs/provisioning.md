@@ -17,7 +17,7 @@ Nothing here belongs in code; no value from here belongs in git.
 | Zulex | integration host (from M4) | integration host (from M4) | production host |
 | Stripe | sandbox `dev` (from M4) | sandbox `staging` (from M4) | live account (business verification pending) |
 | Mail | console | Resend, allowlisted recipients | Resend |
-| Identity (Verimi, added later) | fake | fake until Verimi is added | Verimi |
+| Identity (Verimi, added later) | fake | fake (`IDENTITY_DRIVER=fake`, the only value until a Verimi adapter exists) | the fake is refused while a service that verifies the customer is on sale, and Neuzulassung is one, so it cannot go on sale before Verimi |
 | Database | in-memory, seeded at boot | Supabase project (Frankfurt), seeded on deploy | separate Supabase project (Frankfurt), never seeded |
 | Document storage | in-memory, seeded at boot | Supabase Storage in the staging project, bucket `kba-documents` (§9) | Storage in the production Supabase project |
 | Money | none | none | real |
@@ -30,7 +30,7 @@ Two Vercel **projects**, not two branches of one: secrets are scoped per project
 
 Do §3 first: step 5 needs the database values.
 
-1. Sign up at vercel.com with **Continue with GitHub**. Hobby is enough to start staging, but it is for non-commercial use only; move to Pro before real customers (and before M4's per-minute poller cron).
+1. Sign up at vercel.com with **Continue with GitHub**. Hobby is enough to start staging, but it is for non-commercial use only; move to Pro before real customers (and before the per-minute poller cron, §5).
 2. **Add New → Project → Import Git Repository.** Install the Vercel GitHub app when asked, granting it `mmaksi/zulexgo` only. Import it and name the project **`zulexgo-staging`**. Framework preset Next.js, root directory `./`; leave the build command alone (`vercel.json` sets it). Add no environment variables here: at import they apply to every environment. Deploy. This first deployment builds `main` and errors at runtime; that is expected.
 3. **Settings → Environments → Production → Branch Tracking** → **`staging`** → Save. Every merge to `staging` now deploys here.
 4. **Settings → Environment Variables**: check that **Enable access to System Environment Variables** is on; `scripts/vercel-build` reads `VERCEL_ENV`.
@@ -52,7 +52,7 @@ Do §3 first: step 5 needs the database values.
 
    These are the first deploy's values: payment, registration, mail and storage start fake because those vendors come later. §8 has since switched payment and mail to Stripe and Resend, and §9 covers storage; registration switches once the Zulex API is back. The app refuses to boot if a driver is flipped without its key.
 
-6. **Deployments → Create Deployment** → branch `staging`. The marketing site must serve at `APP_BASE_URL`. Once M3 is merged, the build log also shows the migrations running.
+6. **Deployments → Create Deployment** → branch `staging`. The marketing site must serve at `APP_BASE_URL`, and the build log shows the migrations running (§3).
 7. Region needs nothing: `vercel.json` pins Frankfurt (`fra1`).
 
 ## 2. Vercel — production  *(needed for M8, create it now if convenient)*
@@ -74,18 +74,18 @@ No Supabase Auth (no accounts by design), no client-side Supabase SDK, no RLS-ba
 
 ### Connecting a stage to its database  *(M3 for staging, M8 for production)*
 
-1. **Turn off the Data API**: Integrations → Data API → Overview → **Enable Data API** off. Supabase otherwise serves `public` tables over REST to anyone holding the anon key, and grants every new `public` table to `anon`, `authenticated` and `service_role` by default. Every table also has row-level security on with no policy, so the app (the table owner) is the only reader either way; the switch removes the endpoint altogether, including for the service-role key M5 adds for Storage, which bypasses RLS.
+1. **Turn off the Data API**: Integrations → Data API → Overview → **Enable Data API** off. Supabase otherwise serves `public` tables over REST to anyone holding the anon key, and grants every new `public` table to `anon`, `authenticated` and `service_role` by default. Every table also has row-level security on with no policy, so the app (the table owner) is the only reader either way; the switch removes the endpoint altogether, including for the secret key the document store uses for Storage (§9), which bypasses RLS.
 2. **Set a database password you hold**: Project Settings → Database → **Reset database password**, using `openssl rand -hex 24` (letters and digits only, so the connection string needs no URL-encoding). Supabase never shows it again, so save it in your password manager first.
 3. **Copy two connection strings** from the dashboard's **Connect** button and replace `[YOUR-PASSWORD]` in each. Vercel is IPv4-only and the direct host `db.<ref>.supabase.co` is IPv6-only (unless the paid IPv4 add-on is on), so neither variable uses the direct connection:
 
    | Variable | Connect → | Port | Used by |
    |---|---|---|---|
    | `DATABASE_URL` | Transaction pooler | 6543 | the app, per request |
-   | `DIRECT_DATABASE_URL` | Session pooler | 5432 | `npm run db:migrate` during the Vercel build |
+   | `DIRECT_DATABASE_URL` | Session pooler | 5432 | `npm run db:migrate` and `db:seed` during the Vercel build |
 
 4. **Generate the encryption key**: `openssl rand -base64 32` → `CODES_ENCRYPTION_KEY`. Store a copy in your password manager: without it, every stored security code and status link is unreadable. A new key per stage.
 5. **Set them in the stage's Vercel project** (Production scope), together with `REPOSITORY_DRIVER=postgres`, **before** merging the change that should run on Postgres. The next deploy runs `scripts/vercel-build`, which migrates the database, seeds it on staging, and then builds; a failed migration fails the deploy and the previous one keeps serving.
-6. **Check it**: the build log lists `Applied 0001_create_applications` … on the first deploy, `Nothing to apply.` afterwards. On staging it then shows `Seeded 7 applications.` the first time and `Seed already loaded.` after. The database's Table Editor shows `applications`, `payments`, `status_history`, `status_tokens` and `schema_migrations`: seven seeded applications on staging, empty on production, which is never seeded.
+6. **Check it**: the build log lists `Applied 0001_create_applications` … on the first deploy, `Nothing to apply.` afterwards. On a fresh staging database it then shows `Seeded 16 applications.` the first time and `Seed already loaded.` after (a database that holds fewer gets only the missing ones). The database's Table Editor shows `applications`, `payments`, `status_history`, `status_tokens`, `rate_limits` and `schema_migrations`: sixteen seeded applications on staging (seven de-registrations and nine Neuzulassungen, one per status), empty on production, which is never seeded.
 
 Migrations only move forward on staging and production: `db:migrate:down` refuses to run outside dev. A bad migration is fixed with a new one.
 
@@ -152,7 +152,7 @@ Registration stays `REGISTRATION_DRIVER=fake` while the Zulex API is down; payme
 
 1. **Developers → API keys**: copy the publishable key (`pk_test_…`) and the secret key (`sk_test_…`).
 2. **Developers → Webhooks**: the endpoint exists (`we_1UKcZOFkTWmWhWUMfaW3drfH`, created 2026-09-28 through the Stripe MCP): URL `https://zulexgo-staging.vercel.app/api/webhooks/stripe`, events **`payment_intent.amount_capturable_updated`** and **`payment_intent.succeeded`** only, API version `2026-08-26.dahlia`, the one the Stripe adapter pins. Open it and copy its signing secret (**Signing secret → Reveal**, `whsec_…`). Don't add a second endpoint: each has its own secret, and the app verifies against one.
-3. **Settings → Payment methods**: cards on. For Apple Pay, **Payment method domains → Add** `zulexgo-staging.vercel.app`. SEPA Direct Debit stays off: the app does not offer it.
+3. **Settings → Payment methods**: cards on. For Apple Pay and Google Pay, **Payment method domains → Add** every domain that shows the form: `zulexgo-staging.vercel.app` is registered (`pmd_1ULhCNFkTWmWhWUMJEzfJHCV`, created 2026-10-01 through the Stripe MCP; Apple Pay and Google Pay both `active`). No verification file is hosted: Stripe does Apple's merchant validation. SEPA Direct Debit stays off: the app does not offer it.
 
 **Vercel, project `zulexgo-staging`, environment Production** (secrets Sensitive):
 
@@ -186,14 +186,25 @@ The KBA's confirmation is cached in a private Supabase Storage bucket and stream
 1. Supabase → `zulexgo-staging` → Project Settings → API Keys → **Publishable and secret API keys** → create a secret key named `zulexgo-staging-documents` (its own name, so it can be rotated alone). Copy the `sb_secret_…` value.
 2. Vercel → `zulexgo-staging` → Settings → Environment Variables → `SUPABASE_STORAGE_SERVICE_KEY` = that value, environment **Production** only, marked **Sensitive**.
 3. Change `STORAGE_DRIVER` from `fake` to `supabase` in the same place. **Only after step 2**: the app refuses to boot with the driver switched on and the key missing.
-4. Redeploy `staging`. The build log shows `Seeded 1 documents.` on the first deploy (the test confirmation of the seeded completed order, stored in the bucket) and `Seed already loaded.` after. A wrong key or bucket fails the deploy, so the previous one keeps serving.
-5. Check: open `https://zulexgo-staging.vercel.app/status/seed-status-link-completed` and download the test confirmation. In the Supabase dashboard, Storage → `kba-documents` holds `ZG-SEED04/9100000000000004.confirmation`. If the seeded link says "Link nicht gültig", someone used the resend form on the seeded order (its reference and address are in the repo); the next deploy restores it.
+4. Redeploy `staging`. The build log shows `Seeded 2 documents.` on the first deploy (the test confirmations of the two seeded completed orders, stored in the bucket) and `Seed already loaded.` after. A wrong key or bucket fails the deploy, so the previous one keeps serving.
+5. Check: open `https://zulexgo-staging.vercel.app/status/seed-status-link-completed` (or `…/status/seed-status-link-new-registration-completed`) and download the test confirmation. In the Supabase dashboard, Storage → `kba-documents` holds `ZG-SEED04/9100000000000004.confirmation` and `ZG-SEED16/9100000000000016.confirmation`. If the seeded link says "Link nicht gültig", someone used the resend form on the seeded order (its reference and address are in the repo); the next deploy restores it.
 
 **Production** (M8): the same in the production Supabase project, with its own bucket and its own secret key; never seeded.
 
 The secret key bypasses row-level security. It stays server-side (`SUPABASE_STORAGE_SERVICE_KEY` has no `NEXT_PUBLIC_` twin), and `tests/integration/client-bundle-secrets.test.ts` walks the client import graph to keep it so.
 
 ---
+
+## 10. What a stage sells, and the beta  *(N9)*
+
+Each stage decides what it sells with settings in its own Vercel project; none is a secret except the invite codes. Production stays as it is until you change it: with none of them set, a stage sells de-registration to everyone.
+
+1. **Staging, to try Neuzulassung on the fakes:** in `zulexgo-staging`, environment Production, add `SERVICES_ON_SALE=deregistration,newRegistration` and redeploy. `/register` then exists on staging and the landing page shows its card. Staging's identity check, registration service and (until its keys are set) payments are fakes or sandboxes, so no real order can be made.
+2. **A beta on a stage:** add `BETA_SERVICES`, `INVITE_CODES_<SERVICE>` (mark it Sensitive) and optionally `BETA_DAILY_CAP`. [docs/runbooks/new-registration-beta.md](runbooks/new-registration-beta.md) says how to make codes and take them back.
+3. **Production:** `SERVICES_ON_SALE` gains `newRegistration` only once a real identity adapter exists (until then the production deploy refuses to boot with it) and the N9 exit criteria in `registration-plan.md` are met; start it in `BETA_SERVICES`.
+4. **The report:** `GET /api/internal/report` uses the same `CRON_SECRET` as the poller. The runbook reads it.
+
+The landing page is built ahead of any request, so its cards take these settings at build: a change shows on the landing page after the redeploy, which Vercel needs for any variable anyway.
 
 ## Rotating a secret
 

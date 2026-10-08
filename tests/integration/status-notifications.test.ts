@@ -1,10 +1,10 @@
 import { renderEmail } from "@/src/adapters/mail/resend/render"
-import type { ApplicationReference } from "@/src/core/domain/application-reference"
-import { Money } from "@/src/core/domain/money"
-import { DEREGISTRATION_TOTAL, PROCESSING_FEE } from "@/src/core/domain/pricing"
-import { GatewayUnavailable } from "@/src/core/errors/gateway-unavailable"
-import type { EmailTemplate } from "@/src/core/ports/mailer"
-import { confirmRefund } from "@/src/core/use-cases/confirm-refund"
+import type { ApplicationReference } from "@/src/core/domain/application/application-reference"
+import { Money } from "@/src/core/domain/payment/money"
+import { PROCESSING_FEE, SERVICE_PRICES } from "@/src/core/domain/payment/pricing"
+import { GatewayUnavailable } from "@/src/core/errors/registration/gateway-unavailable"
+import type { EmailTemplate } from "@/src/core/ports/mail/mailer"
+import { confirmRefund } from "@/src/core/use-cases/payment/confirm-refund"
 import { CODES, keepServiceDown, setupFlow } from "./flow-harness"
 
 const FINISHED = { state: "finished", documents: [] } as const
@@ -67,7 +67,7 @@ describe("status notifications: one email per transition", () => {
     await flow.poll(1)
 
     expect(flow.emails()).toEqual(["orderConfirmation", "submittedToKba", "correctionRequired"])
-    expect(await flow.payment(reference)).toMatchObject({ status: "captured", captured: DEREGISTRATION_TOTAL, refunded: Money.ofCents(0) })
+    expect(await flow.payment(reference)).toMatchObject({ status: "captured", captured: SERVICE_PRICES.deregistration, refunded: Money.ofCents(0) })
   })
 
   it("5c: a final error sends 5c, then email 6 with what comes back, and a later refund confirmation adds nothing", async () => {
@@ -82,7 +82,7 @@ describe("status notifications: one email per transition", () => {
     expect(flow.emails()).toHaveLength(4)
     const [, , rejected, refund] = flow.deps.mailer.sent.map(({ template }) => template)
     expect(rejected).toMatchObject({ retained: PROCESSING_FEE })
-    expect(refund).toMatchObject({ amount: DEREGISTRATION_TOTAL.subtract(PROCESSING_FEE) })
+    expect(refund).toMatchObject({ amount: SERVICE_PRICES.deregistration.subtract(PROCESSING_FEE) })
   })
 
   it("our own technical error: 5c and email 6 for the whole price, with no fee named", async () => {
@@ -93,9 +93,9 @@ describe("status notifications: one email per transition", () => {
 
     expect(flow.emails()).toEqual(["orderConfirmation", "rejected", "refundIssued"])
     const [, rejected, refund] = flow.deps.mailer.sent.map(({ template }) => template)
-    expect(rejected).toMatchObject({ refund: DEREGISTRATION_TOTAL })
+    expect(rejected).toMatchObject({ refund: SERVICE_PRICES.deregistration })
     expect(rejected).toMatchObject({ retained: expect.objectContaining({ cents: 0 }) })
-    expect(refund).toMatchObject({ amount: DEREGISTRATION_TOTAL })
+    expect(refund).toMatchObject({ amount: SERVICE_PRICES.deregistration })
   })
 
   it("sends no refund email for an order that kept all its money", async () => {
@@ -113,7 +113,7 @@ describe("status notifications: an email that could not be sent is not lost", ()
   it("email 4: the transition waits, the next tick after the backoff sends it once, and only then is the KBA asked about", async () => {
     const flow = setupFlow()
     failMailerOnce(flow, "submittedToKba")
-    const submit = jest.spyOn(flow.deps.registration, "submitDeregistration")
+    const submit = jest.spyOn(flow.deps.registration, "submit")
     const reference = await flow.payForCheckout()
 
     await expect(flow.confirm(reference)).rejects.toThrow("Resend refused")
@@ -129,7 +129,7 @@ describe("status notifications: an email that could not be sent is not lost", ()
     expect(submit).toHaveBeenCalledTimes(1)
   })
 
-  it("email 5a: the confirmation is still stored and the card still captured once, and the email goes out on the next tick", async () => {
+  it("email 5a: the confirmation is still stored and the card still captured once, and the email goes out after backoff", async () => {
     const flow = setupFlow()
     const { reference, id } = await reachKba(flow)
     failMailerOnce(flow, "completed")
@@ -139,12 +139,13 @@ describe("status notifications: an email that could not be sent is not lost", ()
     expect(await flow.poll(1)).toMatchObject({ failed: 1 })
     expect((await flow.stored(reference)).status).toBe("submitted_to_kba")
 
-    await flow.poll(0)
+    expect(await flow.poll(0)).toEqual({ checked: 0, failed: 0 })
+    await flow.poll(2)
 
     expect((await flow.stored(reference)).status).toBe("completed")
     expect(flow.emails()).toEqual(["orderConfirmation", "submittedToKba", "completed"])
     expect(await flow.deps.documents.list(reference)).toEqual([{ id: "9", kind: "confirmation" }])
-    expect(await flow.payment(reference)).toMatchObject({ status: "captured", captured: DEREGISTRATION_TOTAL })
+    expect(await flow.payment(reference)).toMatchObject({ status: "captured", captured: SERVICE_PRICES.deregistration })
   })
 
   it("email 5b: the status waits for the email", async () => {
@@ -156,7 +157,8 @@ describe("status notifications: an email that could not be sent is not lost", ()
     expect(await flow.poll(1)).toMatchObject({ failed: 1 })
     expect((await flow.stored(reference)).status).toBe("submitted_to_kba")
 
-    await flow.poll(0)
+    expect(await flow.poll(0)).toEqual({ checked: 0, failed: 0 })
+    await flow.poll(2)
 
     expect((await flow.stored(reference)).status).toBe("failed_correctable")
     expect(flow.emails()).toEqual(["orderConfirmation", "submittedToKba", "correctionRequired"])
@@ -173,19 +175,20 @@ describe("status notifications: an email that could not be sent is not lost", ()
       expect(await flow.poll(1)).toMatchObject({ failed: 1 })
       expect((await flow.stored(reference)).status).toBe("submitted_to_kba")
 
-      await flow.poll(0)
+      expect(await flow.poll(0)).toEqual({ checked: 0, failed: 0 })
+      await flow.poll(2)
 
       expect((await flow.stored(reference)).status).toBe("failed_final")
       expect(flow.emails()).toEqual(["orderConfirmation", "submittedToKba", "rejected", "refundIssued"])
       expect(await flow.payment(reference)).toMatchObject({
         status: "captured",
-        captured: DEREGISTRATION_TOTAL,
-        refunded: DEREGISTRATION_TOTAL.subtract(PROCESSING_FEE),
+        captured: SERVICE_PRICES.deregistration,
+        refunded: SERVICE_PRICES.deregistration.subtract(PROCESSING_FEE),
       })
     },
   )
 
-  it("email 6: a refund email that fails after our own technical error is sent on the next tick, for the whole price", async () => {
+  it("email 6: a refund email that fails after our own technical error is sent after a backoff of at most an hour, for the whole price", async () => {
     const flow = setupFlow()
     flow.deps.registration.failNext("submit", new GatewayUnavailable())
     const reference = await flow.checkoutAndPay()
@@ -194,7 +197,8 @@ describe("status notifications: an email that could not be sent is not lost", ()
 
     flow.deps.registration.failNext("submit", new GatewayUnavailable())
     expect(await flow.poll(60)).toMatchObject({ failed: 1 })
-    await flow.poll(0)
+    expect(await flow.poll(0)).toEqual({ checked: 0, failed: 0 })
+    await flow.poll(60)
 
     expect((await flow.stored(reference)).status).toBe("failed_final")
     expect(flow.emails()).toEqual(["orderConfirmation", "rejected", "refundIssued"])
@@ -240,7 +244,7 @@ describe("status notifications: money that went back by refund", () => {
     const flow = setupFlow()
     flow.deps.registration.failNext("submit", new GatewayUnavailable())
     const reference = await flow.checkoutAndPay("sepaDebit")
-    await flow.deps.payments.refund((await flow.stored(reference)).payment.id, DEREGISTRATION_TOTAL, "test-refund")
+    await flow.deps.payments.refund((await flow.stored(reference)).payment.id, SERVICE_PRICES.deregistration, "test-refund")
 
     await flow.poll(1)
 

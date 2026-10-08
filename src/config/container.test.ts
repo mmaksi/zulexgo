@@ -1,13 +1,13 @@
 import { randomBytes } from "node:crypto"
 import { join } from "node:path"
 import { setupServer } from "msw/node"
-import { anApplication, FAKE_REQUEST } from "@/tests/fixtures/applications"
+import { anApplication, FAKE_CONSENTS, FAKE_REQUEST } from "@/tests/fixtures/applications"
 import { STORAGE_TEST_BUCKET, STORAGE_TEST_KEY, STORAGE_TEST_URL, SupabaseStorageDouble } from "@/tests/msw/supabase-storage"
 import { Migrator, readMigrations } from "@/src/adapters/repository/postgres/migrator"
 import { createTestDatabase, describeWithPostgres, type TestDatabase } from "@/src/adapters/repository/postgres/test-database"
-import { clockContract } from "@/src/core/ports/clock.contract"
-import { tokenGeneratorContract } from "@/src/core/ports/token-generator.contract"
-import { submitCheckout } from "@/src/core/use-cases/submit-checkout"
+import { clockContract } from "@/src/core/ports/clock/clock.contract"
+import { tokenGeneratorContract } from "@/src/core/ports/tokens/token-generator.contract"
+import { submitCheckout } from "@/src/core/use-cases/checkout/submit-checkout"
 import { ZULEX_BASE_URLS } from "./env"
 import { createContainer } from "./container"
 
@@ -47,11 +47,29 @@ describe("createContainer", () => {
   })
 })
 
+describe("what the container sells", () => {
+  it("is de-registration to everyone unless the stage says otherwise", () => {
+    expect(createContainer(staging)).toMatchObject({ servicesOnSale: ["deregistration"], beta: undefined })
+  })
+
+  it("is what the stage's settings say, with its beta", () => {
+    const container = createContainer({
+      ...staging,
+      SERVICES_ON_SALE: "deregistration,newRegistration",
+      BETA_SERVICES: "newRegistration",
+      INVITE_CODES_NEW_REGISTRATION: "K7M2-QX9P",
+    })
+
+    expect(container.servicesOnSale).toEqual(["deregistration", "newRegistration"])
+    expect(container.beta).toEqual({ invites: { newRegistration: ["K7M2-QX9P"] }, dailyPlaces: 5 })
+  })
+})
+
 describe("container ports", () => {
   it("wires a fake for every port in dev, so the whole flow runs locally", async () => {
     const container = createContainer(dev)
 
-    const { reference, clientSecret } = await submitCheckout(container, { request: FAKE_REQUEST, email: "customer@example.test" })
+    const { reference, clientSecret } = await submitCheckout(container, { service: "deregistration", request: FAKE_REQUEST, email: "customer@example.test", consents: FAKE_CONSENTS })
 
     expect(clientSecret).toEqual(expect.any(String))
     expect((await container.repository.get(reference))?.status).toBe("awaiting_payment")
@@ -71,7 +89,7 @@ describe("container ports", () => {
     const { reference, email } = anApplication()
     const statusLink = "https://zulexgo.example.test/status/faketoken-container-log-test-000000000001"
 
-    await createContainer(stage).mailer.send({ to: email, template: { name: "orderConfirmation", reference, statusLink }, idempotencyKey: "k" })
+    await createContainer(stage).mailer.send({ to: email, template: { name: "orderConfirmation", service: "deregistration", reference, statusLink }, idempotencyKey: "k" })
 
     expect(log.mock.calls.flat().join("\n").includes("faketoken-container-log-test")).toBe(printed)
     log.mockRestore()

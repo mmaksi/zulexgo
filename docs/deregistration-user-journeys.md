@@ -2,7 +2,7 @@
 
 Scope: B2C MVP on `POST /deregistration-applications`, `GET /deregistration-applications/{id}`, `PATCH /deregistration-applications/{id}`, `POST /applications/{id}/retry`, `GET /documents/{id}`.
 
-Business logic: [launch-plan.md](launch-plan.md) is source of truth; open points are its Q1–Q18. Statuses: 1 submitted & paid → 2 waiting for identity verification → 3 identity verified → 4 submitted to KBA → 5a completed | 5b failed, correctable | 5c failed, not correctable. Verimi (2, 3 and their emails) is added later (launch plan Q1–Q4); until then 1 leads straight to 4. Email numbers are the launch plan's.
+Business logic: [launch-plan.md](launch-plan.md) is source of truth; open points are its Q1–Q56. Statuses: 1 submitted & paid → 2 waiting for identity verification → 3 identity verified → 4 submitted to KBA → 5a completed | 5b failed, correctable | 5c failed, not correctable. A de-registration goes from 1 straight to 4 (provisional answer to Q4: its security codes are the proof of possession); 2, 3 and their emails run for a service filed in the customer's name (Neuzulassung, [registration-plan.md](registration-plan.md)), on a fake identity adapter until the Verimi adapter exists (launch plan Q1–Q4, Q45). Email numbers are the launch plan's.
 
 ## Data the customer must provide
 
@@ -14,7 +14,7 @@ Business logic: [launch-plan.md](launch-plan.md) is source of truth; open points
 | Security code, registration certificate part 1 | 7 alphanumeric | Required (scratched field on Zulassungsbescheinigung Teil I) |
 | VIN | 1–17 chars `[A-Z0-9]` | Required. Loose API pattern; UI expects 17 chars for modern vehicles, allows shorter for old ones |
 | `reserveLicencePlate` | boolean | Out of scope — always omit/send `false` (founder decision) |
-| Email, payment | — | **Not part of the API.** Ours to collect for Stripe, status emails, status link |
+| Email, payment | — | **Not part of the API.** Ours: the email carries the status link and every status email (it is not sent to Stripe, Q16); payment goes through Stripe |
 
 Always send `X-Idempotency-Key` (one per checkout attempt): a network retry must never create two applications and two charges.
 
@@ -23,13 +23,13 @@ Always send `X-Idempotency-Key` (one per checkout attempt): a network retry must
 ## Journeys
 
 ### J1 — Happy path (two-plate car)
-Select "De-register vehicle" → eligibility check (German plate, has Teil I, plate seals intact, authority reachable) → enter plate, VIN, scratch and enter 3 codes (front, rear, certificate) → see price and 19.99 € processing-fee notice, pay in Stripe Payment Element (card held by pre-authorization; SEPA captured at checkout) → signed Stripe webhook starts application: **status 1**, email 1 (order ID, status link) → **status 2**, email 2 (Verimi link); selfie + ID scan → **status 3**, email 3 → backend submits to API (`201`, `applicationId`) → **status 4**, email 4, polling starts. `FINISHED` with `DEREGISTRATION_CONFIRMATION` document → **5a**, email 5a; customer downloads official confirmation PDF from status page. Success screen states insurance and vehicle tax stop automatically via KBA. Open: when held card payment is captured (Q7); which Stripe event starts the application (Q6); Zulex called at status 1 or 3 (Q5).
+Select "De-register vehicle" → eligibility check (German plate, has Teil I, plate seals intact, authority reachable) → enter plate, VIN, scratch and enter 3 codes (front, rear, certificate) → see price and 19.99 € processing-fee notice, pay in Stripe Payment Element (cards, Apple Pay and Google Pay; the card is held by pre-authorization; no SEPA, Q12) → signed Stripe webhook starts application: **status 1**, email 1 (order ID, status link) → backend submits to API (`201`, `applicationId`) → **status 4**, email 4, polling starts. (A service that verifies the customer's identity first passes through **status 2**, email 2 (Verimi link; selfie + ID scan), and **status 3**, email 3, between 1 and 4: J12.) `FINISHED` with `DEREGISTRATION_CONFIRMATION` document → **5a**, email 5a; customer downloads official confirmation PDF from status page. Success screen states insurance and vehicle tax stop automatically via KBA. Open, with provisional answers in code: when a held card payment is captured (Q7); Zulex called at status 1, right after payment (Q5). Which Stripe event starts the application follows Stripe's behaviour (Q6).
 
 ### J2 — Happy path (motorcycle / trailer, one plate)
 As J1, but UI asked "how many plates?" first and never showed front-code field. Omitting `frontLicencePlateSecurityCode` is valid for the API.
 
 ### J3 — Input rejected at submission (400)
-Backend receives `400`. **Gap: spec defines no response body for 4xx errors**, so field-level mapping not guaranteed. Mitigation: validate everything client-side before payment (patterns above, scratch-code length, checksum-ish VIN checks) so 400 is rare. If it happens, error algorithm classifies it correctable (5b) or not (5c). Whether a data error gets the one automatic retry: open (Q18). Until the error catalogue exists, unrecognised error → 5b (launch-plan fallback).
+Backend receives `400`. **Gap: spec defines no response body for 4xx errors**, so field-level mapping not guaranteed. Mitigation: validate everything client-side before payment (patterns above, scratch-code length; the VIN has no check-digit test, so it never turns away one the API would accept) so 400 is rare. If it happens on the first attempt, nothing was filed and the order goes straight to 5b (J4). Whether a data error gets the one automatic retry: open (Q18; provisional answer in code: no). Until the error catalogue exists, unrecognised error → 5b (launch-plan fallback).
 
 ### J4 — Failed, correction possible (5b)
 Polling shows failure with `errorInfo` (code, description, details) and/or `REJECTION` document. After error algorithm runs: email 5b (reason, correction link, cancel option + fee notice); status page shows "Correction required" with human-readable reason. Options, both on the status page:
@@ -39,13 +39,13 @@ Polling shows failure with `errorInfo` (code, description, details) and/or `REJE
 **Gap: API doesn't say whether a rejection is correctable.** UI must infer from `errorInfo.code` — needs error-code catalogue from API provider (founder clarifying). Which de-registration failures are correctable: Q10.
 
 ### J5 — Failed, correction not possible (5c)
-E.g. vehicle already deregistered, plate/VIN mismatch confirmed by KBA, alerts against vehicle, identity verification failed. Status page: terminal "Failed" with reason and "Start a new application" CTA. Refund amount minus 19.99 € (email 5c, then email 6); new application is a new order at full price. How "minus 19.99 €" is executed on a held payment — partial capture or capture then refund — open (Q8).
+E.g. vehicle already deregistered, plate/VIN mismatch confirmed by KBA, alerts against vehicle, identity verification failed (a Neuzulassung only: a de-registration does not verify, Q4). Status page: terminal "Failed" with reason and "Start a new application" CTA. Refund amount minus 19.99 € (email 5c, then email 6); new application is a new order at full price. How "minus 19.99 €" is executed on a held payment — partial capture or capture then refund — open (Q8). Until the error-code catalogue lists a code as final (Q10), no KBA error reaches 5c.
 
 ### J6 — Technical error (ERROR status)
 API timeout, KBA temporarily unavailable, or status `ERROR` with technical `errorInfo`. Backend auto-calls `POST /applications/{id}/retry` (no data change) **once** for a KBA technical error; customer not notified, no refund started. A create that times out, or is answered 429, 5xx, 409, or with an error we cannot read, has no application to retry: it is resubmitted under the same idempotency key on a backoff for 24 hours (Q23), then fails for good with a full refund (Q40). Retry succeeds → 5a. Otherwise classified: technical API error → correctable (5b); technical error on our side → 100 % refund. Line between the two: open (Q9). Never ask customer to resubmit — risks duplicates.
 
 ### J7 — Payment problems
-Card declined / 3DS abandoned → `payment_intent.payment_failed`, application never started; customer stays on payment step with Stripe's message. SEPA Direct Debit captured at checkout but settles over several business days and can still fail afterwards — whether a SEPA order starts before settling: open (Q12). Card hold lasts 7 days; Verimi wait plus manual-processing authority can exceed that. As built (provisional answers to Q7 and Q20): an online authority's card is captured in full when Zulex accepts the application; otherwise it is held, and captured in full two days before it would lapse, or when the KBA finishes; a 5b waiting on the customer is watched daily for the same. The plan's alternative, a re-authorisation email, is not built (Q20).
+Card declined / 3DS abandoned → application never started (the `payment_intent.payment_failed` event is not acted on); customer stays on payment step with Stripe's message, and a declined card is retried on the same order. SEPA Direct Debit would be captured at checkout but settles over several business days and can still fail afterwards: it is not offered (cards, Apple Pay and Google Pay only; provisional answer to Q12), and whether a SEPA order would start before settling is open (Q12). Card hold lasts 7 days; a Verimi wait (Neuzulassung) plus manual-processing authority can exceed that. As built (provisional answers to Q7 and Q20): an online authority's card is captured in full when Zulex accepts the application; otherwise it is held, and captured in full two days before it would lapse, or when the KBA finishes; a 5b waiting on the customer is watched daily for the same. The plan's alternative, a re-authorisation email, is not built (Q20).
 
 ### J8 — Duplicate submission
 Double-click / refresh on "Pay & submit": idempotency key makes API call safe; Stripe PaymentIntent likewise idempotent. Same vehicle deliberately submitted twice (two sessions): API accepts both; KBA rejects the second. Guard, built: the checkout warns if the same plate and VIN have a paid, unfinished order from us, and goes on only when the customer confirms (Q38).
@@ -54,13 +54,13 @@ Double-click / refresh on "Pay & submit": idempotency key makes API call safe; S
 `GET /registration-authorities?licencePlatePrefix=…` before payment. `online` → normal expectations ("usually minutes to hours"). `unavailable`/`offline` → **manual processing**: tell customer before payment it may take days. Always use this endpoint in the eligibility step.
 
 ### J10 — Status tracking, lost link, unknown status
-Status link → personal status dashboard (no account) with the customer statuses (seven once Verimi is added) and documents. Lost link → "Resend my link" by email + order ID (launch-plan assumption; send to stored address only — never reveal data on-page from an email guess). Unknown status tag from API (spec explicitly warns of new statuses) → render generic "In progress" step, don't break.
+Status link → personal status dashboard (no account) with the customer statuses (five for a de-registration, seven for a service that verifies the customer's identity first) and documents. Lost link → "Resend my link" by email + order ID (launch-plan assumption; send to stored address only — never reveal data on-page from an email guess). Unknown status tag from API (spec explicitly warns of new statuses) → render generic "In progress" step, don't break.
 
 ### J11 — Special plates (edge case)
 Seasonal (Saisonkennzeichen), electric (E), historic (H) plates: deregistration request has **no `licencePlateAttributes`** (other flows do). If KBA needs E/H suffix, these vehicles may be rejected. Clarify with API provider (Q23); until then the eligibility step has a checkbox for these plates that warns the application may be rejected, without stopping the customer (Q39).
 
 ### J12 — Identity verification (Verimi), added later
-After status 1: email 2 with Verimi link; selfie + ID-card scan (~90 s). Success → status 3, email 3, then KBA submission. Failure → 5c (refund minus 19.99 €). Email 2 names a deadline; its length, any reminder, outcome when it passes: open (Q14). Who integrates Verimi, who sends the link, how ZulexGO learns the result: open (Q1–Q3).
+After status 1: email 2 with Verimi link; selfie + ID-card scan (~90 s). Success → status 3, email 3, then KBA submission. Failure → 5c (refund minus 19.99 €). Email 2 names a deadline; its length, any reminder, outcome when it passes: open (Q14). Who integrates Verimi, who sends the link, how ZulexGO learns the result: open (Q1–Q3). As built, for a Neuzulassung only (a de-registration does not verify, Q4) and on a fake adapter (Q45): a verified person who is not the owner on the order → 5b, nothing filed (Q47); a reminder after 2 days, and after 4 the order is cancelled with everything back (Q48).
 
 ---
 

@@ -14,13 +14,13 @@ import { PostgresRateLimiter } from "@/src/adapters/repository/postgres/postgres
 import { InMemoryDocumentStore } from "@/src/adapters/storage/fake/in-memory-document-store"
 import { SupabaseDocumentStore } from "@/src/adapters/storage/supabase/supabase-document-store"
 import { CryptoTokenGenerator } from "@/src/adapters/tokens/crypto/crypto-token-generator"
-import type { ApplicationRepository } from "@/src/core/ports/application-repository"
-import type { Clock } from "@/src/core/ports/clock"
-import type { IdentityVerification } from "@/src/core/ports/identity-verification"
-import type { RateLimiter } from "@/src/core/ports/rate-limiter"
+import type { ApplicationRepository } from "@/src/core/ports/repository/application-repository"
+import type { Clock } from "@/src/core/ports/clock/clock"
+import type { IdentityVerification } from "@/src/core/ports/identity/identity-verification"
+import type { RateLimiter } from "@/src/core/ports/rate-limit/rate-limiter"
 import type { Dependencies } from "@/src/core/use-cases/dependencies"
 import { seedDocumentsFor, seedFor, seedPaymentsFor } from "@/db/seed/seed"
-import { parseEnv, type Env, type EnvSource } from "./env"
+import { betaOf, parseEnv, type Env, type EnvSource } from "./env"
 
 /**
  * The composition root: the only place in the application that constructs an
@@ -31,12 +31,20 @@ import { parseEnv, type Env, type EnvSource } from "./env"
  * secret — and a frozen clock or a predictable status link in a running dev
  * server would be a bug, not a convenience. Tests inject the fakes directly.
  *
- * Identity verification has no driver yet: Verimi is added later (launch plan
- * Q1–Q4), so its fake is wired everywhere until `IDENTITY_DRIVER` exists.
+ * Identity verification is the fake in every stage for now (`IDENTITY_DRIVER`): Verimi is added later
+ * (launch plan Q1–Q3), and `parseEnv` refuses the fake in production once a service that verifies the
+ * customer is on sale.
+ *
+ * The container holds the Zulex `X-Api-Key` and the Stripe, Resend, Supabase
+ * and database credentials, so it is server-only: importing it from a client
+ * component is a build error (`server-only`).
  */
 export interface Container extends Dependencies {
+  /**
+   * The validated environment, for the few callers that read configuration
+   * directly (the poll route's `CRON_SECRET`, the funnel's Stripe publishable key).
+   */
   readonly env: Env
-  readonly identity: IdentityVerification
   /**
    * Only on the fake payment provider, which has no browser to pay in: plays
    * the customer paying, so the funnel runs end to end without Stripe keys.
@@ -44,9 +52,24 @@ export interface Container extends Dependencies {
   readonly simulateCustomerPayment?: (paymentId: string) => Promise<void>
 }
 
+/**
+ * Wires one adapter per port from `source`, which is `process.env` in the
+ * running app and a literal in tests.
+ *
+ * The `*_DRIVER` variables choose each adapter and default to the fake or
+ * console one, so dev needs no secrets. `parseEnv` refuses a production
+ * environment that selects any of those and requires the credentials of every
+ * real adapter, which is why the non-null assertions below are safe. `APP_ENV`
+ * decides the rest: only dev prints status links when it "sends" mail, and the
+ * fakes load a seed that `seedFor` refuses to hand out in production.
+ *
+ * @throws {EnvironmentError} before any adapter is built, if the environment is invalid.
+ */
 export function createContainer(source: EnvSource = process.env): Container {
   const env = parseEnv(source)
   const clock = new SystemClock()
+  // Built ahead of the object because the container also exposes its `customerPays`
+  // as `simulateCustomerPayment`.
   const fakePayments = env.PAYMENT_DRIVER === "fake" ? new FakePaymentProvider(clock, seedPaymentsFor(env.APP_ENV)) : undefined
   return {
     env,
@@ -62,6 +85,8 @@ export function createContainer(source: EnvSource = process.env): Container {
       fakePayments ??
       new StripePaymentProvider({ secretKey: env.STRIPE_SECRET_KEY!, webhookSecret: env.STRIPE_WEBHOOK_SECRET! }),
     simulateCustomerPayment: fakePayments && ((paymentId) => fakePayments.customerPays(paymentId, "card")),
+    // Only staging restricts Resend to an allowlist. Production mails everyone (`parseEnv`
+    // rejects a non-empty list there) and dev never gets here (`parseEnv` requires console).
     mailer:
       env.MAIL_DRIVER === "console"
         ? new ConsoleMailer({ revealStatusLinks: env.APP_ENV === "dev" })
@@ -78,18 +103,32 @@ export function createContainer(source: EnvSource = process.env): Container {
             bucket: env.SUPABASE_STORAGE_BUCKET!,
             serviceKey: env.SUPABASE_STORAGE_SERVICE_KEY!,
           }),
-    identity: new FakeIdentityVerification(),
+    identity: createIdentity(env),
+    servicesOnSale: env.SERVICES_ON_SALE,
+    beta: betaOf(env),
     statusLink: (token) => new URL(`/status/${token}`, env.APP_BASE_URL).toString(),
   }
 }
 
-/** On the in-memory repository every boot starts from the seed; a database is seeded by its deploy instead. */
+/**
+ * On the in-memory repository every boot starts from the seed; a database is seeded by
+ * its deploy instead. The app connects through `DATABASE_URL`, the transaction pooler;
+ * `DIRECT_DATABASE_URL` is for the db commands.
+ */
 function createRepository(env: Env): ApplicationRepository {
   if (env.REPOSITORY_DRIVER === "fake") return new InMemoryApplicationRepository(seedFor(env.APP_ENV))
   return new PostgresApplicationRepository({
     connectionString: env.DATABASE_URL!,
     encryptionKey: env.CODES_ENCRYPTION_KEY!,
   })
+}
+
+/** A `switch` with no default: a driver added to `IDENTITY_DRIVER` does not compile until it is wired here. */
+function createIdentity(env: Env): IdentityVerification {
+  switch (env.IDENTITY_DRIVER) {
+    case "fake":
+      return new FakeIdentityVerification()
+  }
 }
 
 /** Counts must be shared by every instance, so the limiter lives wherever the repository does: in memory only while the repository is. */
@@ -100,5 +139,13 @@ function createRateLimiter(env: Env, clock: Clock): RateLimiter {
 
 let container: Container | undefined
 
-/** Validated once per process, so a misconfigured deploy fails on its first request. */
+/**
+ * The process-wide container. Validated once per process, so a misconfigured deploy
+ * fails on its first request.
+ *
+ * It is built on first use, not at import, so loading a module that depends on it
+ * reads no environment and opens no connection. It is shared because the in-memory
+ * fakes keep their state in the instance and each Postgres adapter owns a connection
+ * pool. A build that throws is not remembered; the next call tries again.
+ */
 export const getContainer = (): Container => (container ??= createContainer())

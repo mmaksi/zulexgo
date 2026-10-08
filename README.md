@@ -3,8 +3,9 @@
 Consumer-facing (B2C) web app for German vehicle registration services, built on the
 B2B Zulex API. The MVP covers one service: vehicle de-registration
 (Außerbetriebsetzung), from eligibility check through payment to the official KBA
-confirmation. There are no user accounts — order status is reached through a
-personal status link sent by email.
+confirmation. A second service, Neuzulassung (new registration), is built but not on
+sale: a stage's `SERVICES_ON_SALE` setting lists only de-registration by default. There are no user accounts —
+order status is reached through a personal status link sent by email.
 
 ## Getting started
 
@@ -15,16 +16,16 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). No secrets are needed yet —
-until the Stripe and Zulex adapters land (launch plan M4), `dev` runs on in-memory
-fakes for every external service — but `APP_ENV` must be set: the server validates
-its environment at start and refuses to run without it. From M4, dev can call the
-test mode of the Stripe account and the Zulex integration API with their keys in
-`.env.local` (`docs/provisioning.md`); without them it keeps its fakes and
-simulates the payment. Database and storage stay in memory and mail stays on the
-console.
+Open [http://localhost:3000](http://localhost:3000). No secrets are needed: `dev`
+runs on in-memory fakes for every external service, but `APP_ENV` must be set (the
+template sets `dev`): the server validates its environment at start and refuses to
+run without it. Dev can call the test mode of the Stripe account and the Zulex
+integration API with `PAYMENT_DRIVER=stripe` or `REGISTRATION_DRIVER=zulex` and their
+keys in `.env.local` (`docs/provisioning.md`); without them it keeps its fakes and
+simulates the payment. Database and storage default to in-memory fakes and mail stays
+on the console.
 
-The middle line registers `git start`, which is how you begin a piece of work:
+The `git config` line registers `git start`, which is how you begin a piece of work:
 
 ```bash
 git start feature/eligibility-check

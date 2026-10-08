@@ -1,5 +1,10 @@
-/** The fields a correction can change; the plate cannot (launch plan Q26). */
-export type CorrectionField = "vin" | "rearPlate" | "frontPlate" | "certificate"
+/** A de-registration's correction form: the VIN and the three security codes; the plate cannot be changed (launch plan Q26). */
+export type DeregistrationCorrectionField = "vin" | "rearPlate" | "frontPlate" | "certificate"
+
+/** A Neuzulassung's: the eVB number and the Teil II, and, until the identity is verified, the owner's name and birth date (Q47). */
+export type NewRegistrationCorrectionField = "evbNumber" | "part2Number" | "part2SecurityCode" | "firstName" | "lastName" | "birthDate"
+
+export type CorrectionField = DeregistrationCorrectionField | NewRegistrationCorrectionField
 
 /** What the status page is told after the customer tries to change an order. Kept apart from the server code so the browser bundle can import it. */
 export type OrderChangeState =

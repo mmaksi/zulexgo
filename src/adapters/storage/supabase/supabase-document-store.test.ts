@@ -7,8 +7,8 @@ import {
   STORAGE_TEST_URL,
   SupabaseStorageDouble,
 } from "@/tests/msw/supabase-storage"
-import type { DocumentRef } from "@/src/core/domain/document"
-import { documentStoreContract } from "@/src/core/ports/document-store.contract"
+import type { DocumentRef } from "@/src/core/domain/registration/document"
+import { documentStoreContract } from "@/src/core/ports/storage/document-store.contract"
 import { SupabaseDocumentStore } from "./supabase-document-store"
 
 let storage = new SupabaseStorageDouble()

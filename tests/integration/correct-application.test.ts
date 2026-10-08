@@ -1,13 +1,13 @@
-import { FAKE_REQUEST } from "@/tests/fixtures/applications"
-import { GatewayRejected } from "@/src/core/errors/gateway-rejected"
-import { GatewayUnavailable } from "@/src/core/errors/gateway-unavailable"
-import { InvalidTransition } from "@/src/core/errors/invalid-transition"
-import { TokenInvalid } from "@/src/core/errors/token-invalid"
+import { FAKE_REQUEST, type DeregistrationApplication } from "@/tests/fixtures/applications"
+import { GatewayRejected } from "@/src/core/errors/registration/gateway-rejected"
+import { GatewayUnavailable } from "@/src/core/errors/registration/gateway-unavailable"
+import { InvalidTransition } from "@/src/core/errors/application/invalid-transition"
+import { TokenInvalid } from "@/src/core/errors/application/token-invalid"
 import { ValidationError } from "@/src/core/errors/validation-error"
-import { PaymentNoLongerWhole } from "@/src/core/errors/payment-no-longer-whole"
-import { StaleApplication } from "@/src/core/errors/stale-application"
-import { cancelApplication } from "@/src/core/use-cases/cancel-application"
-import { correctApplication } from "@/src/core/use-cases/correct-application"
+import { PaymentNoLongerWhole } from "@/src/core/errors/payment/payment-no-longer-whole"
+import { StaleApplication } from "@/src/core/errors/application/stale-application"
+import { cancelApplication } from "@/src/core/use-cases/application/cancel-application"
+import { correctApplication } from "@/src/core/use-cases/application/correct-application"
 import { InMemoryApplicationRepository } from "@/src/adapters/repository/fake/in-memory-application-repository"
 import { CODES, setupFlow } from "./flow-harness"
 
@@ -34,6 +34,16 @@ async function refusedAtSubmission() {
 
 const newVin = { vin: "FAKEVIN0000000009", certificate: "AAAAAA9" }
 
+it("refuses a correction when the provider amount differs from the stored order total", async () => {
+  const flow = await refusedByKba()
+  const application = await flow.stored(flow.reference)
+  await flow.deps.repository.update({ ...application, payment: { ...application.payment, total: application.payment.total.add(application.payment.total) } })
+
+  await expect(correctApplication(flow.deps, flow.token, newVin)).rejects.toBeInstanceOf(PaymentNoLongerWhole)
+  expect(flow.deps.registration.corrections).toHaveLength(0)
+  expect((await flow.stored(flow.reference)).status).toBe("failed_correctable")
+})
+
 describe("correctApplication, an order the service holds", () => {
   it("patches only the corrected fields, then puts the order back at the KBA with email 4 again", async () => {
     const flow = await refusedByKba()
@@ -56,9 +66,10 @@ describe("correctApplication, an order the service holds", () => {
     await correctApplication(flow.deps, flow.token, newVin)
 
     const stored = await flow.stored(flow.reference)
-    expect(stored.request.vin).toBe(newVin.vin)
-    expect(stored.request.codes.certificate.reveal()).toBe(newVin.certificate)
-    expect(stored.request.codes.rearPlate.reveal()).toBe(FAKE_REQUEST.codes.rearPlate)
+    const { request } = stored as DeregistrationApplication
+    expect(request.vin).toBe(newVin.vin)
+    expect(request.codes.certificate.reveal()).toBe(newVin.certificate)
+    expect(request.codes.rearPlate.reveal()).toBe(FAKE_REQUEST.codes.rearPlate)
     expect(stored.failure).toBeUndefined()
     expect(stored.retryAttempts).toBe(0)
     expect(stored.polling.nextPollAt).toBeDefined()

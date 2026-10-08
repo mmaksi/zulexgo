@@ -5,7 +5,7 @@ import { FakeMailer } from "@/src/adapters/mail/fake/fake-mailer"
 import { InMemoryRateLimiter } from "@/src/adapters/rate-limit/fake/in-memory-rate-limiter"
 import { InMemoryApplicationRepository } from "@/src/adapters/repository/fake/in-memory-application-repository"
 import { FakeTokenGenerator } from "@/src/adapters/tokens/fake/fake-token-generator"
-import { limitResend, resendStatusLink } from "@/src/core/use-cases/resend-status-link"
+import { limitResend, resendStatusLink } from "@/src/core/use-cases/status/resend-status-link"
 
 const HOUR = 60 * 60_000
 const OLD_TOKEN = "faketoken-original-link"

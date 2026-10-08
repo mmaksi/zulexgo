@@ -110,15 +110,15 @@ Warning text is always `--color-grau-dark` on `--color-warning-tint`; `--color-w
 
 | Family | Weights in use | Role |
 |---|---|---|
-| **Kanit** [S] | 300 Light, 400 Regular (text below 16px, §3.2), 600 SemiBold Italic (wordmark only), 800 ExtraBold (H1 only) | Everything. |
+| **Kanit** [S] | 300 Light, 400 Regular (text below 16px, §3.2), 600 SemiBold (plate fallback, below), 600 SemiBold Italic (wordmark only), 800 ExtraBold (H1 only) | Everything. |
 | **Euro Plate Regular** [S] | Regular | **Licence plates only.** Uppercase-only, includes the D/EU oval glyph. Never for UI text, headings or reference numbers. |
 
 ```css
 --font-sans:  'Kanit', 'Helvetica Neue', Arial, sans-serif;
---font-plate: 'Euro Plate', 'FE-Schrift', monospace;
+--font-plate: 'Euro Plate', var(--font-sans);
 ```
 
-Kanit (Google Fonts): load **only** 300, 400, 600 italic, 800 — `display=swap`, self-hosted WOFF2 preferred, preload 300 and 800 subsets. Euro Plate is licensed: load lazily, only on views rendering a plate; on failure, fall back to `--font-sans` 600 uppercase, `letter-spacing: 0.08em`, inside the plate frame.
+Kanit (Google Fonts): load **only** 300, 400, 600, 600 italic, 800 — `display=swap`, self-hosted WOFF2 preferred, preload 300 and 800 subsets. Euro Plate is licensed: load lazily, only on views rendering a plate; on failure, fall back to `--font-sans` 600 uppercase, `letter-spacing: 0.08em`, inside the plate frame.
 
 ### 3.2 Scale
 
@@ -176,7 +176,7 @@ Uppercase headings need `hyphens: none` and `overflow-wrap: break-word` (German 
 --space-12: 48px;  --space-16: 64px;  --space-24: 96px;  --space-32: 128px;
 ```
 
-Default step 8px; 4px only for tight optical corrections (icon-to-label, badge padding).
+Default step 8px; 4px only for tight optical corrections (icon-to-label, badge padding). In code Tailwind's 4px spacing scale carries these steps; no `--space-*` variables are defined.
 
 ### 4.2 Page frame
 
@@ -289,6 +289,8 @@ Depth only where an element genuinely floats. Shadows in `--color-grau-dark` at 
 --elev-2: 0 4px 16px rgba(39,40,40,.10);                               /* dropdown, popover, sticky header */
 --elev-3: 0 12px 32px rgba(39,40,40,.16);                              /* modal, bottom sheet */
 ```
+
+In `app/globals.css` these are `--shadow-elev-1` to `--shadow-elev-3`, used as `shadow-elev-N`; `--elev-0` is no shadow, so it has no variable.
 
 Resting card: `--elev-0` with `1px solid var(--color-bg-blue)`, or `1px solid var(--color-grau-bright)` when it must read as an input boundary. Rises to `--elev-1` on hover only if clickable.
 

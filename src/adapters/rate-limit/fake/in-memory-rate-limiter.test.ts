@@ -1,5 +1,5 @@
-import type { Clock } from "@/src/core/ports/clock"
-import { rateLimiterContract } from "@/src/core/ports/rate-limiter.contract"
+import type { Clock } from "@/src/core/ports/clock/clock"
+import { rateLimiterContract } from "@/src/core/ports/rate-limit/rate-limiter.contract"
 import { InMemoryRateLimiter } from "./in-memory-rate-limiter"
 
 /** Adapters may not import each other, so this test keeps its own movable clock. */

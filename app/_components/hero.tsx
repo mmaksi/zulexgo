@@ -1,9 +1,10 @@
 import { ArrowRight } from "lucide-react"
 import { buttonLink } from "@/src/ui/button"
+import { KbaSeal } from "./kba-seal"
 
 // site-contract.md §2.1 — headline <=60, subline <=140, CTA <=25 chars, verb-first.
 const STATS = [
-  { value: "10 Min.", label: "Ausfüllen und bezahlen" },
+  { value: "24/7", label: "Online beauftragen, wann Sie wollen" },
   { value: "0", label: "Termine bei der Behörde" },
   { value: "100 %", label: "Online, ohne Kundenkonto" },
 ]
@@ -12,27 +13,38 @@ export function Hero() {
   return (
     <section className="py-(--section-gap)">
       <div className="page-frame">
-        <p className="text-small font-normal tracking-[0.1em] text-grau-bright uppercase">
-          Amtlicher Vorgang über das Kraftfahrt-Bundesamt
-        </p>
+        <div className="lg:grid lg:grid-cols-[1fr_auto] lg:items-center lg:gap-16">
+          <div>
+            <p className="text-small font-normal tracking-[0.1em] text-grau-bright uppercase">
+              Amtlicher Vorgang über das Kraftfahrt-Bundesamt
+            </p>
 
-        <h1 className="mt-5 max-w-[18ch] text-grau-dark sm:mt-6">
-          Fahrzeug online abmelden
-        </h1>
+            <h1 className="mt-5 max-w-[18ch] text-grau-dark sm:mt-6">
+              Fahrzeug online an- und abmelden
+            </h1>
 
-        <p className="measure mt-(--heading-space-below) text-subtitle text-grau">
-          Die Außerbetriebsetzung erledigen Sie in unter 10 Minuten — offiziell
-          über das KBA, ohne Termin bei der Zulassungsstelle.
-        </p>
+            <p className="measure mt-(--heading-space-below) text-subtitle text-grau">
+              Abmeldung, Neuzulassung, Ummeldung und mehr: offiziell über das
+              KBA, ohne Termin bei der Zulassungsstelle.
+            </p>
 
-        <div className="mt-8 flex flex-col gap-3 sm:mt-10 sm:flex-row sm:items-start">
-          <a href="#leistungen" className={buttonLink()}>
-            Jetzt abmelden
-            <ArrowRight aria-hidden="true" />
-          </a>
-          <a href="#ablauf" className={buttonLink({ variant: "outline" })}>
-            So funktioniert es
-          </a>
+            <div className="mt-8 flex flex-col gap-3 sm:mt-10 sm:flex-row sm:items-start">
+              <a href="#leistungen" className={buttonLink()}>
+                Leistung wählen
+                <ArrowRight aria-hidden="true" />
+              </a>
+              <a href="#ablauf" className={buttonLink({ variant: "outline" })}>
+                So funktioniert es
+              </a>
+            </div>
+          </div>
+
+          {/* Below the buttons on small screens, so it never pushes the call
+              to action down. */}
+          <KbaSeal
+            sizes="(min-width: 1024px) 256px, 144px"
+            className="mt-10 size-36 lg:mt-0 lg:size-64"
+          />
         </div>
 
         {/* §7 numeric values sit in grau-dark and are never orange */}

@@ -1,7 +1,12 @@
 import type { z } from "zod"
-import { GatewayRejected } from "@/src/core/errors/gateway-rejected"
-import { GatewayUnavailable } from "@/src/core/errors/gateway-unavailable"
+import { GatewayRejected } from "@/src/core/errors/registration/gateway-rejected"
+import { GatewayUnavailable } from "@/src/core/errors/registration/gateway-unavailable"
 
+/**
+ * A request that outlives this is aborted and reported as `GatewayUnavailable`. The abort proves
+ * nothing about the server: a submission may still have been filed, which is why submissions
+ * carry an idempotency key.
+ */
 const TIMEOUT_MS = 15_000
 
 /** 409 is "GET the latest version and retry", 429 and 5xx are "back off": all worth another try later. */
@@ -10,6 +15,11 @@ const isTransient = (status: number) => status === 409 || status === 429 || stat
 /**
  * Thrown for what no retry fixes: a wrong API key, an unknown id. Carries the
  * status and path only; never a request body, which holds security codes.
+ *
+ * Deliberately not a domain error: it means our configuration or request is wrong (401 for a
+ * wrong key, 404 for an unknown id, or a status the spec does not describe), and should be loud
+ * in the logs. The message carries the path without its query string. On submission the use case
+ * still treats it as an unconfirmed attempt, since the service may hold the application anyway.
  */
 export class ZulexRequestFailed extends Error {
   constructor(method: string, path: string, status: number) {
@@ -19,11 +29,29 @@ export class ZulexRequestFailed extends Error {
 }
 
 export interface ZulexConfig {
+  /**
+   * The host including its version prefix, with no trailing slash: paths are appended as they are.
+   * `src/config/env.ts` pins it to the integration or the production host by stage.
+   */
   readonly baseUrl: string
+  /** The merchant's `X-Api-Key`. Sent as a header only, never logged, never reaches the browser. */
   readonly apiKey: string
 }
 
-/** One call to the Zulex API, with vendor failures turned into domain errors at this edge. */
+/**
+ * One call to the Zulex API, with vendor failures turned into domain errors at this edge.
+ *
+ * The status is sorted by what the caller may do next, following the spec's own guidance:
+ * - 2xx returns the response, still unread.
+ * - 400 is `GatewayRejected`: invalid input, "fix the data and resubmit", so the same data fails again.
+ * - 409, 429 and 5xx (504 in the spec) are `GatewayUnavailable`, carrying `Retry-After` when sent.
+ *   A 409 means a concurrent modification and the spec says to GET the latest version first;
+ *   this function does not, it leaves the retry to the caller.
+ * - A network failure or timeout is `GatewayUnavailable` too, with no `Retry-After`.
+ * - Anything else (401, 403, 404...) is `ZulexRequestFailed`, not a domain error.
+ *
+ * `idempotencyKey` becomes `X-Idempotency-Key`, which the spec defines on creating calls only.
+ */
 export async function zulexRequest(
   config: ZulexConfig,
   method: string,
@@ -41,6 +69,7 @@ export async function zulexRequest(
       headers,
       body: options.body === undefined ? undefined : JSON.stringify(options.body),
       signal: AbortSignal.timeout(TIMEOUT_MS),
+      // A status read must never be answered from Next's fetch cache.
       cache: "no-store",
     })
   } catch {
@@ -53,15 +82,29 @@ export async function zulexRequest(
   throw new ZulexRequestFailed(method, path.split("?")[0], response.status)
 }
 
-/** Parses JSON keeping every `id` as its source text: document ids are int64, beyond what a JS number holds exactly. */
+/**
+ * Parses JSON keeping every `id` as its source text: document ids are int64, beyond what a JS number holds exactly.
+ *
+ * Relies on `JSON.parse` handing the reviver the number's source text (Node 21 and later). Where
+ * that is missing the id stays a number and the schemas, which expect a string, reject it.
+ * A body that does not match `schema` throws a `ZodError`, which is not a domain error. A body that
+ * is not JSON throws a plain `Error` that says only so: a `SyntaxError` quotes the stretch of the body it
+ * choked on, and a response echoes what was filed.
+ */
 export async function readJson<Schema extends z.ZodType>(response: Response, schema: Schema): Promise<z.output<Schema>> {
   const text = await response.text()
   const reviver = (key: string, value: unknown, context?: { source?: string }) =>
     key === "id" && typeof value === "number" && context?.source ? context.source : value
-  return schema.parse(JSON.parse(text, reviver as Parameters<typeof JSON.parse>[1]))
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(text, reviver as Parameters<typeof JSON.parse>[1])
+  } catch {
+    throw new Error("Zulex answered with a body that is not JSON")
+  }
+  return schema.parse(parsed)
 }
 
-/** Retry-After is either delay-seconds or an HTTP date. */
+/** Retry-After is either delay-seconds or an HTTP date. A past date clamps to zero; junk is ignored. */
 function retryAfterMs(header: string | null): number | undefined {
   if (!header) return undefined
   const seconds = Number(header)

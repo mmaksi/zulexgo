@@ -1,29 +1,26 @@
 import type { Metadata } from "next"
-import { connection } from "next/server"
-import { getContainer } from "@/src/config/container"
-import { completeSimulatedPaymentAction, checkEligibilityAction, startCheckoutAction } from "./actions"
-import type { PaymentMode } from "./_components/checkout-actions"
+import { BetaGate } from "@/app/(funnel)/beta-gate"
+import { requireOnSale } from "@/app/(funnel)/on-sale"
+import { paymentModeOfDeployment } from "@/app/(funnel)/payment-mode"
+import { completeSimulatedPaymentAction } from "@/app/(funnel)/simulated-payment-action"
+import { checkEligibilityAction, startCheckoutAction } from "./actions"
 import { DeregistrationFunnel } from "./_components/deregistration-funnel"
 
 export const metadata: Metadata = { title: "Fahrzeug abmelden — ZulexGO" }
 
 export default async function DeregisterPage() {
-  // The payment mode is the deployment's, read at request time, not baked in at build.
-  await connection()
-  const { env } = getContainer()
-  const payment: PaymentMode =
-    env.PAYMENT_DRIVER === "stripe"
-      ? { kind: "stripe", publishableKey: env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY! }
-      : { kind: "simulated" }
+  await requireOnSale("deregistration")
 
   return (
-    <DeregistrationFunnel
-      payment={payment}
-      actions={{
-        checkEligibility: checkEligibilityAction,
-        startCheckout: startCheckoutAction,
-        completeSimulatedPayment: completeSimulatedPaymentAction,
-      }}
-    />
+    <BetaGate service="deregistration" name="Abmeldung">
+      <DeregistrationFunnel
+        payment={await paymentModeOfDeployment()}
+        actions={{
+          checkEligibility: checkEligibilityAction,
+          startCheckout: startCheckoutAction,
+          completeSimulatedPayment: completeSimulatedPaymentAction,
+        }}
+      />
+    </BetaGate>
   )
 }

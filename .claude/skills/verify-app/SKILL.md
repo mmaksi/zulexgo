@@ -41,12 +41,12 @@ git log --oneline HEAD..origin/staging
 Read the diff itself, not your memory of writing it. For each behaviour it changes, ask every question below and write down each edge that applies as `edge -> proof`. Skip a question only when you can say why it cannot apply. "No edge cases" on a non-trivial change means you have not looked.
 
 - **Input and limits.** Empty, missing, whitespace, wrong case, one past each limit (plate `[A-ZÄÖÜ]{1,3}`, VIN 1-17, codes of 3 and 7, no leading 0), umlauts, hostile strings. Values the spec does not list: an unknown Zulex status shows "In progress"; an `UNKNOWN` document type or unknown alert tag does not break the page. Money: cents, rounding, a refund never below zero nor above what was paid.
-- **State.** Each status the change touches (1 -> 4 -> 5a | 5b | 5c), each illegal move refused, terminal states stop polling. A crash between two steps (row written, email unsent; Stripe called, row unwritten): what is left behind, does the next tick repair it, is money left held or taken wrongly? The order of side effects (D5).
+- **State.** Each status the change touches (1 -> 4 -> 5a | 5b | 5c, and 1 -> 2 -> 3 -> 4 for a service that verifies the customer's identity first), each illegal move refused, terminal states stop polling. A crash between two steps (row written, email unsent; Stripe called, row unwritten): what is left behind, does the next tick repair it, is money left held or taken wrongly? The order of side effects (D5).
 - **Repeats and order.** The same request twice (double click, refresh, webhook redelivery, overlapping cron ticks, a retry under the same idempotency key) has one effect. Events out of order (webhook before the redirect, a status change after a refund). A timeout is not a failure: the call may have succeeded (D6). 429 with `Retry-After`. Time: hold expiry, backoff, DST, a frozen `Clock`.
 - **Instances.** Vercel runs many short-lived instances; dev and tests run one. Anything in memory (module state, a cache, a counter, a rate limiter, and every fake on staging) is per instance and lost on a cold start (D11). Two requests racing on one row need a unique constraint or a compare-and-set. Test it with two instances of the object, interleaved.
 - **Stages.** What differs on dev, staging and production (`environments`)? A new variable parses on all three and names itself when missing; a guardrail has a test per stage; nothing branches on `NODE_ENV`; nothing works only because dev is in-memory and seeded.
 - **Dependency failure.** For each outside call touched (Zulex, Stripe, Resend, Postgres, Storage): it fails, times out, answers 4xx with no body (the spec defines none), or returns an unexpected shape. What does the customer see, what is stored, what is logged, is money left wrong? Do the fake and the real adapter still agree, both passing the port's contract?
-- **Secrets and privacy.** Security codes and the `X-Api-Key` appear in no log, page, email, error message, Stripe metadata, fixture or client chunk; status tokens appear in logs only in dev. A new route authenticates (cron bearer, Stripe signature over the raw body, token lookup) and answers "unknown" and "not yours" alike. Anything guessable is rate-limited, and a per-instance limit does not count (Instances). Store only what is needed.
+- **Secrets and privacy.** Security codes and the `X-Api-Key` appear in no log, page, email, error message, Stripe metadata, fixture or client chunk; status tokens appear in logs only in dev. A new route authenticates (cron bearer, the provider's signature over the raw body for the Stripe and identity webhooks, token lookup) and answers "unknown" and "not yours" alike. Anything guessable is rate-limited, and a per-instance limit does not count (Instances). Store only what is needed.
 - **Data.** Runs on a table that already has rows (nullable, default, backfill); `down.sql` reverses it; running it twice is safe; the seed stays idempotent and satisfies the new constraints; codes stay encrypted at rest.
 - **UI states.** Loading, empty, error, success, disabled, and pending (double submit). Back, refresh and a deep link mid-funnel; the browser's back button after payment. Long German words and error messages, 320 px wide, keyboard only, screen-reader names, focus after a failed submit, reduced motion.
 - **Docs and neighbours.** Code and `docs/launch-plan.md` still agree; if behaviour changed, change the doc that states it in the same PR (the launch plan wins). Every fact you wrote in a doc is checked against the code. Nothing was removed that something else relied on, and every place that repeats the rule (email templates, status mapping, seed, fixtures) moved with it.
@@ -83,7 +83,7 @@ npm test -- --ci
 
 All suites pass in both projects (`jsdom` and `node`). While iterating, run one file: `npm test -- path/to/file.test.ts`, but finish on the full suite.
 
-- Read the summary, not the exit code. Without `TEST_DATABASE_URL` the Postgres suites report as **skipped** (`2 skipped` suites) and the run still exits 0. If the change touches persistence, that is a step 6 run, not a pass.
+- Read the summary, not the exit code. Without `TEST_DATABASE_URL` the Postgres suites report as **skipped** (`3 skipped` suites) and the run still exits 0. If the change touches persistence, that is a step 6 run, not a pass.
 - New logic or a fix has a test, and you watched it fail before the code made it pass (`test-driven-development`). A test you never saw fail proves nothing.
 - Every edge from step 2 that logic can answer has a test, the failure path included. Read your new tests as a reviewer would: they assert what the caller observes; fixtures pass the same zod schemas as production input; no real sleeps or wall clock; no real security code or token as a fixture value; no snapshot of a component tree (CLAUDE.md Testing).
 - Code with shared state, time or ordering: rerun its file a few times with `npm test -- path/to/file.test.ts --randomize`. It shuffles the tests, so state leaking between them shows up.
@@ -122,7 +122,7 @@ ZULEX_API_KEY=ci-canary-zulex-api-key-must-not-ship npm run build \
 
 The same env as CI. Shell variables override `.env.local`, so the build proves the staging configuration parses, not your local one. It catches what the dev server forgives: `server-only` imports reaching a client component, prerender errors, and a server secret leaking into `.next/static`. A canary hit is a security failure, not a flaky step. `next build` writes to `.next`, `next dev` to `.next/dev`, so it can run beside a dev server. Then read what it printed:
 
-- **The route table.** `/`, `/agb`, `/datenschutz` and `/impressum` may be `○` (static). Everything that shows an order or takes a request (`/status/[token]`, `/deregister*`, `/api/*`) is `ƒ`. A `○` there is a personal page that could be cached and served to someone else. Place any route your change created on one side or the other.
+- **The route table.** `/`, `/agb`, `/datenschutz`, `/impressum` and `/status/link-anfordern` (a form with no order data) may be `○` (static). Everything that shows an order or takes a request (`/status/[token]`, `/deregister*`, `/api/*`) is `ƒ`. A `○` there is a personal page that could be cached and served to someone else. `/register` and `/register/bestaetigung` are `ƒ` (`/register` reads the stage's `SERVICES_ON_SALE` per request and 404s where it does not list `newRegistration`; the confirmation page always exists). `/` is `○`: its cards take the setting at build. Place any route your change created on one side or the other.
 - No new warning.
 - **A dependency change** (`package.json`): `npm ci --dry-run` succeeds. CI installs with `npm ci`, which refuses a lockfile out of sync with `package.json`; a local `npm install` forgives it.
 
@@ -139,9 +139,9 @@ If one is already running (`.next/dev/lock` holds its PID and URL), reuse it. Th
 - `preview_logs`: `✓ Ready`, and no error, warning, or stack trace. `instrumentation.ts` builds the container at boot, so a clean start proves the dev env parses.
 - Every route answers, and an unknown one 404s:
   ```bash
-  for p in / /agb /datenschutz /impressum /deregister /status/seed-status-link-submitted-to-kba /does-not-exist; do echo "$(curl -s -o /dev/null -w '%{http_code}' localhost:3000$p) $p"; done
+  for p in / /agb /datenschutz /impressum /deregister /status/link-anfordern /status/seed-status-link-submitted-to-kba /does-not-exist; do echo "$(curl -s -o /dev/null -w '%{http_code}' localhost:3000$p) $p"; done
   ```
-  The status link is one the dev seed opens. `/api/webhooks/stripe` and `/api/internal/poll` are exercised by the integration tests, not here. Add any route your change created.
+  The status link is one the dev seed opens. `/register` 404s where `SERVICES_ON_SALE` does not list `newRegistration` (the default), so it is not in the loop unless the setting is set for the boot. `/api/webhooks/stripe`, `/api/webhooks/identity`, `/api/internal/poll` and `/api/internal/report` are exercised by the integration tests, not here. Add any route your change created.
 - If the change touched a route handler or server action, call it: a correct request, missing and wrong credentials, a malformed body, and the same request twice. Check the status and body each time, and that the second call does not repeat the effect.
 - `read_console_messages` with `onlyErrors: true`: empty. No hydration mismatch, no React key warning.
 - Logs show no security code and no `X-Api-Key`. Status links appear only because this is dev (CLAUDE.md Non-negotiables).
@@ -166,7 +166,7 @@ Skip when nothing rendered changed. Otherwise, on the pages you touched:
 Cheap greps for rules the tests don't fully cover:
 
 ```bash
-grep -rnE "from ['\"](stripe|@stripe/|resend|@supabase/)" app src | grep -v "^src/adapters/" | grep -v "^app/(funnel)/deregister/_components/stripe/"   # vendor outside its adapter: must be empty; Stripe's browser SDK has that one folder, fenced by lint
+grep -rnE "from ['\"](stripe|@stripe/|resend|react-email|@supabase/|pg['\"])" app src | grep -v "^src/adapters/" | grep -v "^app/(funnel)/_components/stripe/"   # vendor outside its adapter: must be empty; Stripe's browser SDK has that one folder, fenced by lint
 grep -rn "NEXT_PUBLIC_" app src | grep -v NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY                  # only that one may be public
 grep -rnE "from ['\"](@/src/adapters|@/app|\.\./\.\./adapters)" src/core                        # core depends on nothing outward
 grep -rnE "^(export )?(let|var) |= new (Map|WeakMap)\(" app src | grep -v "\.test\." | grep -v "/fake/" | grep -v "^src/config/container.ts"   # module state is per Vercel instance (step 2, Instances)
@@ -189,7 +189,7 @@ When unsure, run all of it.
 
 ## Reporting
 
-State what ran and how it ended, with numbers: "lint clean, typecheck clean, `<n>` suites / `<m>` tests pass with none skipped (Postgres included), build ok, canary absent, status and API routes dynamic, dev boot clean, 6 routes 200." Then the edges: "`<n>` worked out: `<a>` proven by tests (names), `<b>` checked by hand (which check), `<c>` to confirm on staging (what)." For a failure, quote the output and say whether you fixed it. Name every skipped step and why; Postgres suites that skipped are a skipped step.
+State what ran and how it ended, with numbers: "lint clean, typecheck clean, `<n>` suites / `<m>` tests pass with none skipped (Postgres included), build ok, canary absent, status and API routes dynamic, dev boot clean, 7 routes 200." Then the edges: "`<n>` worked out: `<a>` proven by tests (names), `<b>` checked by hand (which check), `<c>` to confirm on staging (what)." For a failure, quote the output and say whether you fixed it. Name every skipped step and why; Postgres suites that skipped are a skipped step.
 
 The loop runs on fakes and stubbed networks in one process. It cannot prove live Zulex, Stripe or Resend behaviour beyond their test doubles, several Vercel instances at once, or the cron schedule. Say which of those the change touches and what to check on staging. Never say "should work": if a step didn't run or an edge has no proof, the change isn't verified.
 

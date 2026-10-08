@@ -22,8 +22,8 @@ const VENDORS = [
 }));
 
 // Stripe's browser SDKs are UI, so they cannot live in an adapter; they get one
-// folder of their own in the funnel instead.
-const STRIPE_UI_FOLDER = "app/(funnel)/deregister/_components/stripe";
+// folder of their own, shared by every funnel, instead.
+const STRIPE_UI_FOLDER = "app/(funnel)/_components/stripe";
 const STRIPE_UI = {
   group: ["@stripe/*"],
   message: `Stripe's browser SDK lives in ${STRIPE_UI_FOLDER}/ only.`,
@@ -121,6 +121,18 @@ const eslintConfig = defineConfig([
     files: ["app/**/*.{ts,tsx}"],
     rules: {
       "no-restricted-imports": restrict({ paths: [RAW_CN], patterns: [CONCRETE_ADAPTERS] }),
+    },
+  },
+  {
+    // A funnel handles what the customer typed as plain strings and sends it to a server action, which parses it
+    // into secrets. Nothing under app/ or src/ui/ has a reason to read a `Secret`, and a client component that
+    // did would ship the value in the bundle: only an adapter reveals one, to send it or to store it.
+    files: ["app/**/*.{ts,tsx}", "src/ui/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-syntax": ["error", {
+        selector: "CallExpression[callee.property.name='reveal']",
+        message: "Only an adapter reveals a Secret, to send or store it. The funnel passes what the customer typed on as a plain string.",
+      }],
     },
   },
   {

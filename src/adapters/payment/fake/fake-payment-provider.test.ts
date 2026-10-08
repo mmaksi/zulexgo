@@ -1,8 +1,8 @@
 import { anApplication } from "@/tests/fixtures/applications"
-import { Money } from "@/src/core/domain/money"
-import { HoldExpired } from "@/src/core/errors/hold-expired"
-import type { Clock } from "@/src/core/ports/clock"
-import { paymentProviderContract } from "@/src/core/ports/payment-provider.contract"
+import { Money } from "@/src/core/domain/payment/money"
+import { HoldExpired } from "@/src/core/errors/payment/hold-expired"
+import type { Clock } from "@/src/core/ports/clock/clock"
+import { paymentProviderContract } from "@/src/core/ports/payment/payment-provider.contract"
 import { FakePaymentProvider } from "./fake-payment-provider"
 
 /** Adapters may not import each other, so this test keeps its own movable clock. */
@@ -28,7 +28,7 @@ describe("FakePaymentProvider hold expiry, driven by the clock", () => {
     const { clock, advance } = movableClock(new Date("2026-03-01T09:00:00.000Z"))
     const provider = new FakePaymentProvider(clock)
     const { reference, email } = anApplication()
-    const { paymentId } = await provider.createPayment({ reference, amount: Money.ofCents(6999), email })
+    const { paymentId } = await provider.createPayment({ reference, service: "deregistration", amount: Money.ofCents(6999), email })
     await provider.customerPays(paymentId, "card")
 
     expect((await provider.getPayment(paymentId)).holdExpiresAt).toEqual(new Date("2026-03-08T09:00:00.000Z"))

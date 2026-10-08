@@ -1,14 +1,15 @@
 import Link from "next/link"
 import { ArrowRight } from "lucide-react"
-import { formatEuros } from "@/src/core/domain/money"
+import { isOrderable, type OrderableService, type Service } from "@/src/core/domain/application/service"
+import { formatEuros } from "@/src/core/domain/payment/money"
 import {
   CARBON_SURCHARGE,
   FINE_DUST_STICKER_PRICE,
   PLATE_PRICE,
   PLATE_SHIPPING,
   SERVICE_PRICES,
-  type Service,
-} from "@/src/core/domain/pricing"
+} from "@/src/core/domain/payment/pricing"
+import { FUNNELS } from "@/app/_components/funnels"
 import { Badge } from "@/src/ui/badge"
 import { buttonLink } from "@/src/ui/button"
 import {
@@ -22,51 +23,59 @@ import {
 import { Section, SectionHeading } from "@/src/ui/section"
 
 /**
- * prd.md §3 — the MVP sells de-registration only; every other service is
- * visible but disabled, so the roadmap is legible without being clickable.
- * site-contract.md §2.1 — title <=30, description <=90, CTA label <=20 chars.
+ * prd.md §3 — a card is actionable only for a service on sale (`SERVICES_ON_SALE`, per stage); every
+ * other service is visible but disabled, so the roadmap is legible without being clickable.
+ * site-contract.md §2.1 — title <=30, description <=90 chars.
  * Prices come from the price list, so a card can never quote what the
  * checkout does not charge.
  */
-const SERVICES: { service: Service; title: string; description: string; available: boolean }[] = [
+const SERVICES: { service: Service; title: string; description: string }[] = [
   {
     service: "deregistration",
     title: "Abmeldung",
     description:
       "Fahrzeug offiziell außer Betrieb setzen — bei Verkauf, Verschrottung oder Export.",
-    available: true,
   },
   {
     service: "newRegistration",
     title: "Neuzulassung",
     description:
-      "Neues Fahrzeug erstmals anmelden. Kennzeichen bestellen Sie auf Wunsch dazu.",
-    available: false,
+      "Neues Fahrzeug erstmals zulassen — ohne Gang zur Zulassungsstelle.",
   },
   {
     service: "reRegistration",
     title: "Wiederzulassung",
     description:
       "Abgemeldetes Fahrzeug wieder zulassen — ohne Gang zur Zulassungsstelle.",
-    available: false,
   },
   {
     service: "changeOfKeeper",
     title: "Ummeldung",
     description:
       "Fahrzeug auf einen neuen Halter ummelden — ohne Gang zur Zulassungsstelle.",
-    available: false,
   },
   {
     service: "addressChange",
     title: "Adressänderung",
     description:
       "Neue Anschrift in den Fahrzeugpapieren eintragen — ohne Termin.",
-    available: false,
   },
 ]
 
-export function ServiceSelection() {
+export function ServiceSelection({
+  servicesOnSale,
+  betaServices = [],
+}: {
+  servicesOnSale: readonly OrderableService[]
+  /** The services on sale to invited customers only: they stay linked, since an invited customer starts from here. */
+  betaServices?: readonly OrderableService[]
+}) {
+  const cards = SERVICES.map((card) => ({
+    ...card,
+    funnel: isOrderable(card.service) && servicesOnSale.includes(card.service) ? FUNNELS[card.service] : undefined,
+    inBeta: isOrderable(card.service) && betaServices.includes(card.service),
+  }))
+
   return (
     <Section id="leistungen" className="bg-white">
       <SectionHeading
@@ -76,12 +85,12 @@ export function ServiceSelection() {
       />
 
       <ul className="grid gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 xl:grid-cols-5">
-        {SERVICES.map((service) => (
+        {cards.map((service) => (
           <li key={service.service} className="flex">
             <Card
-              aria-disabled={!service.available || undefined}
+              aria-disabled={!service.funnel || undefined}
               className={
-                service.available
+                service.funnel
                   ? "relative flex-1 transition-[border-color,box-shadow] hover:border-grau-bright hover:shadow-elev-1"
                   : "flex-1 bg-bg-blue"
               }
@@ -92,6 +101,11 @@ export function ServiceSelection() {
 
               <CardContent className="flex-1">
                 <CardDescription>{service.description}</CardDescription>
+                {service.funnel && service.inBeta ? (
+                  <Badge variant="secondary" className="mt-4">
+                    Nur mit Einladung
+                  </Badge>
+                ) : null}
               </CardContent>
 
               {/* The price and the action slot are the same height in every
@@ -101,14 +115,14 @@ export function ServiceSelection() {
                   {formatEuros(SERVICE_PRICES[service.service])}
                 </p>
                 <div className="flex min-h-12 w-full items-center">
-                  {service.available ? (
+                  {service.funnel ? (
                     // The link stretches over the card, so the whole card is
                     // the click target its hover state promises (§5.3).
                     <Link
-                      href="/deregister"
+                      href={service.funnel.href}
                       className={buttonLink({ className: "w-full after:absolute after:inset-0" })}
                     >
-                      Jetzt abmelden
+                      {service.funnel.label}
                       <ArrowRight aria-hidden="true" />
                     </Link>
                   ) : (

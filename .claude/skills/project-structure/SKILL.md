@@ -16,9 +16,14 @@ Every folder has one purpose and one allowed set of dependencies. If you cannot 
 ```
 app/                    Next.js App Router. Routing, layouts, pages, route handlers ONLY.
   (marketing)/          Route group: landing + legal pages. No URL segment.
-  (funnel)/             Route group: the de-registration funnel.
-  status/[token]/       Account-free status dashboard.
-  api/                  Route handlers — webhooks and client-callable endpoints.
+  (funnel)/             Route group: the funnels, one folder each (`deregister/`, `register/`). `_components/` holds
+                        what every funnel shares: the step frame, the payment panel, the Stripe Payment Element
+                        and the payment driver.
+  status/               Account-free pages: the status dashboard (`[token]/`) and the request for a new
+                        link (`link-anfordern/`).
+  api/                  Route handlers: webhooks (`webhooks/stripe`, `webhooks/identity`), the scheduler's
+                        `internal/poll`, the operator's `internal/report` (both behind the cron secret), and any
+                        client-callable endpoint.
   _components/          App-level UI shared across route groups (header, footer, landing sections).
                         Underscore = never a route. A route group may keep its own `_components/`
                         for UI only it uses.
@@ -26,16 +31,33 @@ app/                    Next.js App Router. Routing, layouts, pages, route handl
 
 src/
   core/                 The application. No framework, no SDK, no I/O. Pure TypeScript.
-    domain/             Entities and value objects: LicencePlate, SecurityCode, Application, Money.
-    ports/              Interfaces the core requires of the outside world. See `external-services`.
-    use-cases/          One file per business operation: submit-to-kba.ts, advance-status.ts.
-    errors/             Domain error types the whole app throws and maps.
+    domain/             Entities and value objects, one folder per area: application/ (Application,
+                        status machine), vehicle/ (LicencePlate, Vin, SecurityCode), payment/ (Money,
+                        pricing, hold and refund policy), registration/ (KBA error algorithm, poll
+                        schedule), customer/, rate-limit/. `secret.ts` and `validate.ts` stay at the root.
+    ports/              Interfaces the core requires of the outside world, one folder per capability
+                        with the same names as `adapters/`: payment/, registration/, repository/,
+                        mail/, storage/, identity/, clock/, tokens/, rate-limit/. Each holds the port
+                        and its `*.contract.ts`. See `external-services`.
+    use-cases/          One file per business operation, grouped by the part of the order's life it
+                        belongs to: checkout/, payment/, registration/ (filing, polling, failures),
+                        identity/ (starting and checking a customer's identity verification),
+                        application/ (cancel, correct), status/ (what the customer reads), monitoring/ (the numbers an operator
+                        reads, counts only), mail/.
+                        `dependencies.ts` stays at the root.
+    errors/             Domain error types the whole app throws and maps, in the same folders as the
+                        area that throws them. `domain-error.ts` and `validation-error.ts` stay at
+                        the root.
   adapters/             Implementations of ports. One folder per capability, then per vendor.
-    payment/stripe/     |  payment/fake/
-    registration/zulex/ |  registration/fake/
+    payment/stripe/      |  payment/fake/
+    registration/zulex/  |  registration/fake/
     repository/postgres/ |  repository/fake/
-    mail/resend/ storage/supabase/ identity/verimi/ clock/ tokens/
-  config/               Env parsing (zod), the composition root, environment detection.
+    mail/resend/         |  mail/console/, mail/fake/
+    storage/supabase/    |  storage/fake/
+    identity/fake/       (Verimi, added later, becomes identity/verimi/)
+    rate-limit/fake/     (its Postgres adapter sits in repository/postgres/, the one folder `pg` may be imported in)
+    clock/system/, clock/fake/  |  tokens/crypto/, tokens/fake/
+  config/               Env parsing and guardrails (zod), the composition root, the runner behind the `db:*` commands.
   ui/                   Design-system components, shared across routes. See `docs/design-standard.md`.
   hooks/                Shared React hooks (the Shadcn CLI writes here; see components.json).
   lib/                  Genuinely generic helpers with no domain knowledge. Keep small.
@@ -47,7 +69,9 @@ db/
 tests/
   integration/          Cross-module flow tests, named for the flow.
   fixtures/             Shared payloads. Never duplicate a Zulex payload inline.
-  msw/                  Network-boundary handlers for Zulex and Stripe.
+  msw/                  Network-boundary handlers for Zulex, Stripe, Resend and Supabase Storage.
+
+scripts/                Command-line entry points: `db.ts` (the `db:*` npm scripts), `vercel-build`, `git-start`.
 
 docs/                   Authoritative specs. Listed in CLAUDE.md.
 public/                 Static assets. Stays at repo root (Next.js requirement).
@@ -59,9 +83,9 @@ Config files (`package.json`, `next.config.ts`, `tsconfig.json`, `.env.*`) stay 
 
 | Layer | May import | Must never import |
 |---|---|---|
-| `app/` | `src/core/**`, `src/ui/**`, `src/config/**`, `src/lib/**`; Stripe's browser SDK (`@stripe/*`) in `app/(funnel)/deregister/_components/stripe/` only | any other vendor SDK, `src/adapters/**` directly |
+| `app/` | `src/core/**`, `src/ui/**`, `src/config/**`, `src/lib/**`; Stripe's browser SDK (`@stripe/*`) in `app/(funnel)/_components/stripe/` only | any other vendor SDK, `src/adapters/**` directly |
 | `src/core/` | `src/core/**` only | anything in `app/`, `adapters/`, `ui/`, `next/*`, `react`, any SDK |
-| `src/adapters/` | `src/core/ports/**`, `src/core/domain/**`, its own SDK, siblings via `./` | other adapters, `app/`, `src/ui/`, `src/config/` |
+| `src/adapters/` | `src/core/ports/**`, `src/core/domain/**`, `src/core/errors/**`, its own SDK, siblings via `./` | other adapters, `app/`, `src/ui/`, `src/config/` |
 | `src/config/` | everything (it is the composition root) | — |
 | `src/ui/` | `src/ui/**`, `src/lib/**`, `react`, UI libraries (`@base-ui/react`, `class-variance-authority`, `lucide-react`) | `src/core/use-cases/**`, adapters, vendor SDKs, the bare `cn` package |
 
@@ -72,7 +96,8 @@ Cross-folder imports go through `@/`; a relative `../` import is a lint error, b
 ## Naming
 
 - Files and folders: `kebab-case.ts`. One primary export per file, named after the file.
-- Use cases read as verbs: `submit-deregistration.ts`, not `deregistrationService.ts`.
+- Use cases read as verbs: `submit-checkout.ts`, not `checkoutService.ts`.
+- Inside `src/core/`, a folder is an area or a service (`payment/`, `registration/`), not a role. Reuse the area's name in every layer, so `payment` means the same folder in `domain/`, `ports/`, `errors/`, `use-cases/` and `adapters/`. A file that touches several areas goes where its operation belongs (`submit-to-kba` is `registration/`, though it captures the payment).
 - Ports read as roles: `payment-provider.ts`, not `stripe-service.ts`.
 - Tests sit next to their subject (`x.ts` → `x.test.ts`); integration tests live in `tests/integration/`.
 - Path alias: `@/*` maps to the repo root, so `@/src/core/...` and `@/app/...`.
