@@ -16,14 +16,18 @@ Every folder has one purpose and one allowed set of dependencies. If you cannot 
 ```
 app/                    Next.js App Router. Routing, layouts, pages, route handlers ONLY.
   (marketing)/          Route group: landing + legal pages. No URL segment.
-  (funnel)/             Route group: the funnels, one folder each (`deregister/`, `register/`). `_components/` holds
-                        what every funnel shares: the step frame, the payment panel, the Stripe Payment Element
-                        and the payment driver.
-  status/               Account-free pages: the status dashboard (`[token]/`) and the request for a new
-                        link (`link-anfordern/`).
+  (funnel)/             Route group: the funnels, one folder each (`deregister/`, `register/`), each with its
+                        `page.tsx`, `actions.ts`, `requests.ts`, `_components/` and `bestaetigung/` (the
+                        confirmation page). Beside them sit the modules every funnel shares: `_components/`
+                        (the step frame, the payment panel, the Stripe Payment Element, the payment driver, the
+                        invite form) and the server-side rules of being on sale and in beta (`on-sale.ts`,
+                        `beta-gate.tsx`, `redeem-invite.ts`, `invite-cookie.ts`), of rate limiting
+                        (`over-limit.ts`, `too-many-attempts.ts`) and of what a failure may log (`failed-because.ts`).
+  status/               Account-free pages: the status dashboard (`[token]/`, with the document download in
+                        `documents/[documentId]/`) and the request for a new link (`link-anfordern/`).
   api/                  Route handlers: webhooks (`webhooks/stripe`, `webhooks/identity`), the scheduler's
-                        `internal/poll`, the operator's `internal/report` (both behind the cron secret), and any
-                        client-callable endpoint.
+                        `internal/poll`, the operator's `internal/report` (both behind the cron secret, checked
+                        by `internal/bearer.ts`), and any client-callable endpoint.
   _components/          App-level UI shared across route groups (header, footer, landing sections).
                         Underscore = never a route. A route group may keep its own `_components/`
                         for UI only it uses.
@@ -59,7 +63,8 @@ src/
     clock/system/, clock/fake/  |  tokens/crypto/, tokens/fake/
   config/               Env parsing and guardrails (zod), the composition root, the runner behind the `db:*` commands.
   ui/                   Design-system components, shared across routes. See `docs/design-standard.md`.
-  hooks/                Shared React hooks (the Shadcn CLI writes here; see components.json).
+  hooks/                Shared React hooks (the Shadcn CLI writes here; see components.json). React and
+                        `src/lib/` only.
   lib/                  Genuinely generic helpers with no domain knowledge. Keep small.
 
 db/
@@ -67,23 +72,27 @@ db/
   seed/                 Mock data for dev and staging, never production. See `database-migrations`.
 
 tests/
-  integration/          Cross-module flow tests, named for the flow.
+  integration/          Cross-module flow tests, named for the flow. `flow-harness.ts` (every adapter a fake)
+                        and `network-harness.ts` (the real Stripe and Zulex adapters over MSW) build the
+                        container the flows share.
   fixtures/             Shared payloads. Never duplicate a Zulex payload inline.
   msw/                  Network-boundary handlers for Zulex, Stripe, Resend and Supabase Storage.
 
 scripts/                Command-line entry points: `db.ts` (the `db:*` npm scripts), `vercel-build`, `git-start`.
 
-docs/                   Authoritative specs. Listed in CLAUDE.md.
+docs/                   Specs, plans and `runbooks/` (operating a stage). The authoritative ones are listed in CLAUDE.md.
 public/                 Static assets. Stays at repo root (Next.js requirement).
 ```
 
-Config files (`package.json`, `next.config.ts`, `tsconfig.json`, `.env.*`) stay at the repo root.
+Config files (`package.json`, `next.config.ts`, `tsconfig.json`, `vercel.json`, `components.json`, `.env.*`) and Next.js's `instrumentation.ts` stay at the repo root.
+
+An entry point reachable from outside, a route handler or a server action, comes in two files: a thin one that reads the container (`route.ts`, `actions.ts`) and a sibling that takes its dependencies as arguments (`handle.ts`, `requests.ts`). The sibling is what the tests drive, with no server and no container. Keep the logic out of the thin file.
 
 ## Dependency rules
 
 | Layer | May import | Must never import |
 |---|---|---|
-| `app/` | `src/core/**`, `src/ui/**`, `src/config/**`, `src/lib/**`; Stripe's browser SDK (`@stripe/*`) in `app/(funnel)/_components/stripe/` only | any other vendor SDK, `src/adapters/**` directly |
+| `app/` | `src/core/**`, `src/ui/**`, `src/hooks/**`, `src/config/**`, `src/lib/**`; Stripe's browser SDK (`@stripe/*`) in `app/(funnel)/_components/stripe/` only | any other vendor SDK, `src/adapters/**` directly |
 | `src/core/` | `src/core/**` only | anything in `app/`, `adapters/`, `ui/`, `next/*`, `react`, any SDK |
 | `src/adapters/` | `src/core/ports/**`, `src/core/domain/**`, `src/core/errors/**`, its own SDK, siblings via `./` | other adapters, `app/`, `src/ui/`, `src/config/` |
 | `src/config/` | everything (it is the composition root) | — |
@@ -110,6 +119,7 @@ Verified against `node_modules/next/dist/docs/`:
 - `_folder` (underscore) is explicitly non-routable — use it for route-local components.
 - `(group)` route groups organise without adding a URL segment.
 - **`src/app` is ignored when `app/` exists at the root.** This project keeps `app/` at the root, so `src/` is an ordinary source folder. Do not move `app/` into `src/` without also updating the alias config.
+- `instrumentation.ts` sits in the root directory next to `app/`, never inside `app/`. It builds the container once per server instance so a misconfigured deploy refuses to start.
 
 ## When something does not fit
 
