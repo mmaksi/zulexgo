@@ -120,6 +120,7 @@ function createRepository(env: Env): ApplicationRepository {
   return new PostgresApplicationRepository({
     connectionString: env.DATABASE_URL!,
     encryptionKey: env.CODES_ENCRYPTION_KEY!,
+    ca: env.DATABASE_CA_CERT,
   })
 }
 
@@ -134,7 +135,7 @@ function createIdentity(env: Env): IdentityVerification {
 /** Counts must be shared by every instance, so the limiter lives wherever the repository does: in memory only while the repository is. */
 function createRateLimiter(env: Env, clock: Clock): RateLimiter {
   if (env.REPOSITORY_DRIVER === "fake") return new InMemoryRateLimiter(clock)
-  return new PostgresRateLimiter({ connectionString: env.DATABASE_URL!, secret: env.CODES_ENCRYPTION_KEY!, clock })
+  return new PostgresRateLimiter({ connectionString: env.DATABASE_URL!, secret: env.CODES_ENCRYPTION_KEY!, clock, ca: env.DATABASE_CA_CERT })
 }
 
 let container: Container | undefined

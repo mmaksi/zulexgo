@@ -1,27 +1,53 @@
 import { failedBecause } from "@/app/(funnel)/failed-because"
+import { overLimit } from "@/app/(funnel)/over-limit"
 import type { StartCheckoutResult } from "@/app/(funnel)/_components/checkout-panel"
 import { toRequest } from "@/app/_components/vehicle-data"
+import { RATE_LIMITS } from "@/src/core/domain/rate-limit/rate-limits"
 import { BetaFull } from "@/src/core/errors/application/beta-full"
 import { ConsentRequired } from "@/src/core/errors/application/consent-required"
 import { InviteRequired } from "@/src/core/errors/application/invite-required"
 import { OpenApplicationExists } from "@/src/core/errors/application/open-application-exists"
 import { ValidationError } from "@/src/core/errors/validation-error"
+import { checkEligibility } from "@/src/core/use-cases/checkout/check-eligibility"
 import { submitCheckout } from "@/src/core/use-cases/checkout/submit-checkout"
 import type { Dependencies } from "@/src/core/use-cases/dependencies"
 import type { CheckoutActions } from "./_components/checkout-actions"
 
 /**
- * What the de-registration funnel's checkout action does. Reachable by any POST, so every input is
- * treated as untrusted and validated by the use case. Failures are logged by name only: the input holds
- * security codes.
+ * What the de-registration funnel's server actions do. Reachable by any POST, so each call is counted
+ * against the caller's address first (an address over its limit moves nothing, and so does a limiter that
+ * cannot answer: it fails closed, as unavailable), and every input is treated as untrusted and validated
+ * by the use case. Failures are logged by name only: the input holds security codes.
  */
+
+export async function checkPrefix(
+  deps: Pick<Dependencies, "registration" | "rateLimiter">,
+  headers: Headers,
+  prefix: string,
+): ReturnType<CheckoutActions["checkEligibility"]> {
+  try {
+    const over = await overLimit(deps, headers, "deregister-eligibility", RATE_LIMITS.eligibilityLookup)
+    if (over) return { ok: false, reason: "limited", ...over }
+
+    return { ok: true, ...(await checkEligibility(deps, prefix)) }
+  } catch (error) {
+    if (error instanceof ValidationError) return { ok: false, reason: "invalidPrefix" }
+    failedBecause("eligibility check", error)
+    return { ok: false, reason: "unavailable" }
+  }
+}
+
 export async function startDeregistrationCheckout(
   deps: Dependencies,
+  headers: Headers,
   { plateCount, vehicle, consents, acknowledgedDuplicate }: Parameters<CheckoutActions["startCheckout"]>[0],
   /** The code the customer redeemed when the service was in beta, as the browser holds it: untrusted. */
   invite?: string,
 ): Promise<StartCheckoutResult> {
   try {
+    const over = await overLimit(deps, headers, "deregister-checkout", RATE_LIMITS.checkout)
+    if (over) return { ok: false, reason: "limited", ...over }
+
     const { reference, clientSecret } = await submitCheckout(deps, {
       service: "deregistration",
       request: toRequest(vehicle, plateCount),

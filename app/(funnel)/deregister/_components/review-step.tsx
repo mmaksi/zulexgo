@@ -51,6 +51,7 @@ export function ReviewStep({
       ]}
       payment={payment}
       returnPath="/deregister/bestaetigung"
+      orderKey={JSON.stringify([plateCount, vehicle])}
       startCheckout={(checkout) => actions.startCheckout({ plateCount, vehicle, ...checkout })}
       completeSimulatedPayment={actions.completeSimulatedPayment}
       onPaid={onPaid}

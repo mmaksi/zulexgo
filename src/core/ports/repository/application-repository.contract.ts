@@ -249,6 +249,17 @@ export function applicationRepositoryContract(name: string, makeSubject: () => A
       })
     })
 
+    // Launch plan Q22, provisional: an order that has ended is never filed again, so its security codes are not kept.
+    it("stores a de-registration that has ended without its security codes and reads it back so, plate and VIN kept", async () => {
+      const created = await repository.create(anApplication({ status: "submitted_to_kba" }))
+
+      await repository.update(applyEvent(created, "kbaCompleted", minutes(1)))
+      const { request: stored } = (await repository.get(created.reference))!
+
+      expect(stored).not.toHaveProperty("codes")
+      expect(stored).toMatchObject({ service: "deregistration", vin: FAKE_REQUEST.vin, licencePlate: FAKE_REQUEST.licencePlate })
+    })
+
     describe("a Neuzulassung order", () => {
       const request = (overrides: object) => parseNewRegistrationRequest({ ...FAKE_NEW_REGISTRATION, ...overrides }, FAKE_NEW_REGISTRATION_NOW)
 

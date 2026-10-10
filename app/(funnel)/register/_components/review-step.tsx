@@ -66,6 +66,7 @@ export function ReviewStep({
       ]}
       payment={payment}
       returnPath="/register/bestaetigung"
+      orderKey={JSON.stringify(data)}
       startCheckout={(checkout) => actions.startCheckout({ data, ...checkout })}
       completeSimulatedPayment={actions.completeSimulatedPayment}
       onPaid={onPaid}

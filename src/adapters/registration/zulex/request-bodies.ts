@@ -1,4 +1,4 @@
-import type { DeregistrationRequest } from "@/src/core/domain/application/deregistration-request"
+import type { StoredDeregistrationRequest } from "@/src/core/domain/application/deregistration-request"
 import type { NewRegistrationRequest, StoredNewRegistrationRequest } from "@/src/core/domain/application/new-registration-request"
 import type { OrderableService, ServiceRequest } from "@/src/core/domain/application/service"
 import type { Correction, Corrections, NewRegistrationPatch } from "@/src/core/ports/registration/registration-gateway"
@@ -9,9 +9,11 @@ const GENDERS = { female: "FEMALE", male: "MALE", diverse: "DIVERSE", unspecifie
 
 /**
  * The create body of a de-registration. The front plate code is sent only for a two-plate vehicle.
- * Reserving the plate is out of scope for the MVP (founder decision).
+ * Reserving the plate is out of scope for the MVP (founder decision). An order that has ended has no codes, and
+ * is never filed again.
  */
-function deregistrationBody({ licencePlate, vin, codes }: DeregistrationRequest) {
+function deregistrationBody({ licencePlate, vin, codes }: StoredDeregistrationRequest) {
+  if (!codes) throw new Error("A de-registration without its security codes cannot be filed")
   return {
     licencePlate,
     vin,

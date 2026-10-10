@@ -10,6 +10,7 @@ import { TextField } from "@/app/_components/text-field"
 import type { PlateCount } from "@/app/_components/vehicle-data"
 import { Alert } from "@/src/ui/alert"
 import { Checkbox } from "@/src/ui/checkbox"
+import { tooManyAttempts } from "@/app/(funnel)/too-many-attempts"
 
 export interface Eligibility {
   plateCount: PlateCount
@@ -42,11 +43,13 @@ export function EligibilityStep({
     try {
       const result = await checkEligibility(prefix)
       if (!result.ok) {
-        setError(
-          result.reason === "invalidPrefix"
-            ? "Für dieses Ortskürzel finden wir keine Zulassungsstelle. Prüfen Sie die 1 bis 3 Buchstaben vor dem ersten Leerzeichen."
-            : "Die Zulassungsstelle ist gerade nicht zu erreichen. Bitte versuchen Sie es in ein paar Minuten noch einmal.",
-        )
+        if (result.reason === "limited") setError(tooManyAttempts(result.retryAfterMinutes))
+        else
+          setError(
+            result.reason === "invalidPrefix"
+              ? "Für dieses Ortskürzel finden wir keine Zulassungsstelle. Prüfen Sie die 1 bis 3 Buchstaben vor dem ersten Leerzeichen."
+              : "Die Zulassungsstelle ist gerade nicht zu erreichen. Bitte versuchen Sie es in ein paar Minuten noch einmal.",
+          )
         return
       }
       onEligible({ plateCount, prefix: result.prefix, ikfzStatus: result.ikfzStatus })
