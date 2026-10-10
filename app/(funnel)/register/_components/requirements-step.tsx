@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, type FormEvent } from "react"
+import { flushSync } from "react-dom"
 import type { IkfzStatus } from "@/src/core/domain/registration/registration-authority"
 import { Choice } from "@/app/(funnel)/_components/choice"
 import { TextField } from "@/app/_components/text-field"
@@ -72,9 +73,9 @@ export function RequirementsStep({
   const [checking, setChecking] = useState(false)
   const ready = REQUIREMENTS.every(({ key }) => answers[key] === true) && postcode.trim() !== ""
 
-  /** The error has no live role, so focus moves to the field, as on any invalid field (site-contract §3). */
+  /** The error has no live role, so it is rendered before focus moves to the field, which then announces it (site-contract §3). */
   const refuse = (message: string) => {
-    setError(message)
+    flushSync(() => setError(message))
     document.getElementById(POSTCODE_ID)?.focus()
   }
 
