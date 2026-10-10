@@ -21,6 +21,18 @@ const commaList = (list: string) => list.split(",").map((entry) => entry.trim())
 
 const inviteCodes = (list: string) => commaList(list).map(normaliseInvite)
 
+const aesKey = z.string().refine((key) => Buffer.from(key, "base64").length === CODES_KEY_BYTES, `must be ${CODES_KEY_BYTES} base64-encoded bytes for AES-256-GCM.`)
+
+// Read only, never written with: what an old key encrypted stays readable until `db reencrypt` rewrites it.
+const retiredKeys = z.string().default("").transform(commaList).pipe(z.array(aesKey))
+
+// Pasted on one line, the PEM's line breaks arrive as "\n" escapes, which TLS cannot read.
+const databaseCaCert = z
+  .string()
+  .startsWith("-----BEGIN CERTIFICATE-----", "must be the PEM certificate itself, not a file name.")
+  .transform((pem) => pem.replaceAll("\\n", "\n"))
+  .optional()
+
 const orderableService = z.custom<OrderableService>(isOrderable, { message: "is not a service an order can be made for." })
 
 const salesFields = {
@@ -64,13 +76,9 @@ const schema = z
     // DATABASE_URL is the transaction pooler (the app); DIRECT_DATABASE_URL the session one (db commands).
     DATABASE_URL: secret,
     DIRECT_DATABASE_URL: secret,
-    // Pasted on one line, the PEM's line breaks arrive as "\n" escapes, which TLS cannot read.
-    DATABASE_CA_CERT: z
-      .string()
-      .startsWith("-----BEGIN CERTIFICATE-----", "must be the PEM certificate itself, not a file name.")
-      .transform((pem) => pem.replaceAll("\\n", "\n"))
-      .optional(),
+    DATABASE_CA_CERT: databaseCaCert,
     CODES_ENCRYPTION_KEY: secret,
+    RETIRED_CODES_ENCRYPTION_KEYS: retiredKeys,
 
     SUPABASE_STORAGE_URL: z.url().optional(),
     SUPABASE_STORAGE_BUCKET: z.string().min(1).optional(),
@@ -291,3 +299,20 @@ export function parseSales(source: EnvSource): { servicesOnSale: OrderableServic
 }
 
 export const salesOfDeployment = () => parseSales(process.env)
+
+const keyRotationSchema = z.object({
+  DIRECT_DATABASE_URL: z.string().min(1),
+  DATABASE_CA_CERT: databaseCaCert,
+  CODES_ENCRYPTION_KEY: aesKey,
+  RETIRED_CODES_ENCRYPTION_KEYS: retiredKeys,
+})
+
+export type KeyRotation = z.output<typeof keyRotationSchema>
+
+// Only what re-encrypting needs, so an operator's shell does not have to hold every secret of the stage.
+export function parseKeyRotation(source: EnvSource): KeyRotation {
+  const result = keyRotationSchema.safeParse(withoutBlanks(source))
+
+  if (!result.success) throw environmentError(result.error)
+  return result.data
+}

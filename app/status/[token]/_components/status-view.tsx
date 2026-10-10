@@ -1,5 +1,6 @@
 import { Download } from "lucide-react"
 import Link from "next/link"
+import type { JSX } from "react"
 import { FUNNELS } from "@/app/_components/funnels"
 import { SUPPORT_EMAIL } from "@/src/core/domain/customer/contact"
 import type { CustomerStep } from "@/src/core/domain/application/customer-steps"
@@ -60,9 +61,7 @@ function describe(step: CustomerStep, view: View): { title: string; line?: strin
   }
   switch (step.outcome) {
     case "completed":
-      return view.service === "newRegistration"
-        ? { title: "Neuzulassung abgeschlossen", line: "Vorgang abgeschlossen", text: "Das KBA hat Ihre Neuzulassung bestätigt. Ihre Unterlagen finden Sie unten." }
-        : { title: "Abmeldung abgeschlossen", line: "Vorgang abgeschlossen", text: "Ihr Fahrzeug ist abgemeldet. Kfz-Steuer und Versicherung enden automatisch." }
+      return COMPLETED[view.service]
     case "failed_correctable":
       return { title: "Korrektur erforderlich", line: "Korrektur erforderlich", text: failureReason }
     case "failed_final":
@@ -76,12 +75,17 @@ function describe(step: CustomerStep, view: View): { title: string; line?: strin
   }
 }
 
+const COMPLETED: Record<View["service"], { title: string; line: string; text: string }> = {
+  deregistration: { title: "Abmeldung abgeschlossen", line: "Vorgang abgeschlossen", text: "Ihr Fahrzeug ist abgemeldet. Kfz-Steuer und Versicherung enden automatisch." },
+  newRegistration: { title: "Neuzulassung abgeschlossen", line: "Vorgang abgeschlossen", text: "Das KBA hat Ihre Neuzulassung bestätigt. Ihre Unterlagen finden Sie unten." },
+}
+
 const TITLES: Record<View["service"], string> = {
   deregistration: "Ihre Abmeldung",
   newRegistration: "Ihre Neuzulassung",
 }
 
-function Summary({ view }: { view: View }) {
+function Summary({ view }: { view: View }): JSX.Element {
   switch (view.service) {
     case "deregistration":
       return (
@@ -126,26 +130,33 @@ function Correction({ view, action }: { view: View; action: CorrectAction }) {
           ? "Korrigieren Sie Ihre Angaben. Wir prüfen Ihre Identität dann erneut. Das kostet nichts extra."
           : "Korrigieren Sie Ihre Angaben und reichen Sie den Antrag erneut ein. Das kostet nichts extra."}
       </p>
-      {view.service === "deregistration" ? (
-        <CorrectOrder action={action} plateCount={view.plateCount} />
-      ) : (
-        <CorrectNewRegistration action={action} ownerCorrectable={ownerCorrectable} />
-      )}
+      <CorrectionForm view={view} action={action} ownerCorrectable={ownerCorrectable} />
     </div>
   )
 }
 
-const DOCUMENT_LABELS: Record<DocumentKind, string> = {
-  confirmation: "Bestätigung der Abmeldung",
+function CorrectionForm({ view, action, ownerCorrectable }: { view: View; action: CorrectAction; ownerCorrectable: boolean }): JSX.Element {
+  switch (view.service) {
+    case "deregistration":
+      return <CorrectOrder action={action} plateCount={view.plateCount} />
+    case "newRegistration":
+      return <CorrectNewRegistration action={action} ownerCorrectable={ownerCorrectable} />
+  }
+}
+
+const CONFIRMATION_LABELS: Record<View["service"], string> = {
+  deregistration: "Bestätigung der Abmeldung",
+  newRegistration: "Bestätigung der Zulassung",
+}
+
+const DOCUMENT_LABELS: Record<Exclude<DocumentKind, "confirmation">, string> = {
   temporaryCertificate: "Vorläufiger Zulassungsnachweis",
   rejection: "Ablehnung",
   fee: "Gebührenbeleg",
   unknown: "Dokument",
 }
 
-const NEW_REGISTRATION_LABELS: Partial<Record<DocumentKind, string>> = { confirmation: "Bestätigung der Zulassung" }
-
-const documentLabel = (service: View["service"], kind: DocumentKind) => (service === "newRegistration" ? NEW_REGISTRATION_LABELS[kind] : undefined) ?? DOCUMENT_LABELS[kind]
+const documentLabel = (service: View["service"], kind: DocumentKind) => (kind === "confirmation" ? CONFIRMATION_LABELS[service] : DOCUMENT_LABELS[kind])
 
 export function StatusView({
   view,
@@ -274,6 +285,11 @@ function RefundInfo({ refund }: { refund: View["refund"] }) {
   )
 }
 
+const DOCUMENTS_HEADING: Record<View["service"], string> = {
+  deregistration: "Ihre Bestätigung",
+  newRegistration: "Ihre Unterlagen",
+}
+
 const NO_DOCUMENTS_YET: Record<View["service"], string> = {
   deregistration: "Die Bestätigung steht hier zum Download bereit, sobald sie vorliegt. Fehlt sie länger, schreiben Sie uns an",
   newRegistration: "Ihre Unterlagen stehen hier zum Download bereit, sobald sie vorliegen. Fehlen sie länger, schreiben Sie uns an",
@@ -298,7 +314,7 @@ function Documents({ view, documentHref }: { view: View; documentHref: (document
   return (
     <section aria-labelledby="status-documents" className="flex flex-col gap-4">
       <h2 id="status-documents" className="text-h4 text-grau-dark">
-        {view.service === "newRegistration" ? "Ihre Unterlagen" : "Ihre Bestätigung"}
+        {DOCUMENTS_HEADING[view.service]}
       </h2>
       {view.documents.length > 0 ? (
         <ul className="flex flex-col items-start gap-3">

@@ -1,8 +1,9 @@
-import { randomBytes } from "node:crypto"
+import { createHmac, randomBytes } from "node:crypto"
 import { join } from "node:path"
 import type { Clock } from "@/src/core/ports/clock/clock"
 import { rateLimiterContract } from "@/src/core/ports/rate-limit/rate-limiter.contract"
 import { Migrator, readMigrations } from "./migrator"
+import { createPool } from "./pool"
 import { PostgresRateLimiter } from "./postgres-rate-limiter"
 import { createTestDatabase, describeWithPostgres, type TestDatabase } from "./test-database"
 
@@ -15,7 +16,7 @@ function movableClock() {
 describeWithPostgres("PostgresRateLimiter", () => {
   let database: TestDatabase
   const secret = randomBytes(32).toString("base64")
-  const limiter = (clock: Clock) => new PostgresRateLimiter({ connectionString: database.url, secret, clock })
+  const limiter = (clock: Clock) => new PostgresRateLimiter({ pool: createPool(database.url), secret, clock })
 
   beforeAll(async () => {
     database = await createTestDatabase()
@@ -51,11 +52,21 @@ describeWithPostgres("PostgresRateLimiter", () => {
 
   it("hashes with its secret, so the same key under another secret is another row", async () => {
     const { clock } = movableClock()
-    const other = new PostgresRateLimiter({ connectionString: database.url, secret: randomBytes(32).toString("base64"), clock })
+    const other = new PostgresRateLimiter({ pool: createPool(database.url), secret: randomBytes(32).toString("base64"), clock })
     const limit = { max: 1, windowMs: 60_000 }
     await limiter(clock).consume("same-key", limit)
 
     expect((await other.consume("same-key", limit)).allowed).toBe(true)
+  })
+
+  it("signs with a key of its own, derived from the secret, never with the encryption key itself", async () => {
+    await limiter(movableClock().clock).consume("same-key", { max: 3, windowMs: 60_000 })
+
+    const stored = (await database.query("SELECT key_hash FROM rate_limits")).map((row) => row.key_hash)
+
+    expect(stored).toHaveLength(1)
+    expect(stored).not.toContain(createHmac("sha256", secret).update("same-key").digest("base64url"))
+    expect(stored).not.toContain(createHmac("sha256", Buffer.from(secret, "base64")).update("same-key").digest("base64url"))
   })
 
   it("forgets the counts of windows that ended long ago, so the table does not grow with every caller", async () => {

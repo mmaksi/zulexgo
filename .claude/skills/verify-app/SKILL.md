@@ -117,10 +117,10 @@ The last pair reverses and reapplies the newest migration with the seed's rows i
 APP_ENV=staging APP_BASE_URL=https://ci.example.test CRON_SECRET=ci-placeholder-cron-secret \
 PAYMENT_DRIVER=fake REGISTRATION_DRIVER=fake MAIL_DRIVER=console REPOSITORY_DRIVER=fake STORAGE_DRIVER=fake \
 ZULEX_API_KEY=ci-canary-zulex-api-key-must-not-ship npm run build \
-&& ! grep -rqF ci-canary-zulex-api-key-must-not-ship .next/static && echo "canary absent from client chunks"
+&& ! grep -rqF --exclude-dir=cache --exclude-dir=dev ci-canary-zulex-api-key-must-not-ship .next && echo "canary absent from the build"
 ```
 
-The same env as CI. Shell variables override `.env.local`, so the build proves the staging configuration parses, not your local one. It catches what the dev server forgives: `server-only` imports reaching a client component, prerender errors, and a server secret leaking into `.next/static`. A canary hit is a security failure, not a flaky step. `next build` writes to `.next`, `next dev` to `.next/dev`, so it can run beside a dev server. Then read what it printed:
+The same env as CI. Shell variables override `.env.local`, so the build proves the staging configuration parses, not your local one. It catches what the dev server forgives: `server-only` imports reaching a client component, prerender errors, and a server secret baked into the build (client chunks, or a prerendered page's HTML and RSC payload, served to every visitor). `.next/cache` (Turbopack's build cache, which stores the environment) and `.next/dev` are never served, so the grep skips them. A canary hit is a security failure, not a flaky step. `next build` writes to `.next`, `next dev` to `.next/dev`, so it can run beside a dev server. Then read what it printed:
 
 - **The route table.** `/`, `/agb`, `/datenschutz`, `/impressum` and `/status/link-anfordern` (a form with no order data) may be `○` (static). Everything that shows an order or takes a request (`/status/[token]`, `/deregister*`, `/api/*`) is `ƒ`. A `○` there is a personal page that could be cached and served to someone else. `/register` and `/register/bestaetigung` are `ƒ` (`/register` reads the stage's `SERVICES_ON_SALE` per request and 404s where it does not list `newRegistration`; the confirmation page always exists). `/` is `○`: its cards take the setting at build. Place any route your change created on one side or the other.
 - No new warning.

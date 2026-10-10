@@ -34,6 +34,10 @@ describe("runDatabaseCommand", () => {
     await expect(runDatabaseCommand(["seed"], { APP_ENV: "dev" })).rejects.toThrow(/REPOSITORY_DRIVER/)
   })
 
+  it("refuses to re-encrypt without the current key, naming it", async () => {
+    await expect(runDatabaseCommand(["reencrypt"], { DIRECT_DATABASE_URL: UNREACHABLE })).rejects.toThrow(/CODES_ENCRYPTION_KEY/)
+  })
+
   it.each([["drop"], [], ["down", "-1"], ["seed", "1"]])("rejects the unknown command %p with its usage", async (...args) => {
     await expect(runDatabaseCommand(args, onPostgres({}))).rejects.toThrow(/Usage/)
   })
@@ -66,6 +70,31 @@ describeWithPostgres("runDatabaseCommand on a database", () => {
     expect(await run("seed")).toBe("Seed already loaded.")
     expect(await database.query("SELECT count(*)::int AS n FROM applications")).toEqual([{ n }])
     expect(await database.query("SELECT count(*)::int AS n FROM status_tokens")).toEqual([{ n }])
+  })
+
+  it("re-encrypts everything a retired key wrote under the current key, so the retired one can go", async () => {
+    const [retired, current] = [randomBytes(32).toString("base64"), randomBytes(32).toString("base64")]
+    const withKeys = (keys: Record<string, string>) => onPostgres({ DIRECT_DATABASE_URL: database.url, ...keys })
+    await run("up")
+    await runDatabaseCommand(["seed"], withKeys({ CODES_ENCRYPTION_KEY: retired }))
+
+    const [{ n }] = await database.query(
+      `SELECT (SELECT count(encrypted_security_codes) + count(encrypted_details) + count(identity_verification_id) FROM applications)
+            + (SELECT count(*) FROM status_tokens) AS n`,
+    )
+    expect(await runDatabaseCommand(["reencrypt"], withKeys({ CODES_ENCRYPTION_KEY: current, RETIRED_CODES_ENCRYPTION_KEYS: retired }))).toBe(
+      `Re-encrypted ${n} values under the current key.`,
+    )
+    await expect(runDatabaseCommand(["reencrypt"], withKeys({ CODES_ENCRYPTION_KEY: current }))).resolves.toMatch(/^Re-encrypted/)
+    await expect(runDatabaseCommand(["reencrypt"], withKeys({ CODES_ENCRYPTION_KEY: retired }))).rejects.toThrow()
+  })
+
+  it("re-encrypts with nothing but the database's address and the keys, whatever the stage, so it runs from any shell", async () => {
+    await run("up")
+
+    expect(await runDatabaseCommand(["reencrypt"], { APP_ENV: "production", DIRECT_DATABASE_URL: database.url, CODES_ENCRYPTION_KEY: randomBytes(32).toString("base64") })).toBe(
+      "Re-encrypted 0 values under the current key.",
+    )
   })
 
   it("reverts one migration by default, or all of them", async () => {

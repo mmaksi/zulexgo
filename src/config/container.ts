@@ -10,14 +10,12 @@ import { ZulexRegistrationGateway } from "@/src/adapters/registration/zulex/zule
 import { InMemoryRateLimiter } from "@/src/adapters/rate-limit/fake/in-memory-rate-limiter"
 import { InMemoryApplicationRepository } from "@/src/adapters/repository/fake/in-memory-application-repository"
 import { PostgresApplicationRepository } from "@/src/adapters/repository/postgres/postgres-application-repository"
+import { createPool } from "@/src/adapters/repository/postgres/pool"
 import { PostgresRateLimiter } from "@/src/adapters/repository/postgres/postgres-rate-limiter"
 import { InMemoryDocumentStore } from "@/src/adapters/storage/fake/in-memory-document-store"
 import { SupabaseDocumentStore } from "@/src/adapters/storage/supabase/supabase-document-store"
 import { CryptoTokenGenerator } from "@/src/adapters/tokens/crypto/crypto-token-generator"
-import type { ApplicationRepository } from "@/src/core/ports/repository/application-repository"
-import type { Clock } from "@/src/core/ports/clock/clock"
 import type { IdentityVerification } from "@/src/core/ports/identity/identity-verification"
-import type { RateLimiter } from "@/src/core/ports/rate-limit/rate-limiter"
 import type { Dependencies } from "@/src/core/use-cases/dependencies"
 import { seedDocumentsFor, seedFor, seedPaymentsFor } from "@/db/seed/seed"
 import { betaOf, parseEnv, type Env, type EnvSource } from "./env"
@@ -31,12 +29,16 @@ export function createContainer(source: EnvSource = process.env): Container {
   const env = parseEnv(source)
   const clock = new SystemClock()
   const fakePayments = env.PAYMENT_DRIVER === "fake" ? new FakePaymentProvider(clock, seedPaymentsFor(env.APP_ENV)) : undefined
+  const pool = env.REPOSITORY_DRIVER === "postgres" ? createPool(env.DATABASE_URL!, env.DATABASE_CA_CERT) : undefined
   return {
     env,
     clock,
     tokens: new CryptoTokenGenerator(),
-    repository: createRepository(env),
-    rateLimiter: createRateLimiter(env, clock),
+    repository: pool
+      ? new PostgresApplicationRepository({ pool, encryptionKey: env.CODES_ENCRYPTION_KEY!, retiredEncryptionKeys: env.RETIRED_CODES_ENCRYPTION_KEYS })
+      : new InMemoryApplicationRepository(seedFor(env.APP_ENV)),
+    // Counts must be shared across instances, so the limiter is in memory only while the repository is.
+    rateLimiter: pool ? new PostgresRateLimiter({ pool, secret: env.CODES_ENCRYPTION_KEY!, clock }) : new InMemoryRateLimiter(clock),
     registration:
       env.REGISTRATION_DRIVER === "fake"
         ? new FakeRegistrationGateway()
@@ -68,26 +70,11 @@ export function createContainer(source: EnvSource = process.env): Container {
   }
 }
 
-function createRepository(env: Env): ApplicationRepository {
-  if (env.REPOSITORY_DRIVER === "fake") return new InMemoryApplicationRepository(seedFor(env.APP_ENV))
-  return new PostgresApplicationRepository({
-    connectionString: env.DATABASE_URL!,
-    encryptionKey: env.CODES_ENCRYPTION_KEY!,
-    ca: env.DATABASE_CA_CERT,
-  })
-}
-
 function createIdentity(env: Env): IdentityVerification {
   switch (env.IDENTITY_DRIVER) {
     case "fake":
       return new FakeIdentityVerification()
   }
-}
-
-// Counts must be shared across instances, so the limiter is in memory only while the repository is.
-function createRateLimiter(env: Env, clock: Clock): RateLimiter {
-  if (env.REPOSITORY_DRIVER === "fake") return new InMemoryRateLimiter(clock)
-  return new PostgresRateLimiter({ connectionString: env.DATABASE_URL!, secret: env.CODES_ENCRYPTION_KEY!, clock, ca: env.DATABASE_CA_CERT })
 }
 
 let container: Container | undefined

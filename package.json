@@ -2,6 +2,9 @@
   "name": "zulexgo",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -13,7 +16,8 @@
     "db:migrate": "tsx --conditions=react-server scripts/db.ts up",
     "db:migrate:down": "tsx --conditions=react-server scripts/db.ts down",
     "db:status": "tsx --conditions=react-server scripts/db.ts status",
-    "db:seed": "tsx --conditions=react-server scripts/db.ts seed"
+    "db:seed": "tsx --conditions=react-server scripts/db.ts seed",
+    "db:reencrypt": "tsx --conditions=react-server scripts/db.ts reencrypt"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",

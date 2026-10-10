@@ -10,6 +10,7 @@ import { startIdentityVerification } from "@/src/core/use-cases/identity/start-i
 import { DAY, HOUR, MINUTE, setupFlow } from "./flow-harness"
 
 const FINISHED = { state: "finished", documents: [] } as const
+const STAGING = { APP_ENV: "staging", IDENTITY_DRIVER: "fake" } as const
 
 type Flow = ReturnType<typeof setupFlow>
 
@@ -521,14 +522,26 @@ describe("identity verification: a paid Neuzulassung waits for the customer's ve
       const { payload, signature } = flow.deps.identity.notificationOf(await flow.verificationId(reference))
 
       const responses = await Promise.all([
-        handleIdentityNotification(flow.deps, callback(payload)),
-        handleIdentityNotification(flow.deps, callback(payload, `${signature}0`)),
-        handleIdentityNotification(flow.deps, callback(payload.replace("ZG-", "ZG-X"), signature)),
+        handleIdentityNotification({ ...flow.deps, env: STAGING }, callback(payload)),
+        handleIdentityNotification({ ...flow.deps, env: STAGING }, callback(payload, `${signature}0`)),
+        handleIdentityNotification({ ...flow.deps, env: STAGING }, callback(payload.replace("ZG-", "ZG-X"), signature)),
       ])
 
       expect(responses.map(({ status }) => status)).toEqual([400, 400, 400])
       expect((await flow.stored(reference)).status).toBe("awaiting_identity_verification")
       expect(flow.deps.registration.submissions).toEqual([])
+    })
+
+    it("answers 404 in production while the identity check is the fake, whose signing secret is in the public repo, and checks nothing", async () => {
+      const flow = setupFlow()
+      const reference = await flow.checkoutAndPayNewRegistration()
+      await flow.customerVerifies(reference)
+      const { payload, signature } = flow.deps.identity.notificationOf(await flow.verificationId(reference))
+
+      const response = await handleIdentityNotification({ ...flow.deps, env: { APP_ENV: "production", IDENTITY_DRIVER: "fake" } }, callback(payload, signature))
+
+      expect(response.status).toBe(404)
+      expect((await flow.stored(reference)).status).toBe("awaiting_identity_verification")
     })
 
     it("runs the same check the poller does, for the order it names, so the order is filed without waiting for a tick", async () => {
@@ -537,7 +550,7 @@ describe("identity verification: a paid Neuzulassung waits for the customer's ve
       await flow.customerVerifies(reference)
       const { payload, signature } = flow.deps.identity.notificationOf(await flow.verificationId(reference))
 
-      const response = await handleIdentityNotification(flow.deps, callback(payload, signature))
+      const response = await handleIdentityNotification({ ...flow.deps, env: STAGING }, callback(payload, signature))
 
       expect(response.status).toBe(200)
       expect((await flow.stored(reference)).status).toBe("submitted_to_kba")
@@ -549,8 +562,8 @@ describe("identity verification: a paid Neuzulassung waits for the customer's ve
       await flow.customerVerifies(reference)
       const { payload, signature } = flow.deps.identity.notificationOf(await flow.verificationId(reference))
 
-      await handleIdentityNotification(flow.deps, callback(payload, signature))
-      const again = await handleIdentityNotification(flow.deps, callback(payload, signature))
+      await handleIdentityNotification({ ...flow.deps, env: STAGING }, callback(payload, signature))
+      const again = await handleIdentityNotification({ ...flow.deps, env: STAGING }, callback(payload, signature))
 
       expect(again.status).toBe(200)
       expect(sent(flow, "identityVerified")).toHaveLength(1)
@@ -562,7 +575,7 @@ describe("identity verification: a paid Neuzulassung waits for the customer's ve
       const reference = await flow.checkoutAndPayNewRegistration()
       const { payload, signature } = flow.deps.identity.notificationOf(await flow.verificationId(reference))
 
-      const response = await handleIdentityNotification(flow.deps, callback(payload, signature))
+      const response = await handleIdentityNotification({ ...flow.deps, env: STAGING }, callback(payload, signature))
 
       expect(response.status).toBe(200)
       expect((await flow.stored(reference)).status).toBe("awaiting_identity_verification")
@@ -575,7 +588,7 @@ describe("identity verification: a paid Neuzulassung waits for the customer's ve
       const { verificationId } = await flow.deps.identity.start({ reference, email })
       const { payload, signature } = flow.deps.identity.notificationOf(verificationId)
 
-      expect((await handleIdentityNotification(flow.deps, callback(payload, signature))).status).toBe(200)
+      expect((await handleIdentityNotification({ ...flow.deps, env: STAGING }, callback(payload, signature))).status).toBe(200)
     })
 
     it("answers 500 when the check fails, so the provider tries again, and logs the order and the kind of error, never the message", async () => {
@@ -585,12 +598,27 @@ describe("identity verification: a paid Neuzulassung waits for the customer's ve
       jest.spyOn(flow.deps.identity, "getResult").mockRejectedValueOnce(new Error("Verimi could not read the document of erika.mustermann@example.test"))
       const logged = jest.spyOn(console, "error")
 
-      const response = await handleIdentityNotification(flow.deps, callback(payload, signature))
+      const response = await handleIdentityNotification({ ...flow.deps, env: STAGING }, callback(payload, signature))
 
       expect(response.status).toBe(500)
       const output = logged.mock.calls.flat().join("\n")
       expect(output).toContain(reference)
       expect(output).toContain("Error")
+      expect(output).not.toContain("erika.mustermann")
+    })
+
+    it("answers 500 when the order cannot be read, and logs the order and the kind of error, never the message", async () => {
+      const flow = setupFlow()
+      const reference = await flow.checkoutAndPayNewRegistration()
+      const { payload, signature } = flow.deps.identity.notificationOf(await flow.verificationId(reference))
+      jest.spyOn(flow.deps.repository, "get").mockRejectedValueOnce(new Error("row erika.mustermann@example.test could not be read"))
+      const logged = jest.spyOn(console, "error").mockImplementation(() => {})
+
+      const response = await handleIdentityNotification({ ...flow.deps, env: STAGING }, callback(payload, signature))
+
+      expect(response.status).toBe(500)
+      const output = logged.mock.calls.flat().join("\n")
+      expect(output).toContain(reference)
       expect(output).not.toContain("erika.mustermann")
     })
 
@@ -602,7 +630,7 @@ describe("identity verification: a paid Neuzulassung waits for the customer's ve
       const done = await flow.stored(reference)
       const { payload, signature } = flow.deps.identity.notificationOf(await flow.verificationId(reference))
 
-      await handleIdentityNotification(flow.deps, callback(payload, signature))
+      await handleIdentityNotification({ ...flow.deps, env: STAGING }, callback(payload, signature))
 
       expect(await flow.stored(reference)).toEqual(done)
     })
