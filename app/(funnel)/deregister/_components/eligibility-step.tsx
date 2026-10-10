@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, type FormEvent } from "react"
+import { flushSync } from "react-dom"
 import type { IkfzStatus } from "@/src/core/domain/registration/registration-authority"
 import { Button } from "@/src/ui/button"
 import { RadioGroup } from "@/src/ui/radio-group"
@@ -11,6 +12,9 @@ import type { PlateCount } from "@/app/_components/vehicle-data"
 import { Alert } from "@/src/ui/alert"
 import { Checkbox } from "@/src/ui/checkbox"
 import { tooManyAttempts } from "@/app/(funnel)/too-many-attempts"
+
+const PREFIX_ID = "eligibility-prefix"
+const UNREACHABLE = "Die Zulassungsstelle ist gerade nicht zu erreichen. Bitte versuchen Sie es in ein paar Minuten noch einmal."
 
 export interface Eligibility {
   plateCount: PlateCount
@@ -35,6 +39,12 @@ export function EligibilityStep({
   const [error, setError] = useState<string>()
   const [checking, setChecking] = useState(false)
 
+  /** The error has no live role, so it is rendered before focus moves to the field, which then announces it (site-contract §3). */
+  const refuse = (message: string) => {
+    flushSync(() => setError(message))
+    document.getElementById(PREFIX_ID)?.focus()
+  }
+
   async function submit(event: FormEvent) {
     event.preventDefault()
     // A second submit while a check is pending is ignored.
@@ -43,12 +53,12 @@ export function EligibilityStep({
     try {
       const result = await checkEligibility(prefix)
       if (!result.ok) {
-        if (result.reason === "limited") setError(tooManyAttempts(result.retryAfterMinutes))
+        if (result.reason === "limited") refuse(tooManyAttempts(result.retryAfterMinutes))
         else
-          setError(
+          refuse(
             result.reason === "invalidPrefix"
               ? "Für dieses Ortskürzel finden wir keine Zulassungsstelle. Prüfen Sie die 1 bis 3 Buchstaben vor dem ersten Leerzeichen."
-              : "Die Zulassungsstelle ist gerade nicht zu erreichen. Bitte versuchen Sie es in ein paar Minuten noch einmal.",
+              : UNREACHABLE,
           )
         return
       }
@@ -56,7 +66,7 @@ export function EligibilityStep({
     } catch {
       // The request itself rejected (a lost connection, a server error): the customer hears the same as for an
       // unreachable authority and can try again.
-      setError("Die Zulassungsstelle ist gerade nicht zu erreichen. Bitte versuchen Sie es in ein paar Minuten noch einmal.")
+      refuse(UNREACHABLE)
     } finally {
       // Always, so that no failure leaves the button busy for good.
       setChecking(false)
@@ -96,7 +106,7 @@ export function EligibilityStep({
       ) : null}
 
       <TextField
-        id="eligibility-prefix"
+        id={PREFIX_ID}
         label="Ortskürzel Ihres Kennzeichens"
         helper="Die Buchstaben vor dem ersten Leerzeichen, z. B. „B“ bei B AB 123."
         error={error}

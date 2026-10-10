@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react"
+import { render, screen, waitFor } from "@testing-library/react"
 import { renderToStaticMarkup } from "react-dom/server"
 import userEvent from "@testing-library/user-event"
 import type { InviteAnswer } from "./invite-form"
@@ -52,13 +52,19 @@ describe("InviteForm", () => {
     expect(refresh).not.toHaveBeenCalled()
   })
 
-  it("puts the cursor back in the field after a code that did not work, as a funnel does for its first invalid field", async () => {
+  it.each([
+    ["a code that did not work", "WRONG-CODE"],
+    ["an empty field", ""],
+  ])("puts the cursor back in the field after %s with the error already described, so a screen reader hears it", async (_, code) => {
     const { user } = setup({ status: "refused" })
+    const field = screen.getByLabelText("Einladungscode")
+    let describedOnFocus: string | null = null
+    field.addEventListener("focus", () => (describedOnFocus = field.getAttribute("aria-describedby")))
 
-    await redeem(user, "WRONG-CODE")
+    await redeem(user, code)
 
-    await screen.findByText(/nicht gültig/)
-    expect(screen.getByLabelText("Einladungscode")).toHaveFocus()
+    await waitFor(() => expect(field).toHaveFocus())
+    expect(describedOnFocus).toContain("invite-error")
   })
 
   it("asks for a code instead of sending nothing", async () => {

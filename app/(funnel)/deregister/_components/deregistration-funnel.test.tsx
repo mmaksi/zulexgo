@@ -82,6 +82,21 @@ describe("de-registration funnel", () => {
       expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Können Sie online abmelden?")
     })
 
+    it.each([
+      ["no authority answers", jest.fn(async () => ({ ok: false as const, reason: "invalidPrefix" as const }))],
+      ["the request rejects", jest.fn(async () => Promise.reject(new Error("Network lost")))],
+    ])("moves focus to the prefix when %s, with the error already described, so a screen reader hears it", async (_, checkEligibility) => {
+      const { user } = setup({ checkEligibility })
+      const prefix = screen.getByLabelText("Ortskürzel Ihres Kennzeichens")
+      let describedOnFocus: string | null = null
+      prefix.addEventListener("focus", () => (describedOnFocus = prefix.getAttribute("aria-describedby")))
+
+      await passEligibility(user)
+
+      expect(prefix).toHaveFocus()
+      expect(describedOnFocus).toContain("eligibility-prefix-error")
+    })
+
     it("tells the customer how long to wait when their address asked too often, and keeps them on the step", async () => {
       const { user } = setup({ checkEligibility: jest.fn(async () => ({ ok: false as const, reason: "limited" as const, retryAfterMinutes: 42 })) })
 
@@ -156,6 +171,20 @@ describe("de-registration funnel", () => {
       expect(screen.getByLabelText("Ortskürzel")).toHaveFocus()
       expect(screen.getByLabelText("Sicherheitscode hinteres Kennzeichen")).toHaveAccessibleDescription(/3-stelligen Code/)
       expect(screen.getByLabelText("E-Mail-Adresse")).toHaveAttribute("aria-invalid", "true")
+    })
+
+    it("moves focus to the first invalid field with its error already described, so a screen reader hears it", async () => {
+      const { user } = setup()
+      await passEligibility(user)
+      const prefix = screen.getByLabelText("Ortskürzel")
+      await user.clear(prefix)
+      let describedOnFocus: string | null = null
+      prefix.addEventListener("focus", () => (describedOnFocus = prefix.getAttribute("aria-describedby")))
+
+      await user.click(screen.getByRole("button", { name: "Weiter" }))
+
+      expect(prefix).toHaveFocus()
+      expect(describedOnFocus).toContain("vehicle-prefix-error")
     })
 
     it("warns, without blocking, when a VIN is shorter than the modern 17 characters", async () => {

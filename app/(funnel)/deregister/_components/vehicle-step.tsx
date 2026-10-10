@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, type FormEvent } from "react"
+import { flushSync } from "react-dom"
 import { Button } from "@/src/ui/button"
 import { PlateFrame } from "@/src/ui/plate-frame"
 import { TextField } from "@/app/_components/text-field"
@@ -39,7 +40,8 @@ export function VehicleStep({
   function submit(event: FormEvent) {
     event.preventDefault()
     const found = validateVehicle(data, plateCount)
-    setErrors(found)
+    // Rendered before focus moves, so the field announces its error as it is focused.
+    flushSync(() => setErrors(found))
     const firstInvalid = fieldsFor(plateCount).find((field) => found[field])
     if (firstInvalid) {
       document.getElementById(fieldId(firstInvalid))?.focus()

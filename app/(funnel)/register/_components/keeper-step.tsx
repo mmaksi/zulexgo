@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState, type FormEvent } from "react"
+import { flushSync } from "react-dom"
 import { Choice } from "@/app/(funnel)/_components/choice"
 import { TextField } from "@/app/_components/text-field"
 import { Button } from "@/src/ui/button"
@@ -38,8 +39,9 @@ export function KeeperStep({
     }
   }, [])
 
+  /** The error has no live role, so it is rendered before focus moves to the field, which then announces it (site-contract §3). */
   const refuse = (postcode: string) => {
-    setErrors({ postcode })
+    flushSync(() => setErrors({ postcode }))
     document.getElementById(fieldId("postcode"))?.focus()
   }
 
