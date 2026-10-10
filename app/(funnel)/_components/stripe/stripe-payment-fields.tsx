@@ -5,7 +5,6 @@ import { loadStripe, type Appearance } from "@stripe/stripe-js"
 import { useEffect, useMemo, type RefObject } from "react"
 import type { PaymentDriver } from "@/app/(funnel)/_components/payment-driver"
 
-/** design-standard.md tokens, as far as Stripe's Appearance API reaches into its iframe. */
 const APPEARANCE: Appearance = {
   theme: "stripe",
   variables: {
@@ -14,8 +13,6 @@ const APPEARANCE: Appearance = {
     colorTextSecondary: "#58626D",
     colorDanger: "#A32A1E",
     colorBackground: "#FFFFFF",
-    // No web font is loaded into Stripe's iframe: fonts are self-hosted (design-standard §3.1), never fetched
-    // from Google, so the fields fall back to Helvetica Neue or Arial.
     fontFamily: "Kanit, 'Helvetica Neue', Arial, sans-serif",
     fontSizeBase: "16px",
     borderRadius: "2px",
@@ -37,10 +34,10 @@ export function StripePaymentFields({
 }: {
   publishableKey: string
   amountCents: number
-  /** Where Stripe returns a customer whose payment needs a redirect, as a path on this site. */
   returnPath: string
   driverRef: RefObject<PaymentDriver | null>
 }) {
+  // downloads Stripe’s script from Stripe’s servers
   const stripe = useMemo(() => loadStripe(publishableKey), [publishableKey])
   return (
     <Elements

@@ -11,7 +11,6 @@ const MODERN_VIN_LENGTH = 17
 
 const fieldId = (field: VehicleField) => `vehicle-${field}`
 
-/** site-contract §2.3: exactly the fields the API needs, the front code only for two plates. */
 export function VehicleStep({
   plateCount,
   initial,
