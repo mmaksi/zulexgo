@@ -104,6 +104,13 @@ const schema = z
     // (migrate, seed) use the session connection (DIRECT_DATABASE_URL).
     DATABASE_URL: secret,
     DIRECT_DATABASE_URL: secret,
+    // The Supabase project's root certificate (PEM), so the encrypted link also checks who answers. Pasted on one
+    // line, its line breaks arrive as "\n" escapes, which TLS cannot read.
+    DATABASE_CA_CERT: z
+      .string()
+      .startsWith("-----BEGIN CERTIFICATE-----", "must be the PEM certificate itself, not a file name.")
+      .transform((pem) => pem.replaceAll("\\n", "\n"))
+      .optional(),
     // Encrypts security codes and status tokens at rest; also keys the rate limiter's hashes.
     CODES_ENCRYPTION_KEY: secret,
 

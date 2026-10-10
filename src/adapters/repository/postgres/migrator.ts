@@ -2,6 +2,7 @@ import { createHash } from "node:crypto"
 import { readdir, readFile } from "node:fs/promises"
 import { join } from "node:path"
 import { Client } from "pg"
+import { tlsFor } from "./tls"
 
 /** One `db/migrations/NNNN_slug` folder, read from disk. */
 export interface Migration {
@@ -96,6 +97,8 @@ export class Migrator {
   constructor(
     private readonly connectionString: string,
     private readonly migrations: readonly Migration[],
+    /** The database's root certificate; see `tlsFor`. */
+    private readonly ca?: string,
   ) {}
 
   /**
@@ -165,7 +168,7 @@ export class Migrator {
 
   /** Runs `run` on a fresh connection holding the lock; closing the connection releases the lock. */
   private async locked<T>(run: (client: Client) => Promise<T>): Promise<T> {
-    const client = new Client({ connectionString: this.connectionString })
+    const client = new Client({ connectionString: this.connectionString, ssl: tlsFor(this.connectionString, this.ca) })
     await client.connect()
     try {
       await client.query("SELECT pg_advisory_lock($1)", [LOCK_KEY])

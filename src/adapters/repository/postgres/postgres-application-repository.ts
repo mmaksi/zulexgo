@@ -3,7 +3,7 @@ import type { Application, StatusChange } from "@/src/core/domain/application/ap
 import { parseApplicationReference, type ApplicationReference } from "@/src/core/domain/application/application-reference"
 import { OPEN_STATUSES, POLLED_STATUSES, type ApplicationStatus } from "@/src/core/domain/application/application-status"
 import type { Consent } from "@/src/core/domain/application/consent"
-import { parseDeregistrationRequest } from "@/src/core/domain/application/deregistration-request"
+import { parseStoredDeregistrationRequest } from "@/src/core/domain/application/deregistration-request"
 import type { OrderTrail } from "@/src/core/domain/application/order-report"
 import type { OrderableService, Service, ServiceRequest } from "@/src/core/domain/application/service"
 import { emailSchema } from "@/src/core/domain/customer/email"
@@ -15,6 +15,7 @@ import { StaleApplication } from "@/src/core/errors/application/stale-applicatio
 import type { ApplicationRepository } from "@/src/core/ports/repository/application-repository"
 import { FieldCipher } from "./field-cipher"
 import { detailsOf, requestFrom } from "./new-registration-details"
+import { tlsFor } from "./tls"
 
 /**
  * One row of `SELECT_APPLICATION`, named as in db/migrations. `next_poll_at` is a timestamptz, which pg
@@ -98,8 +99,8 @@ export class PostgresApplicationRepository implements ApplicationRepository {
    * `encryptionKey` is `CODES_ENCRYPTION_KEY`: 32 bytes in base64, checked at boot in `env.ts`.
    * The app passes the pooled `DATABASE_URL`; `db:seed` passes the direct one.
    */
-  constructor(options: { connectionString: string; encryptionKey: string }) {
-    this.pool = new Pool({ connectionString: options.connectionString, allowExitOnIdle: true })
+  constructor(options: { connectionString: string; encryptionKey: string; ca?: string }) {
+    this.pool = new Pool({ connectionString: options.connectionString, ssl: tlsFor(options.connectionString, options.ca), allowExitOnIdle: true })
     // An idle connection dropped by the pooler must not crash the process; the next query reconnects.
     this.pool.on("error", (error) => console.error(`Postgres connection lost: ${error.message}`))
     this.cipher = new FieldCipher(options.encryptionKey)
@@ -290,8 +291,9 @@ export class PostgresApplicationRepository implements ApplicationRepository {
     const none = { plate_count: null, plate_prefix: null, plate_letters: null, plate_numbers: null, encrypted_security_codes: null, encrypted_details: null }
     switch (request.service) {
       case "deregistration": {
-        const { rearPlate, frontPlate, certificate } = request.codes
-        const codes = { rearPlate: rearPlate.reveal(), frontPlate: frontPlate?.reveal(), certificate: certificate.reveal() }
+        // An order that has ended holds no codes (migration 0013 lets the column be empty then).
+        const { codes } = request
+        const revealed = codes && { rearPlate: codes.rearPlate.reveal(), frontPlate: codes.frontPlate?.reveal(), certificate: codes.certificate.reveal() }
         return {
           ...none,
           service: request.service,
@@ -300,7 +302,7 @@ export class PostgresApplicationRepository implements ApplicationRepository {
           plate_letters: request.licencePlate.letters,
           plate_numbers: request.licencePlate.numbers,
           vin: request.vin,
-          encrypted_security_codes: this.cipher.encrypt(JSON.stringify(codes), reference),
+          encrypted_security_codes: revealed ? this.cipher.encrypt(JSON.stringify(revealed), reference) : null,
         }
       }
       case "newRegistration":
@@ -345,11 +347,11 @@ export class PostgresApplicationRepository implements ApplicationRepository {
   private toRequest(row: ApplicationRow, reference: ApplicationReference, lastChangeAt: Date): ServiceRequest {
     switch (row.service) {
       case "deregistration":
-        return parseDeregistrationRequest({
+        return parseStoredDeregistrationRequest({
           plateCount: row.plate_count,
           licencePlate: { prefix: row.plate_prefix, letters: row.plate_letters, numbers: row.plate_numbers },
           vin: row.vin,
-          codes: JSON.parse(this.cipher.decrypt(row.encrypted_security_codes!, reference)),
+          codes: row.encrypted_security_codes === null ? undefined : JSON.parse(this.cipher.decrypt(row.encrypted_security_codes, reference)),
         })
       case "newRegistration":
         return requestFrom(row.vin, this.cipher.decrypt(row.encrypted_details!, reference), lastChangeAt)

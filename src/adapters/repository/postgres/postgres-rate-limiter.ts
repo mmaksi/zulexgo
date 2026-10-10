@@ -2,6 +2,7 @@ import { createHmac } from "node:crypto"
 import { Pool } from "pg"
 import type { Clock } from "@/src/core/ports/clock/clock"
 import { MAX_WINDOW_MS, type RateLimit, type RateLimitDecision, type RateLimiter } from "@/src/core/ports/rate-limit/rate-limiter"
+import { tlsFor } from "./tls"
 
 /**
  * One statement, so concurrent attempts queue on the row: each sees the count the last one left.
@@ -43,8 +44,8 @@ export class PostgresRateLimiter implements RateLimiter {
   private readonly clock: Clock
   private lastPurgeAt = 0
 
-  constructor(options: { connectionString: string; secret: string; clock: Clock }) {
-    this.pool = new Pool({ connectionString: options.connectionString, allowExitOnIdle: true })
+  constructor(options: { connectionString: string; secret: string; clock: Clock; ca?: string }) {
+    this.pool = new Pool({ connectionString: options.connectionString, ssl: tlsFor(options.connectionString, options.ca), allowExitOnIdle: true })
     // An idle connection dropped by the pooler must not crash the process; the next query reconnects.
     this.pool.on("error", (error) => console.error(`Postgres connection lost: ${error.message}`))
     this.secret = options.secret

@@ -5,7 +5,14 @@ import type { PlateCount, VehicleData } from "@/app/_components/vehicle-data"
 
 /** The server actions the funnel calls, passed in by the page so the funnel can be tested without a server. */
 export interface CheckoutActions {
-  checkEligibility(prefix: string): Promise<{ ok: true; prefix: string; ikfzStatus: IkfzStatus } | { ok: false; reason: "invalidPrefix" | "unavailable" }>
+  checkEligibility(
+    prefix: string,
+  ): Promise<
+    | { ok: true; prefix: string; ikfzStatus: IkfzStatus }
+    | { ok: false; reason: "invalidPrefix" | "unavailable" }
+    /** The address asked too often: it may try again after `retryAfterMinutes`. */
+    | { ok: false; reason: "limited"; retryAfterMinutes: number }
+  >
   startCheckout(input: {
     plateCount: PlateCount
     vehicle: VehicleData

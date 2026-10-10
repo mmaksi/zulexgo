@@ -39,7 +39,7 @@ export async function runDatabaseCommand([command, count]: string[], source: Env
     throw new Error(`REPOSITORY_DRIVER is ${env.REPOSITORY_DRIVER}: there is no database to migrate.`)
   }
 
-  const migrator = async () => new Migrator(env.DIRECT_DATABASE_URL!, await readMigrations(MIGRATIONS_DIRECTORY))
+  const migrator = async () => new Migrator(env.DIRECT_DATABASE_URL!, await readMigrations(MIGRATIONS_DIRECTORY), env.DATABASE_CA_CERT)
 
   if (command === "up" && count === undefined) {
     return report("Applied", await (await migrator()).up(), "Nothing to apply.")
@@ -52,6 +52,7 @@ export async function runDatabaseCommand([command, count]: string[], source: Env
     const repository = new PostgresApplicationRepository({
       connectionString: env.DIRECT_DATABASE_URL!,
       encryptionKey: env.CODES_ENCRYPTION_KEY!,
+      ca: env.DATABASE_CA_CERT,
     })
     const added = await loadSeed(repository, seedFor(env.APP_ENV))
     const documents = env.STORAGE_DRIVER === "supabase" ? await loadSeededDocuments(env) : 0

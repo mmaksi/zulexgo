@@ -1,6 +1,6 @@
 import type { Correction } from "@/src/core/ports/registration/registration-gateway"
 import { ValidationError } from "@/src/core/errors/validation-error"
-import { parseDeregistrationRequest, type DeregistrationRequest } from "./deregistration-request"
+import { parseDeregistrationRequest, type DeregistrationRequest, type StoredDeregistrationRequest } from "./deregistration-request"
 import type { NewRegistrationCorrectionInput } from "./new-registration-correction"
 import { SecurityCode, type SecurityCodeKind } from "@/src/core/domain/vehicle/security-code"
 import { vinSchema } from "@/src/core/domain/vehicle/vin"
@@ -57,10 +57,12 @@ export function parseCorrection(input: CorrectionInput, plateCount: 1 | 2): Corr
 /**
  * The request with the corrected fields replaced, re-validated as any request is, so it
  * throws a `ValidationError` if the result is not a valid request. The codes are revealed
- * only to be parsed again into new `SecurityCode`s; the given request is not changed.
+ * only to be parsed again into new `SecurityCode`s; the given request is not changed. Only an order at 5b is
+ * corrected, and it still holds its codes: they go when an order ends.
  */
-export function applyCorrection(request: DeregistrationRequest, { vin, codes }: Correction): DeregistrationRequest {
+export function applyCorrection(request: StoredDeregistrationRequest, { vin, codes }: Correction): DeregistrationRequest {
   const current = request.codes
+  if (!current) throw new Error("A de-registration without its security codes cannot be corrected")
   return parseDeregistrationRequest({
     plateCount: request.plateCount,
     licencePlate: request.licencePlate,

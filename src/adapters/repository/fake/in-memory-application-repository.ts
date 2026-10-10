@@ -129,7 +129,7 @@ function isTheVehicle(request: ServiceRequest, vehicle: Parameters<ApplicationRe
 function copyRequest(request: ServiceRequest): ServiceRequest {
   switch (request.service) {
     case "deregistration":
-      return { ...request, licencePlate: { ...request.licencePlate }, codes: { ...request.codes } }
+      return { ...request, licencePlate: { ...request.licencePlate }, ...(request.codes && { codes: { ...request.codes } }) }
     case "newRegistration":
       return {
         ...request,

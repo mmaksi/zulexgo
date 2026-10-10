@@ -9,6 +9,7 @@ import { tooManyAttempts } from "@/app/(funnel)/too-many-attempts"
 import { Alert } from "@/src/ui/alert"
 import { Button } from "@/src/ui/button"
 import { Checkbox } from "@/src/ui/checkbox"
+import { useFunnelCheckout } from "./funnel-frame"
 import type { PaymentDriver, PaymentMode } from "./payment-driver"
 import { SimulatedPaymentFields } from "./simulated-payment-fields"
 import { StripePaymentFields } from "./stripe/stripe-payment-fields"
@@ -30,7 +31,8 @@ const linkClass = "underline underline-offset-4 hover:text-orange-dark"
  * The end of every funnel, site-contract §2.4: the customer's own data (`children`), the full
  * price, the fee notice, the payment form and the consents, before the pay button. The funnel
  * says what is sold and what is ticked; the panel owns the order of events. Payment is confirmed
- * only once the order exists, and a declined card is retried on the same order, never a second one.
+ * only once the order exists, and a declined card is retried on the same order, never a second one,
+ * also after going back and returning with the same data (the frame keeps the order).
  */
 export function CheckoutPanel({
   total,
@@ -38,6 +40,7 @@ export function CheckoutPanel({
   consents,
   payment,
   returnPath,
+  orderKey,
   startCheckout,
   completeSimulatedPayment,
   onPaid,
@@ -50,6 +53,8 @@ export function CheckoutPanel({
   payment: PaymentMode
   /** Where Stripe returns a customer whose payment needs a redirect: the funnel's `bestaetigung` page. */
   returnPath: string
+  /** What the order is opened for, as a string: an order opened for another key is not paid, a new one is opened. */
+  orderKey: string
   /** The funnel's own order data goes in; what the panel adds is what was ticked and whether a duplicate was confirmed. */
   startCheckout(input: { consents: Partial<Record<ConsentKind, boolean>>; acknowledgedDuplicate?: true }): Promise<StartCheckoutResult>
   completeSimulatedPayment(reference: string): Promise<{ ok: boolean }>
@@ -58,7 +63,7 @@ export function CheckoutPanel({
   children: ReactNode
 }) {
   const driverRef = useRef<PaymentDriver | null>(null)
-  const order = useRef<{ reference: string; clientSecret: string } | null>(null)
+  const funnel = useFunnelCheckout()
   const [ticked, setTicked] = useState<Partial<Record<ConsentKind, boolean>>>({})
   const [duplicate, setDuplicate] = useState(false)
   const [wantsAnother, setWantsAnother] = useState(false)
@@ -66,10 +71,20 @@ export function CheckoutPanel({
   const [error, setError] = useState<string>()
   const consented = consents.every(({ kind }) => ticked[kind] === true) && (!duplicate || wantsAnother)
 
+  function busy(running: boolean) {
+    setPaying(running)
+    funnel.setPaying(running)
+  }
+
   async function pay(event: FormEvent) {
     event.preventDefault()
-    if (!consented || paying || !driverRef.current) return
-    setPaying(true)
+    if (!consented || paying) return
+    // The payment form registers itself once loaded; Stripe.js can be slow, blocked, or fail to load.
+    if (!driverRef.current) {
+      setError("Das Zahlungsformular ist noch nicht geladen. Bitte warten Sie einen Moment oder laden Sie die Seite neu. Ein Werbeblocker kann es verhindern.")
+      return
+    }
+    busy(true)
     setError(undefined)
     try {
       const failed = await takePayment(driverRef.current)
@@ -79,8 +94,8 @@ export function CheckoutPanel({
       // trying again pays the same one instead of opening a second.
       setError("Das hat gerade nicht geklappt. Bitte versuchen Sie es in ein paar Minuten noch einmal.")
     } finally {
-      // Always, so that no failure leaves the button busy for good.
-      setPaying(false)
+      // Always, so that no failure leaves the button busy, or the funnel locked, for good.
+      busy(false)
     }
   }
 
@@ -88,8 +103,9 @@ export function CheckoutPanel({
     const invalid = await driver.prepare()
     if (invalid) return invalid
 
-    // A declined card is retried on the same order, never a second one.
-    if (!order.current) {
+    // A declined card is retried on the same order, never a second one, unless what the order holds has changed since.
+    let order = funnel.orderFor(orderKey)
+    if (!order) {
       const started = await startCheckout({
         consents: Object.fromEntries(consents.map(({ kind }) => [kind, ticked[kind] === true])),
         ...(wantsAnother ? { acknowledgedDuplicate: true as const } : {}),
@@ -106,12 +122,13 @@ export function CheckoutPanel({
           ? "Einige Angaben sind nicht gültig. Bitte gehen Sie einen Schritt zurück und prüfen Sie sie."
           : "Das hat gerade nicht geklappt. Bitte versuchen Sie es in ein paar Minuten noch einmal."
       }
-      order.current = { reference: started.reference, clientSecret: started.clientSecret }
+      order = { key: orderKey, reference: started.reference, clientSecret: started.clientSecret }
+      funnel.keep(order)
     }
 
-    const declined = await driver.confirm(order.current)
+    const declined = await driver.confirm(order)
     if (declined) return declined
-    onPaid(order.current.reference)
+    onPaid(order.reference)
   }
 
   return (

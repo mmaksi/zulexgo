@@ -1,9 +1,10 @@
 import { act, render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
+import type { PaymentMode } from "@/app/(funnel)/_components/payment-driver"
 import type { CheckoutActions } from "./checkout-actions"
 import { DeregistrationFunnel } from "./deregistration-funnel"
 
-function setup(overrides: Partial<CheckoutActions> = {}) {
+function setup(overrides: Partial<CheckoutActions> = {}, payment: PaymentMode = { kind: "simulated" }) {
   const actions: CheckoutActions = {
     checkEligibility: jest.fn(async (prefix: string) => ({ ok: true as const, prefix, ikfzStatus: "online" as const })),
     startCheckout: jest.fn(async () => ({ ok: true as const, reference: "ZG-ABC123", clientSecret: "fake-secret" })),
@@ -17,7 +18,7 @@ function setup(overrides: Partial<CheckoutActions> = {}) {
       <a href="/impressum" onClick={followLink}>
         Impressum
       </a>
-      <DeregistrationFunnel payment={{ kind: "simulated" }} actions={actions} />
+      <DeregistrationFunnel payment={payment} actions={actions} />
     </>,
   )
   return { actions, user, followLink }
@@ -78,6 +79,15 @@ describe("de-registration funnel", () => {
       await passEligibility(user)
 
       expect(screen.getByLabelText("Ortskürzel Ihres Kennzeichens")).toHaveAccessibleDescription(/keine Zulassungsstelle/)
+      expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Können Sie online abmelden?")
+    })
+
+    it("tells the customer how long to wait when their address asked too often, and keeps them on the step", async () => {
+      const { user } = setup({ checkEligibility: jest.fn(async () => ({ ok: false as const, reason: "limited" as const, retryAfterMinutes: 42 })) })
+
+      await passEligibility(user)
+
+      expect(screen.getByLabelText("Ortskürzel Ihres Kennzeichens")).toHaveAccessibleDescription(/42 Minuten/)
       expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Können Sie online abmelden?")
     })
 
@@ -360,6 +370,88 @@ describe("de-registration funnel", () => {
 
       expect(await screen.findByText("ZG-ABC123")).toBeInTheDocument()
       expect(actions.startCheckout).toHaveBeenCalledTimes(1)
+    })
+
+    async function failFirstPaymentThenGoBack(overrides: Partial<CheckoutActions> = {}) {
+      const completeSimulatedPayment = jest.fn().mockResolvedValueOnce({ ok: false }).mockResolvedValue({ ok: true })
+      const flow = setup({ completeSimulatedPayment, ...overrides })
+      await passEligibility(flow.user)
+      await fillVehicle(flow.user)
+      await flow.user.click(consentBoxes()[0])
+      await flow.user.click(consentBoxes()[1])
+      await flow.user.click(payButton())
+      expect(await screen.findByRole("alert")).toHaveTextContent(/fehlgeschlagen/)
+      await flow.user.click(screen.getByRole("button", { name: "Zurück" }))
+      await screen.findByRole("heading", { level: 1, name: "Ihr Fahrzeug" })
+      return flow
+    }
+
+    async function payAgain(user: User) {
+      await user.click(screen.getByRole("button", { name: "Weiter" }))
+      await user.click(consentBoxes()[0])
+      await user.click(consentBoxes()[1])
+      await user.click(payButton())
+    }
+
+    it("retries a failed payment on the same order after the customer went back and changed nothing", async () => {
+      const { user, actions } = await failFirstPaymentThenGoBack()
+
+      await payAgain(user)
+
+      expect(await screen.findByText("ZG-ABC123")).toBeInTheDocument()
+      expect(actions.startCheckout).toHaveBeenCalledTimes(1)
+    })
+
+    it("opens a new order once the customer changed what the first one holds", async () => {
+      const startCheckout = jest
+        .fn()
+        .mockResolvedValueOnce({ ok: true, reference: "ZG-ABC123", clientSecret: "fake-secret" })
+        .mockResolvedValueOnce({ ok: true, reference: "ZG-DEF456", clientSecret: "fake-secret-2" })
+      const { user, actions } = await failFirstPaymentThenGoBack({ startCheckout })
+      await user.clear(screen.getByLabelText("E-Mail-Adresse"))
+      await user.type(screen.getByLabelText("E-Mail-Adresse"), "other@example.test")
+
+      await payAgain(user)
+
+      expect(await screen.findByText("ZG-DEF456")).toBeInTheDocument()
+      expect(actions.startCheckout).toHaveBeenLastCalledWith(expect.objectContaining({ vehicle: expect.objectContaining({ email: "other@example.test" }) }))
+    })
+
+    it("tells the customer when the card form never loaded, instead of ignoring the click", async () => {
+      // jsdom loads no external script, so Stripe.js never arrives: as with a blocker or a dropped connection.
+      const { user, actions } = setup({}, { kind: "stripe", publishableKey: "pk_test_fake" })
+      await passEligibility(user)
+      await fillVehicle(user)
+      await user.click(consentBoxes()[0])
+      await user.click(consentBoxes()[1])
+
+      await user.click(payButton())
+
+      expect(await screen.findByRole("alert")).toHaveTextContent(/Zahlungsformular/)
+      expect(actions.startCheckout).not.toHaveBeenCalled()
+    })
+
+    it("keeps the customer on the payment while it runs, and lets them go back once it failed", async () => {
+      let finish!: (result: { ok: boolean }) => void
+      const completeSimulatedPayment = jest.fn(() => new Promise<{ ok: boolean }>((resolve) => (finish = resolve)))
+      const { user } = setup({ completeSimulatedPayment })
+      await passEligibility(user)
+      await fillVehicle(user)
+      await user.click(consentBoxes()[0])
+      await user.click(consentBoxes()[1])
+      await user.click(payButton())
+
+      expect(screen.getByRole("button", { name: "Zurück" })).toBeDisabled()
+      await act(async () => {
+        const popped = new Promise((resolve) => window.addEventListener("popstate", resolve, { once: true }))
+        window.history.back()
+        await popped
+      })
+      expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Prüfen und bezahlen")
+
+      await act(async () => finish({ ok: false }))
+      await user.click(screen.getByRole("button", { name: "Zurück" }))
+      expect(await screen.findByRole("heading", { level: 1, name: "Ihr Fahrzeug" })).toBeInTheDocument()
     })
   })
 })

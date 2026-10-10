@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState, type ReactNode } from "react"
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,12 +20,38 @@ export interface FunnelStep {
   heading: string
 }
 
+/** An order the checkout opened, with the data it was opened for, as `CheckoutPanel` keys it. */
+export interface FunnelOrder {
+  key: string
+  reference: string
+  clientSecret: string
+}
+
+/**
+ * What the checkout needs from the frame, which outlives every step: the order it opened, so coming
+ * back to the payment with the same data pays that order instead of opening a second, and a lock on
+ * going back while a payment runs.
+ */
+const FunnelCheckout = createContext<{
+  /** The order opened for `key`, if the last one was. */
+  orderFor: (key: string) => FunnelOrder | undefined
+  keep: (order: FunnelOrder) => void
+  setPaying: (paying: boolean) => void
+} | null>(null)
+
+export function useFunnelCheckout() {
+  const checkout = useContext(FunnelCheckout)
+  if (!checkout) throw new Error("The checkout is part of a funnel: render it inside FunnelFrame")
+  return checkout
+}
+
 /**
  * What every funnel shares: one step per screen, the last being the confirmation. A funnel keeps
  * its own data, never in the URL (it holds codes and personal details), so going back keeps what was
  * entered. The frame owns where the customer is: each step is a history entry holding only its
  * number, so the browser's back button goes back one step (site-contract §3). `paid` locks the
- * confirmation in: once the order is paid, going back must not offer the payment again.
+ * confirmation in: once the order is paid, going back must not offer the payment again. While a
+ * payment runs the customer stays on it too, so its form cannot be torn down half-way.
  */
 export function FunnelFrame({
   steps,
@@ -37,6 +63,8 @@ export function FunnelFrame({
   children: (navigation: { step: number; goTo: (step: number) => void }) => ReactNode
 }) {
   const [step, setStep] = useState(0)
+  const [paying, setPaying] = useState(false)
+  const order = useRef<FunnelOrder | null>(null)
   const heading = useRef<HTMLHeadingElement>(null)
   const firstRender = useRef(true)
   const confirmation = steps.length - 1
@@ -49,11 +77,14 @@ export function FunnelFrame({
   useEffect(() => {
     const onPopState = (event: PopStateEvent) => {
       const target = event.state?.funnelStep
-      if (typeof target === "number" && !paid) setStep(target)
+      if (typeof target !== "number" || paid) return
+      // The browser has already moved back: put the payment's entry back, so a later "Zurück" still lands one step back.
+      if (paying) window.history.pushState({ funnelStep: step }, "")
+      else setStep(target)
     }
     window.addEventListener("popstate", onPopState)
     return () => window.removeEventListener("popstate", onPopState)
-  }, [paid])
+  }, [paid, paying, step])
 
   const goTo = (next: number) => {
     setStep(next)
@@ -77,7 +108,7 @@ export function FunnelFrame({
       <div className="flex flex-col gap-(--heading-space-below)">
         {entering ? (
           <div>
-            <Button variant="ghost" size="sm" onClick={() => window.history.back()}>
+            <Button variant="ghost" size="sm" disabled={paying} onClick={() => window.history.back()}>
               Zurück
             </Button>
           </div>
@@ -87,7 +118,17 @@ export function FunnelFrame({
         </h1>
       </div>
 
-      {children({ step, goTo })}
+      <FunnelCheckout.Provider
+        value={{
+          orderFor: (key) => (order.current?.key === key ? order.current : undefined),
+          keep: (opened) => {
+            order.current = opened
+          },
+          setPaying,
+        }}
+      >
+        {children({ step, goTo })}
+      </FunnelCheckout.Provider>
 
       <LeaveGuard active={entering} />
     </div>

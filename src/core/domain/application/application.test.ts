@@ -151,18 +151,39 @@ describe("applyEvent, once a Neuzulassung's order has ended", () => {
     expect(ended.history.at(-1)).toEqual({ status: "completed", at: NOW })
   })
 
-  it("leaves a de-registration's request as it was: it holds no account", () => {
-    const ended = applyEvent(anApplication({ status: "submitted_to_kba" }), "kbaCompleted", NOW)
-
-    expect(ended.request.codes.rearPlate.reveal()).toBe("AA1")
-  })
-
   it("leaves the order it was given untouched", () => {
     const open = walk(...AT_THE_KBA)
 
     applyEvent(open, "kbaCompleted", NOW)
 
     expect(open.request.bankAccount.reveal().iban).toBe("DE89370400440532013000")
+  })
+})
+
+// Launch plan Q22, provisional: the codes prove possession for one filing, and an order that has ended is never filed again.
+describe("applyEvent, once a de-registration's order has ended", () => {
+  const walk = (...events: ApplicationEvent[]) =>
+    events.reduce((order, event, index) => applyEvent(order, event, new Date(NOW.getTime() + (index + 1) * 60_000)), anApplication({ status: "submitted_to_kba" }))
+
+  it.each([
+    ["completed (5a)", ["kbaCompleted"]],
+    ["failed for good (5c)", ["failedFinal"]],
+    ["was cancelled at 5b", ["failedCorrectable", "cancelledByCustomer"]],
+  ] as const)("holds no security codes once it %s", (_, events) => {
+    expect(walk(...events).request).not.toHaveProperty("codes")
+  })
+
+  it("holds them at 5b, where a correction files the order again", () => {
+    const { request } = walk("failedCorrectable")
+
+    expect(request.service === "deregistration" && request.codes?.rearPlate.reveal()).toBe("AA1")
+  })
+
+  it("keeps the plate and the VIN", () => {
+    const open = anApplication({ status: "submitted_to_kba" })
+    const ended = applyEvent(open, "kbaCompleted", NOW)
+
+    expect(ended.request).toEqual({ ...open.request, codes: undefined })
   })
 })
 

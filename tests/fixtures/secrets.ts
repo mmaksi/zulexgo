@@ -7,7 +7,8 @@ import type { ServiceRequest } from "@/src/core/domain/application/service"
  */
 export function secretsOf(request: ServiceRequest): string[] {
   if (request.service === "deregistration") {
-    const { rearPlate, frontPlate, certificate } = request.codes
+    // An order that has ended no longer holds its codes.
+    const { rearPlate, frontPlate, certificate } = request.codes ?? {}
     return [rearPlate, frontPlate, certificate].flatMap((code) => (code ? [code.reveal()] : []))
   }
   const { owner, bankAccount, registrationCertificate, evbNumber } = request

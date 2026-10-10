@@ -94,17 +94,18 @@ describeWithPostgres("migration rehearsal", () => {
   })
 
   // The rehearsal that matters on a real table: the dev seed holds orders of both services when someone reverts.
-  it("reverts the Neuzulassung migrations with orders stored, keeping the de-registrations, and loads the seed again afterwards", async () => {
+  it("reverts the Neuzulassung migrations with orders stored, keeping the de-registrations that still hold their codes, and loads the seed again afterwards", async () => {
     const migrations = await readMigrations(join(process.cwd(), "db", "migrations"))
     const migrator = new Migrator(database.url, migrations)
     await migrator.up()
     const repository = new PostgresApplicationRepository({ connectionString: database.url, encryptionKey: randomBytes(32).toString("base64") })
     const seed = seedFor("dev")
-    const kept = seed.filter(({ application }) => application.request.service === "deregistration").length
+    // Reverting 0013 on the way deletes the ended ones, which have forgotten their codes.
+    const kept = seed.filter(({ application: { request } }) => request.service === "deregistration" && request.codes).length
     await loadSeed(repository, seed)
 
-    // The newest three (0010 to 0012): the last of them to be reverted, 0010, is the one that deletes the Neuzulassung orders.
-    await migrator.down(3)
+    // Back to before 0010, the last of them to be reverted and the one that deletes the Neuzulassung orders.
+    await migrator.down(migrations.filter(({ name }) => name >= "0010").length)
 
     expect(await database.query("SELECT service, count(*)::int AS n FROM applications GROUP BY service")).toEqual([{ service: "deregistration", n: kept }])
     await migrator.up()
@@ -113,7 +114,7 @@ describeWithPostgres("migration rehearsal", () => {
     await migrator.up()
   })
 
-  // The reversal the CI rehearsal makes with the seed in place: only the newest migration, over orders that hold a consent.
+  // With the seed in place, back to before the consent migration (0012) and up again, over orders that hold a consent.
   it("reverts and reapplies the consent migration over orders that hold a consent, keeping them and every de-registration's consent", async () => {
     const migrations = await readMigrations(join(process.cwd(), "db", "migrations"))
     const migrator = new Migrator(database.url, migrations)
@@ -123,8 +124,10 @@ describeWithPostgres("migration rehearsal", () => {
     const seed = seedFor("dev")
     await loadSeed(repository, seed)
 
-    await migrator.down(1)
+    await migrator.down(migrations.filter(({ name }) => name >= "0012").length)
     await migrator.up()
+    // Reverting through 0013 deleted the ended de-registrations, which have forgotten their codes; the seed loads them again.
+    await loadSeed(repository, seed)
 
     expect(await database.query("SELECT count(*)::int AS n FROM applications")).toEqual([{ n: seed.length }])
     // A Neuzulassung's consent is incomplete without its power of attorney, which the reverted column held: it is forgotten with it.
@@ -132,6 +135,28 @@ describeWithPostgres("migration rehearsal", () => {
       { service: "deregistration", with_consent: seed.filter(({ application }) => application.request.service === "deregistration").length },
       { service: "newRegistration", with_consent: 0 },
     ])
+    await migrator.down(migrations.length)
+    await migrator.up()
+  })
+
+  // 0013 lets an ended de-registration forget its codes, which 0010's check cannot hold: reverting deletes exactly those orders, and the seed brings them back.
+  it("reverts and reapplies 0013 over orders that have forgotten their codes, deleting only those, and loads them again", async () => {
+    const migrations = await readMigrations(join(process.cwd(), "db", "migrations"))
+    const migrator = new Migrator(database.url, migrations)
+    await migrator.down(migrations.length)
+    await migrator.up()
+    const repository = new PostgresApplicationRepository({ connectionString: database.url, encryptionKey: randomBytes(32).toString("base64") })
+    const seed = seedFor("dev")
+    const forgotten = seed.filter(({ application: { request } }) => request.service === "deregistration" && !request.codes).length
+    await loadSeed(repository, seed)
+
+    await migrator.down(migrations.filter(({ name }) => name >= "0013").length)
+
+    expect(forgotten).toBeGreaterThan(0)
+    expect(await database.query("SELECT count(*)::int AS n FROM applications")).toEqual([{ n: seed.length - forgotten }])
+    expect(await database.query("SELECT count(*)::int AS n FROM applications WHERE encrypted_security_codes IS NULL AND service = 'deregistration'")).toEqual([{ n: 0 }])
+    await migrator.up()
+    expect(await loadSeed(repository, seed)).toBe(forgotten)
     await migrator.down(migrations.length)
     await migrator.up()
   })

@@ -72,9 +72,15 @@ export async function advanceStatus(deps: Dependencies, application: Application
     const failure = failureOf(status)
     if (failure) {
       // If the algorithm retries silently, that means asking the service to resume this
-      // application (no data change), then looking again on the usual schedule.
+      // application (no data change), then looking again on the usual schedule. A retry the
+      // service refuses still counts as used, or the next look would ask again for ever.
       await handleFailure(deps, application, failure, async (retrying) => {
-        await deps.registration.retry(retrying.zulexApplicationId!)
+        try {
+          await deps.registration.retry(retrying.zulexApplicationId!)
+        } catch (error) {
+          if (error instanceof GatewayUnavailable) throw error
+          console.warn(`[advance-status] ${application.reference}: retry refused (${error instanceof Error ? error.name : "unknown error"}), counted as used`)
+        }
         return scheduleNextPoll(deps, retrying)
       })
       return

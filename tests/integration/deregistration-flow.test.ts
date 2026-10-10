@@ -321,6 +321,42 @@ describe("de-registration flow on fakes", () => {
       expect(emails()).toEqual(["orderConfirmation", "submittedToKba", "correctionRequired"])
     })
 
+    it.each([
+      ["refuses it (400)", () => new GatewayRejected()],
+      ["answers it any other way (a 404)", () => new Error("Zulex answered 404")],
+    ])("counts a retry as used when the service %s, so the next look makes the error correctable instead of asking again for ever", async (_, refusal) => {
+      const warn = jest.spyOn(console, "warn").mockImplementation(() => {})
+      const { deps, emails, stored, zulexId, poll, checkoutAndPay } = setup()
+      const reference = await checkoutAndPay()
+      const id = await zulexId(reference)
+
+      deps.registration.setStatus(id, { state: "failed", error: { code: 999, details: [] }, documents: [] })
+      deps.registration.failNext("retry", refusal())
+      await poll(1)
+      await poll(60)
+
+      expect(deps.registration.retries).toEqual([])
+      expect((await stored(reference)).status).toBe("failed_correctable")
+      expect(emails()).toEqual(["orderConfirmation", "submittedToKba", "correctionRequired"])
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining(`${reference}: retry refused`))
+      warn.mockRestore()
+    })
+
+    it("keeps the silent retry when the service could not be reached to take it", async () => {
+      const { deps, emails, stored, zulexId, poll, checkoutAndPay } = setup()
+      const reference = await checkoutAndPay()
+      const id = await zulexId(reference)
+
+      deps.registration.setStatus(id, { state: "failed", error: { code: 999, details: [] }, documents: [] })
+      deps.registration.failNext("retry", new GatewayUnavailable())
+      await poll(1)
+      await poll(60)
+
+      expect(deps.registration.retries).toEqual([id])
+      expect((await stored(reference)).status).toBe("submitted_to_kba")
+      expect(emails()).toEqual(["orderConfirmation", "submittedToKba"])
+    })
+
     it("flags for support, once, a KBA error code the catalogue does not know, naming the order and never a security code", async () => {
       const warn = jest.spyOn(console, "warn").mockImplementation(() => {})
       const { deps, zulexId, poll, checkoutAndPay } = setup()

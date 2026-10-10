@@ -1,28 +1,15 @@
 "use server"
 
-import { getContainer } from "@/src/config/container"
-import { ValidationError } from "@/src/core/errors/validation-error"
-import { checkEligibility } from "@/src/core/use-cases/checkout/check-eligibility"
-import type { CheckoutActions } from "./_components/checkout-actions"
-import { failedBecause } from "@/app/(funnel)/failed-because"
+import { headers } from "next/headers"
 import { heldInvite } from "@/app/(funnel)/invite-cookie"
-import { startDeregistrationCheckout } from "./requests"
+import { getContainer } from "@/src/config/container"
+import type { CheckoutActions } from "./_components/checkout-actions"
+import { checkPrefix, startDeregistrationCheckout } from "./requests"
 
-/**
- * Reachable by any POST, so every input is treated as untrusted and validated
- * by the use case. Failures are logged by name only: the input holds security
- * codes.
- */
+/** Reachable by any POST: `requests.ts` counts each call against the caller's address and validates what it receives. */
 
-export const checkEligibilityAction: CheckoutActions["checkEligibility"] = async (prefix) => {
-  try {
-    return { ok: true, ...(await checkEligibility(getContainer(), prefix)) }
-  } catch (error) {
-    if (error instanceof ValidationError) return { ok: false, reason: "invalidPrefix" }
-    failedBecause("eligibility check", error)
-    return { ok: false, reason: "unavailable" }
-  }
-}
+export const checkEligibilityAction: CheckoutActions["checkEligibility"] = async (prefix) =>
+  checkPrefix(getContainer(), await headers(), prefix)
 
 export const startCheckoutAction: CheckoutActions["startCheckout"] = async (input) =>
-  startDeregistrationCheckout(getContainer(), input, await heldInvite("deregistration"))
+  startDeregistrationCheckout(getContainer(), await headers(), input, await heldInvite("deregistration"))

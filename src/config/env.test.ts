@@ -326,6 +326,21 @@ describe("database and encryption", () => {
       parseEnv({ ...production, CODES_ENCRYPTION_KEY: Buffer.alloc(16, 1).toString("base64") })
     ).toThrow(/CODES_ENCRYPTION_KEY/)
   })
+
+  it("takes the database's CA certificate as PEM, and refuses at boot anything else pasted there", () => {
+    const pem = "-----BEGIN CERTIFICATE-----\nMIIDxTCCAq2gAwIBAgIUfake\n-----END CERTIFICATE-----\n"
+
+    expect(parseEnv({ ...production, DATABASE_CA_CERT: pem }).DATABASE_CA_CERT).toBe(pem)
+    expect(() => parseEnv({ ...production, DATABASE_CA_CERT: "prod-ca-2021.crt" })).toThrow(/DATABASE_CA_CERT/)
+  })
+
+  it("restores the line breaks of a certificate pasted on one line with \\n escapes", () => {
+    const oneLine = "-----BEGIN CERTIFICATE-----\\nMIIDxTCCAq2gAwIBAgIUfake\\n-----END CERTIFICATE-----\\n"
+
+    expect(parseEnv({ ...production, DATABASE_CA_CERT: oneLine }).DATABASE_CA_CERT).toBe(
+      "-----BEGIN CERTIFICATE-----\nMIIDxTCCAq2gAwIBAgIUfake\n-----END CERTIFICATE-----\n"
+    )
+  })
 })
 
 describe("storage", () => {
