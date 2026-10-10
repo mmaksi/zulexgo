@@ -6,7 +6,6 @@ import { pollDueApplications } from "@/src/core/use-cases/registration/poll-due-
 import { submitCheckout } from "@/src/core/use-cases/checkout/submit-checkout"
 import { webhookRequest, withVendorsAtTheNetwork } from "./network-harness"
 
-/** M4: the poll heartbeat advances a filed application from what Zulex reports, on the backoff schedule. */
 const { world, stored, emails } = withVendorsAtTheNetwork()
 
 const CRON_SECRET = "fake-cron-secret"
@@ -23,7 +22,7 @@ const heartbeat = (afterMinutes: number, authorization = `Bearer ${CRON_SECRET}`
 async function filedApplication() {
   const { reference } = await submitCheckout(world.deps, { service: "deregistration", request: FAKE_REQUEST, email: "customer@example.test", consents: FAKE_CONSENTS })
   const { payment } = await stored(reference)
-  world.stripe.customerPays(payment.id, "card")
+  world.stripe.customerPays(payment.id)
   await handlePaymentNotification(world.deps, webhookRequest(world.stripe.event("payment_intent.amount_capturable_updated", payment.id)))
   return { reference, paymentId: payment.id, zulexId: (await stored(reference)).zulexApplicationId! }
 }

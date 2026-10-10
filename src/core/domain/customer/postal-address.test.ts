@@ -1,5 +1,8 @@
 import { ValidationError } from "@/src/core/errors/validation-error"
-import { parsePostalAddress } from "./postal-address"
+import { validate } from "@/src/core/domain/validate"
+import { postalAddressSchema } from "./postal-address"
+
+const parsePostalAddress = (input: unknown) => validate(postalAddressSchema, input, "address")
 
 const valid = { street: "Beispielstraße", houseNumber: "12a", postcode: "10115", city: "Berlin" }
 
@@ -18,7 +21,6 @@ describe("parsePostalAddress: a German address, as the API takes it", () => {
     expect(parsePostalAddress({ street: " Beispielstraße ", houseNumber: " 12a ", postcode: " 10115 ", city: " Berlin " })).toEqual(valid)
   })
 
-  // The API's pattern: one to four digits, which a letter or anything else may follow.
   it.each(["1", "12", "12a", "12 a", "1-3", "9999", "7/2"])("accepts the house number %p", (houseNumber) => {
     expect(parsePostalAddress({ ...valid, houseNumber }).houseNumber).toBe(houseNumber)
   })

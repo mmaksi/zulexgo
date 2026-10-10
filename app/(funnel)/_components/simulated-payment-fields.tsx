@@ -4,7 +4,6 @@ import { useEffect, type RefObject } from "react"
 import { Alert } from "@/src/ui/alert"
 import type { PaymentDriver } from "./payment-driver"
 
-/** Where no payment provider is configured (dev, a demo): no money moves, the server plays the customer paying. */
 export function SimulatedPaymentFields({
   driverRef,
   completeSimulatedPayment,

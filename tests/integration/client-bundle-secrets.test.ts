@@ -1,16 +1,6 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs"
 import { dirname, join, relative, resolve } from "node:path"
 
-/**
- * CLAUDE.md non-negotiable: the `X-Api-Key` is a merchant credential and must
- * never be reachable from the browser. A client module ships everything it
- * imports, so this walks the import graph from every `"use client"` module and
- * fails if any module it reaches can read a server secret — so the guard is in
- * place before the Zulex and Stripe clients are written.
- *
- * `import "server-only"` makes `next build` fail on the same mistake, and CI
- * greps the built client chunks for a canary secret; this is the fast check.
- */
 const ROOT = resolve(__dirname, "../..")
 const ROOTS = ["app", "src"]
 const EXTENSIONS = [".ts", ".tsx", "/index.ts", "/index.tsx"]
@@ -33,7 +23,6 @@ const specifiers = (source: string) =>
     ([, specifier]) => specifier
   )
 
-/** Resolves app-local imports only; npm packages are not ours to police here. */
 function resolveLocal(specifier: string, importer: string): string | undefined {
   const base = specifier.startsWith("@/")
     ? join(ROOT, specifier.slice(2))
@@ -88,13 +77,10 @@ describe("client bundle secrets", () => {
   )
 
   it("finds the client modules it is meant to police", () => {
-    // A guard that silently matches nothing is worse than no guard.
     expect(clientModules.length).toBeGreaterThan(0)
   })
 
   it("follows imports, so a server module pulled into a client one is caught", () => {
-    // The composition root reads process.env and is server-only; a client
-    // entry that imported it must be reported through the graph, not missed.
     const container = join(ROOT, "src/config/container.ts")
     expect(offendersIn([container]).join("\n")).toMatch(/src\/config\/env\.ts reads a non-public/)
   })

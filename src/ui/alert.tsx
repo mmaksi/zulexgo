@@ -2,9 +2,7 @@ import * as React from "react"
 import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/src/lib/utils"
 
-// design-standard.md §2.4 semantic tints with a 4px left rule; text stays grau-dark
-// on every tint. No default role: callers choose `alert`, `status` or none, since
-// a static notice must not interrupt a screen reader.
+// No default role: a static notice must not interrupt a screen reader, so callers choose one.
 const alertVariants = cva("border-l-4 p-4 text-body text-grau-dark", {
   variants: {
     variant: {

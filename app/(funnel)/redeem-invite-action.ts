@@ -7,7 +7,6 @@ import type { InviteAnswer } from "./_components/invite-form"
 import { holdInvite } from "./invite-cookie"
 import { redeemInvite } from "./redeem-invite"
 
-/** Reachable by any POST: `redeemInvite` counts each call against the caller's address, and the service comes from the browser too. */
 export async function redeemInviteAction(service: string, code: string): Promise<InviteAnswer> {
   if (!isOrderable(service)) return { status: "refused" }
 

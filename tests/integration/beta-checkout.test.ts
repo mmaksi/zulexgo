@@ -12,10 +12,7 @@ const DAY = 24 * 60 * 60_000
 const INVITE = "K7M2-QX9P"
 const EMAIL = "erika.mustermann@example.test"
 
-/**
- * Neuzulassung is on sale to people with an invite only, for two checkouts a day. The checkout is
- * where that is decided: a funnel's server action is reachable by any POST.
- */
+// A funnel's server action is reachable by any POST, so the checkout is where the beta is enforced.
 function setup() {
   const flow = setupFlow()
   const beta: Beta = { invites: { newRegistration: [INVITE] }, dailyPlaces: 2 }
@@ -74,7 +71,6 @@ describe("a checkout for a service in its beta", () => {
     await expect(checkout(INVITE)).rejects.toBeInstanceOf(OpenApplicationExists)
     await expect(checkout(INVITE)).rejects.toBeInstanceOf(OpenApplicationExists)
 
-    // Two places in all: one taken by the paid order, one still free for a car with no order.
     await expect(checkout(INVITE, { ...FAKE_NEW_REGISTRATION, vin: "FAKEVIN0000000099" })).resolves.toMatchObject({ reference: expect.any(String) })
   })
 

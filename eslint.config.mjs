@@ -2,15 +2,7 @@ import { defineConfig, globalIgnores } from "eslint/config";
 import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTs from "eslint-config-next/typescript";
 
-/**
- * `external-services`: a vendor SDK may be imported in exactly one folder, and
- * nothing outside the composition root may depend on a concrete adapter.
- * `project-structure`: dependencies point inward. A rule beats a convention.
- *
- * `no-restricted-imports` does not merge across config blocks — the last block
- * matching a file wins — so every block is built with `restrict()`, which
- * always carries the vendor and parent-import bans.
- */
+// no-restricted-imports does not merge across blocks (the last match wins): build each with restrict().
 const VENDORS = [
   { sdks: [{ name: "stripe" }], folder: "src/adapters/payment/stripe", port: "PaymentProvider" },
   { sdks: [{ name: "pg" }], folder: "src/adapters/repository/postgres", port: "ApplicationRepository" },
@@ -21,23 +13,17 @@ const VENDORS = [
   sdks: vendor.sdks.map((sdk) => ({ ...sdk, message: `Import the ${vendor.port} port; the SDK lives in ${vendor.folder}/ only.` })),
 }));
 
-// Stripe's browser SDKs are UI, so they cannot live in an adapter; they get one
-// folder of their own, shared by every funnel, instead.
 const STRIPE_UI_FOLDER = "app/(funnel)/_components/stripe";
 const STRIPE_UI = {
   group: ["@stripe/*"],
   message: `Stripe's browser SDK lives in ${STRIPE_UI_FOLDER}/ only.`,
 };
 
-// A relative path climbing out of its folder would slip past every alias-based
-// pattern below, so cross-folder imports must go through `@/`.
 const PARENT_IMPORTS = {
   regex: "^\\.\\./",
   message: "Import across folders through @/ so the dependency rules can see it.",
 };
 
-// The bare package does not know the globals.css type scale and drops `text-h4`
-// next to a text colour; src/lib/utils.ts registers the tokens.
 const RAW_CN = { name: "cn", message: "Import cn from @/src/lib/utils, which knows the theme tokens." };
 
 const CONCRETE_ADAPTERS = {
@@ -68,12 +54,10 @@ const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
   globalIgnores([
-    // Default ignores of eslint-config-next:
     ".next/**",
     "out/**",
     "build/**",
     "next-env.d.ts",
-    // Jest coverage output.
     "coverage/**",
   ]),
   {
@@ -83,9 +67,6 @@ const eslintConfig = defineConfig([
   {
     files: ["src/core/**/*.{ts,tsx}"],
     rules: {
-      // Non-determinism arrives through the Clock and TokenGenerator ports, never
-      // by reaching for it. Parsing a stored instant with `new Date(value)` is
-      // fine; it is the zero-argument call that reads the wall clock.
       "no-restricted-syntax": ["error",
         {
           selector: "NewExpression[callee.name='Date'][arguments.length=0]",
@@ -124,9 +105,6 @@ const eslintConfig = defineConfig([
     },
   },
   {
-    // A funnel handles what the customer typed as plain strings and sends it to a server action, which parses it
-    // into secrets. Nothing under app/ or src/ui/ has a reason to read a `Secret`, and a client component that
-    // did would ship the value in the bundle: only an adapter reveals one, to send it or to store it.
     files: ["app/**/*.{ts,tsx}", "src/ui/**/*.{ts,tsx}"],
     rules: {
       "no-restricted-syntax": ["error", {
@@ -145,7 +123,6 @@ const eslintConfig = defineConfig([
     files: ["src/adapters/**/*.{ts,tsx}"],
     rules: { "no-restricted-imports": restrict({ patterns: ADAPTER_PATTERNS }) },
   },
-  // Each vendor SDK is importable in its own adapter folder and nowhere else.
   ...VENDORS.map((vendor) => ({
     files: [`${vendor.folder}/**/*.{ts,tsx}`],
     rules: { "no-restricted-imports": restrict({ patterns: ADAPTER_PATTERNS, allowSdk: vendor }) },

@@ -7,13 +7,7 @@ import type { ResendFormState } from "./resend-form-state"
 
 const MINUTE = 60_000
 
-/**
- * "Send me my link again". Whatever the order, the answer is the same and comes
- * at once: the work of looking it up and mailing it is handed to `later` (Next's
- * `after`), so neither the words nor the time say whether the pair matched. Only
- * a badly formed reference or address is told apart, since that says nothing
- * about any order; only a caller over the limit is told to wait.
- */
+// The work runs in `later`, so neither the answer nor its timing says whether the pair matched
 export async function requestStatusLink(
   deps: Parameters<typeof resendStatusLink>[0] & { rateLimiter: RateLimiter },
   headers: Headers,

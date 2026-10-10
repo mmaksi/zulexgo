@@ -20,10 +20,7 @@ const STEPS = [
 
 const CONFIRMATION = STEPS.length - 1
 
-/**
- * The de-registration funnel, one step per screen. State lives here, never in
- * the URL (it holds security codes), so going back keeps what was entered.
- */
+// State stays in memory, never in the URL: it holds security codes.
 export function DeregistrationFunnel({ payment, actions }: { payment: PaymentMode; actions: CheckoutActions }) {
   const [eligibility, setEligibility] = useState<Eligibility>()
   const [vehicle, setVehicle] = useState<VehicleData>(EMPTY_VEHICLE)
@@ -39,7 +36,7 @@ export function DeregistrationFunnel({ payment, actions }: { payment: PaymentMod
               checkEligibility={actions.checkEligibility}
               onEligible={(result) => {
                 setEligibility(result)
-                setVehicle((current) => ({ ...current, prefix: current.prefix || result.prefix }))
+                setVehicle((current) => ({ ...current, prefix: result.prefix }))
                 goTo(1)
               }}
             />

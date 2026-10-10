@@ -13,7 +13,6 @@ export type ResendLinkAction = (input: { reference: string; email: string }) => 
 const FIELDS = ["reference", "email"] as const
 const fieldId = (field: (typeof FIELDS)[number]) => `resend-${field}`
 
-/** site-contract §3: the recovery for a lost link; the answer never says whether the order exists. */
 export function ResendLinkForm({ action }: { action: ResendLinkAction }) {
   const [state, setState] = useState<ResendFormState>()
   const [pending, setPending] = useState(false)
@@ -28,7 +27,6 @@ export function ResendLinkForm({ action }: { action: ResendLinkAction }) {
     try {
       const answer = await action({ reference: String(data.get("reference") ?? ""), email: String(data.get("email") ?? "") })
       if (answer.status !== "invalid") return setState(answer)
-      // The errors have no live role, so they are rendered before focus moves to the first, which then announces it.
       flushSync(() => setState(answer))
       const first = FIELDS.find((field) => answer.errors[field])
       if (first) document.getElementById(fieldId(first))?.focus()

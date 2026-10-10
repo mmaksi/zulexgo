@@ -132,11 +132,6 @@ describe("CorrectOrder", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(/nicht geklappt/)
   })
 
-  /**
-   * The form is on screen before its script has run, and for good where the script is blocked or fails.
-   * A native submit then sends every field as a query string: the security codes would end up in the
-   * status page's address, the history and the server's logs.
-   */
   describe("before its script has run", () => {
     const html = () => renderToStaticMarkup(<CorrectOrder action={jest.fn()} plateCount={2} />)
 

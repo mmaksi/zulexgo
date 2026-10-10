@@ -2,7 +2,6 @@ import { ArrowRight } from "lucide-react"
 import { buttonLink } from "@/src/ui/button"
 import { KbaSeal } from "./kba-seal"
 
-// site-contract.md §2.1 — headline <=60, subline <=140, CTA <=25 chars, verb-first.
 const STATS = [
   { value: "24/7", label: "Online beauftragen, wann Sie wollen" },
   { value: "0", label: "Termine bei der Behörde" },
@@ -39,19 +38,14 @@ export function Hero() {
             </div>
           </div>
 
-          {/* Below the buttons on small screens, so it never pushes the call
-              to action down. */}
           <KbaSeal
             sizes="(min-width: 1024px) 256px, 144px"
             className="mt-10 size-36 lg:mt-0 lg:size-64"
           />
         </div>
 
-        {/* §7 numeric values sit in grau-dark and are never orange */}
         <dl className="mt-12 grid gap-6 border-t border-border pt-8 sm:mt-16 sm:grid-cols-3 sm:gap-8 sm:pt-10">
           {STATS.map((stat) => (
-            // The term comes first in the DOM so it is announced first; the
-            // value leads visually.
             <div key={stat.label} className="flex flex-col-reverse">
               <dt className="mt-2 text-small text-grau-bright">{stat.label}</dt>
               <dd className="text-h3 font-light text-grau-dark">{stat.value}</dd>

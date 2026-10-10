@@ -3,13 +3,8 @@ import { createRegistrationApplicationSpec, patchRegistrationApplicationSpec } f
 import { parseNewRegistrationRequest } from "@/src/core/domain/application/new-registration-request"
 import { createBody } from "@/src/adapters/registration/zulex/request-bodies"
 
-/**
- * The strict model of the spec is what every Neuzulassung test measures the adapter against, so it
- * has to refuse what the spec refuses: a model that accepts anything would prove nothing.
- */
 const valid = createBody(parseNewRegistrationRequest(FAKE_NEW_REGISTRATION, FAKE_NEW_REGISTRATION_NOW))
 
-/** The valid body with the value at the dotted path replaced, or removed when `value` is undefined. */
 function withChange(path: string, value: unknown): unknown {
   const body = JSON.parse(JSON.stringify(valid)) as Record<string, unknown>
   const keys = path.split(".")

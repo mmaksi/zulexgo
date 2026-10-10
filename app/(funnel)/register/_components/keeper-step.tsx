@@ -12,11 +12,6 @@ import { failureWording, UNREACHABLE } from "./eligibility-failure"
 import type { RegistrationActions } from "./registration-actions"
 import { fieldId, useStepForm, type StepProps } from "./use-step-form"
 
-/**
- * site-contract §2.3: who the car is registered to. The postcode picked the authority in the first
- * step; if the customer changes it here, the authority is asked again, so the processing-time notice
- * is never about another town than the one on the order.
- */
 export function KeeperStep({
   data,
   onChange,
@@ -30,7 +25,6 @@ export function KeeperStep({
 }) {
   const { errors, set, setErrors, bind, check } = useStepForm("keeper", data, onChange)
   const [checking, setChecking] = useState(false)
-  // The check is a round trip the customer can leave during (by going back): its answer then means nothing here.
   const here = useRef(true)
   useEffect(() => {
     here.current = true
@@ -39,7 +33,6 @@ export function KeeperStep({
     }
   }, [])
 
-  /** The error has no live role, so it is rendered before focus moves to the field, which then announces it (site-contract §3). */
   const refuse = (postcode: string) => {
     flushSync(() => setErrors({ postcode }))
     document.getElementById(fieldId("postcode"))?.focus()
@@ -48,7 +41,6 @@ export function KeeperStep({
   async function submit(event: FormEvent) {
     event.preventDefault()
     if (checking || !check()) return
-    // The postcode is the same one the authority was found for: nothing to ask again.
     if (data.postcode.trim() === eligibility.postcode) return onNext(eligibility)
 
     setChecking(true)

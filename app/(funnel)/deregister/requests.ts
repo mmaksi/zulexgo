@@ -13,13 +13,6 @@ import { submitCheckout } from "@/src/core/use-cases/checkout/submit-checkout"
 import type { Dependencies } from "@/src/core/use-cases/dependencies"
 import type { CheckoutActions } from "./_components/checkout-actions"
 
-/**
- * What the de-registration funnel's server actions do. Reachable by any POST, so each call is counted
- * against the caller's address first (an address over its limit moves nothing, and so does a limiter that
- * cannot answer: it fails closed, as unavailable), and every input is treated as untrusted and validated
- * by the use case. Failures are logged by name only: the input holds security codes.
- */
-
 export async function checkPrefix(
   deps: Pick<Dependencies, "registration" | "rateLimiter">,
   headers: Headers,
@@ -41,7 +34,6 @@ export async function startDeregistrationCheckout(
   deps: Dependencies,
   headers: Headers,
   { plateCount, vehicle, consents, acknowledgedDuplicate }: Parameters<CheckoutActions["startCheckout"]>[0],
-  /** The code the customer redeemed when the service was in beta, as the browser holds it: untrusted. */
   invite?: string,
 ): Promise<StartCheckoutResult> {
   try {

@@ -58,8 +58,7 @@ describe("secret()", () => {
   })
 })
 
-// A secret's value is a true private field, which `toEqual` cannot see: without jest.setup.ts's equality tester, two orders
-// whose secrets differ compare equal, so a repository that lost or changed one would pass its own contract.
+// Guards jest.setup.ts's equality tester: without it toEqual cannot see a private field.
 describe("comparing secrets in a test", () => {
   it("tells secrets with different values apart", () => {
     expect(new Secret("DE89370400440532013000", "IBAN")).not.toEqual(new Secret("DE02120300000000202051", "IBAN"))

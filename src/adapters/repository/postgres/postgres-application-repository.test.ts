@@ -49,7 +49,6 @@ describeWithPostgres("PostgresApplicationRepository", () => {
       expect(await database.query("SELECT service FROM applications ORDER BY service")).toEqual([{ service: "deregistration" }, { service: "newRegistration" }])
     })
 
-    // Two checks refuse it (the list of services, and the columns each service must fill); Postgres reports the first it evaluates.
     it("refuses a service the price list does not have, however the row is written", async () => {
       const created = await repository.create(anApplication())
 
@@ -58,7 +57,6 @@ describeWithPostgres("PostgresApplicationRepository", () => {
       )
     })
 
-    // Only two services have a request type to store, so a row of any other has nothing the adapter could read back.
     it("refuses a service that has no stored shape yet, however the row is written", async () => {
       const created = await repository.create(anApplication())
 
@@ -103,7 +101,6 @@ describeWithPostgres("PostgresApplicationRepository", () => {
     })
   })
 
-  // What the plan's N3 asks for: a database reader (a dump, a support query, a leaked backup) learns nothing a person typed.
   it("keeps everything a Neuzulassung's customer typed out of every stored row, and the encrypted blob bound to its order", async () => {
     const created = await repository.create(aNewRegistrationApplication())
     const other = await repository.create(aNewRegistrationApplication())
@@ -128,17 +125,14 @@ describeWithPostgres("PostgresApplicationRepository", () => {
     ]
 
     for (const value of typed) expect(everything).not.toContain(value)
-    // The VIN is the one plain column the duplicate warning needs.
     expect(everything).toContain(vin)
 
-    // Copied onto another order, the blob does not decrypt: it is bound to its own reference.
     await database.query(
       `UPDATE applications SET encrypted_details = (SELECT encrypted_details FROM applications WHERE reference = '${created.reference}') WHERE reference = '${other.reference}'`,
     )
     await expect(repository.get(other.reference)).rejects.toThrow()
   })
 
-  // The stored blob is ciphertext, so a missing account is proved by opening it with the key, as the app does.
   it("holds a Neuzulassung's bank account in its encrypted details until the order ends, and not after", async () => {
     const detailsOf = async (reference: string) => {
       const [row] = await database.query(`SELECT encrypted_details FROM applications WHERE reference = '${reference}'`)
@@ -152,11 +146,9 @@ describeWithPostgres("PostgresApplicationRepository", () => {
     const afterwards = await detailsOf(created.reference)
     expect(afterwards).not.toContain(FAKE_NEW_REGISTRATION.bankAccount.iban)
     expect(afterwards).not.toContain(FAKE_NEW_REGISTRATION.bankAccount.bic)
-    // What else the order held is still there.
     expect(afterwards).toContain(FAKE_NEW_REGISTRATION.evbNumber)
   })
 
-  // The provider's id is part of the customer's start link at some providers, so it is held like a token: encrypted, bound to its order.
   it("keeps the identity provider's verification id out of every stored row, and bound to its order", async () => {
     const waiting = await repository.create(
       aNewRegistrationApplication({
@@ -175,7 +167,6 @@ describeWithPostgres("PostgresApplicationRepository", () => {
     expect(everything).not.toContain("provider-verification-4711")
     expect((await repository.get(waiting.reference))?.identityVerification?.id).toBe("provider-verification-4711")
 
-    // Copied onto another order, it does not decrypt.
     await database.query(
       `UPDATE applications SET identity_verification_id = (SELECT identity_verification_id FROM applications WHERE reference = '${waiting.reference}'),
          identity_verification_deadline = now() WHERE reference = '${other.reference}'`,
@@ -183,7 +174,6 @@ describeWithPostgres("PostgresApplicationRepository", () => {
     await expect(repository.get(other.reference)).rejects.toThrow()
   })
 
-  // A keeper's age is checked when the details are entered, and a correction can enter them again after the order was placed.
   it("reads back an order whose keeper came of age after it was placed, as a correction made then leaves it", async () => {
     const placed = new Date("2026-03-01T09:00:00.000Z")
     const corrected = new Date("2026-03-02T09:00:00.000Z")
@@ -193,7 +183,6 @@ describeWithPostgres("PostgresApplicationRepository", () => {
         { status: "awaiting_payment", at: placed },
         { status: "submitted_and_paid", at: corrected },
       ],
-      // 17 on the day it was placed, 18 the day after.
       request: parseNewRegistrationRequest({ ...FAKE_NEW_REGISTRATION, owner: { ...FAKE_NEW_REGISTRATION.owner, birthDate: "2008-03-02" } }, corrected),
     })
 
@@ -202,7 +191,6 @@ describeWithPostgres("PostgresApplicationRepository", () => {
     expect(await repository.get(order.reference)).toEqual({ ...order, version: 1 })
   })
 
-  // What a staging deploy loads: every seeded order, of every service and status, must satisfy the schema and read back whole.
   it("stores the whole seed and reads every seeded order back as it was seeded", async () => {
     const seed = seedFor("staging")
 

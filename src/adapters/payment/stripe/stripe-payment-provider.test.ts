@@ -23,7 +23,7 @@ const provider = () => new StripePaymentProvider({ secretKey: STRIPE_TEST_SECRET
 
 paymentProviderContract("StripePaymentProvider", () => ({
   provider: provider(),
-  customerPays: async (id, method) => stripe.customerPays(id, method),
+  customerPays: async (id) => stripe.customerPays(id),
   notificationOfPayment: async (id) => stripe.event("payment_intent.amount_capturable_updated", id),
 }))
 
@@ -38,9 +38,9 @@ async function newPayment(service: Service = "deregistration") {
 describe("StripePaymentProvider", () => {
   it.each(["invalid_request_error", "idempotency_error"])("reports a concurrent capture when Stripe responds with %s", async (type) => {
     const { paymentId } = await newPayment()
-    stripe.customerPays(paymentId, "card")
+    stripe.customerPays(paymentId)
     server.use(http.post(`https://api.stripe.com/v1/payment_intents/${paymentId}/capture`, () => {
-      stripe.customerPays(paymentId, "sepaDebit")
+      stripe.capture(paymentId)
       return HttpResponse.json({ error: { type, code: "payment_intent_unexpected_state", message: "Already captured" } }, { status: 400 })
     }))
 
@@ -51,7 +51,7 @@ describe("StripePaymentProvider", () => {
     "reports an expired hold when Stripe refuses the capture with %s before the intent shows it",
     async (code) => {
       const { paymentId } = await newPayment()
-      stripe.customerPays(paymentId, "card")
+      stripe.customerPays(paymentId)
       server.use(http.post(`https://api.stripe.com/v1/payment_intents/${paymentId}/capture`, () =>
         HttpResponse.json({ error: { type: "invalid_request_error", code, message: "The authorization has expired" } }, { status: 400 }),
       ))
@@ -62,7 +62,7 @@ describe("StripePaymentProvider", () => {
 
   it("preserves a provider validation error when the hold is still available", async () => {
     const { paymentId } = await newPayment()
-    stripe.customerPays(paymentId, "card")
+    stripe.customerPays(paymentId)
     server.use(http.post(`https://api.stripe.com/v1/payment_intents/${paymentId}/capture`, () =>
       HttpResponse.json({ error: { type: "invalid_request_error", code: "parameter_invalid_integer", message: "Invalid amount" } }, { status: 400 }),
     ))
@@ -91,7 +91,7 @@ describe("StripePaymentProvider", () => {
 
   it("reports when a held card must be captured by", async () => {
     const { paymentId } = await newPayment()
-    stripe.customerPays(paymentId, "card")
+    stripe.customerPays(paymentId)
 
     const payment = await provider().getPayment(paymentId)
 
@@ -100,7 +100,8 @@ describe("StripePaymentProvider", () => {
 
   it("keeps the refund total across a partial capture and later refunds", async () => {
     const { paymentId } = await newPayment()
-    stripe.customerPays(paymentId, "sepaDebit")
+    stripe.customerPays(paymentId)
+    stripe.capture(paymentId)
 
     await provider().refund(paymentId, Money.ofCents(5000), "refund-1")
 
@@ -109,7 +110,8 @@ describe("StripePaymentProvider", () => {
 
   it("refunds once per idempotency key even when the retry comes from a new process", async () => {
     const { paymentId } = await newPayment()
-    stripe.customerPays(paymentId, "sepaDebit")
+    stripe.customerPays(paymentId)
+    stripe.capture(paymentId)
 
     await provider().refund(paymentId, Money.ofCents(5000), "refund-1")
     const again = await provider().refund(paymentId, Money.ofCents(5000), "refund-1")
@@ -130,7 +132,7 @@ describe("StripePaymentProvider", () => {
       "starts the application on %s",
       async (type) => {
         const { paymentId, reference } = await newPayment()
-        stripe.customerPays(paymentId, "card")
+        stripe.customerPays(paymentId)
         const { payload, signature } = stripe.event(type, paymentId)
 
         expect(provider().readNotification(payload, signature)).toMatchObject({ kind: "paymentReady", reference })

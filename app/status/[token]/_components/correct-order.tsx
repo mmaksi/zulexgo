@@ -19,12 +19,6 @@ const EMPTY: Values = { vin: "", rearPlate: "", frontPlate: "", certificate: "" 
 const MODERN_VIN_LENGTH = 17
 const fieldId = (field: CorrectionField) => `correct-${field}`
 
-/**
- * site-contract §2.6, 5b: the fields the service can be given again, the front
- * code only for two plates. It starts empty, so a stored security code is never
- * put back on the page; a field left blank stays as it was. The plate is not
- * here: a different plate is a different vehicle, so a new order.
- */
 export function CorrectOrder({ action, plateCount }: { action: CorrectOrderAction; plateCount: 1 | 2 }) {
   const router = useRouter()
   const [values, setValues] = useState(EMPTY)
@@ -55,7 +49,6 @@ export function CorrectOrder({ action, plateCount }: { action: CorrectOrderActio
     focusFirstError.current = true
   }
 
-  // A failed submit takes the customer to the first field to fix (design-standard §6.4).
   useEffect(() => {
     if (!focusFirstError.current) return
     focusFirstError.current = false

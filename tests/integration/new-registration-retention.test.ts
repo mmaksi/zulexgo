@@ -3,12 +3,7 @@ import { cancelApplication } from "@/src/core/use-cases/application/cancel-appli
 import { getStatusByToken } from "@/src/core/use-cases/status/get-status-by-token"
 import { setupFlow } from "./flow-harness"
 
-/**
- * N8, launch plan Q54 (provisional): a Neuzulassung's bank account is the owner's, for the vehicle tax the
- * filing sets up, and nothing needs it once the order is over. Each way an order can end is driven through
- * the real use cases on the fakes, and none may leave the account stored. While the order is open it stays,
- * since a 5b can still file the order afresh with it.
- */
+// Provisional: launch plan Q54 (the bank account stays while a 5b can still refile with it).
 type Flow = ReturnType<typeof setupFlow>
 
 const holdsAccount = async (flow: Flow, reference: ApplicationReference) => {
@@ -16,7 +11,6 @@ const holdsAccount = async (flow: Flow, reference: ApplicationReference) => {
   return request.service === "newRegistration" && request.bankAccount !== undefined
 }
 
-/** Paid, verified as the owner and filed: at the KBA, status 4. */
 async function filedOrder(flow: Flow) {
   const reference = await flow.checkoutAndPayNewRegistration()
   await flow.customerVerifies(reference)
@@ -25,7 +19,6 @@ async function filedOrder(flow: Flow) {
   return reference
 }
 
-/** Refused by the KBA with a code the catalogue calls correctable: 5b, which the customer may still correct or cancel. */
 async function atFiveB(flow: Flow) {
   const reference = await filedOrder(flow)
   flow.deps.registration.setStatus(await flow.zulexId(reference), { state: "failed", error: { code: 101, details: [] }, documents: [] })

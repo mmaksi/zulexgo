@@ -20,12 +20,7 @@ const APPEARANCE: Appearance = {
   },
 }
 
-/**
- * Stripe's Payment Element, deferred: the PaymentIntent is created only when
- * the customer pays, with the same amount, currency, capture method and
- * payment method types given here, as Stripe requires. Cards only, which
- * brings Apple Pay and Google Pay; Link is off, so Stripe collects no email.
- */
+// Deferred intent: Stripe requires these options to match the PaymentIntent the server creates
 export function StripePaymentFields({
   publishableKey,
   amountCents,
@@ -37,7 +32,6 @@ export function StripePaymentFields({
   returnPath: string
   driverRef: RefObject<PaymentDriver | null>
 }) {
-  // downloads Stripe’s script from Stripe’s servers
   const stripe = useMemo(() => loadStripe(publishableKey), [publishableKey])
   return (
     <Elements

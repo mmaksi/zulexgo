@@ -31,7 +31,6 @@ function AlertDialogOverlay({ className, ...props }: AlertDialogPrimitive.Backdr
   )
 }
 
-// design-standard.md §5.3 elevation 3, §4.5 radius-lg, §6.4 fade over 200ms ease-enter, exit 120ms ease-exit.
 function AlertDialogContent({ className, ...props }: AlertDialogPrimitive.Popup.Props) {
   return (
     <AlertDialogPortal>

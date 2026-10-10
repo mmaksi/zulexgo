@@ -6,11 +6,6 @@ import { Confirmation } from "@/app/(funnel)/deregister/_components/confirmation
 
 export const metadata: Metadata = { title: "Antrag eingegangen — ZulexGO", robots: { index: false } }
 
-/**
- * Where Stripe returns a customer whose payment needed a redirect. Cards
- * usually confirm in place and never come here. The webhook, not this page,
- * starts the application.
- */
 export default async function ConfirmationPage({ searchParams }: PageProps<"/deregister/bestaetigung">) {
   const { auftrag, redirect_status: status } = await searchParams
   const reference = applicationReferenceSchema.safeParse(auftrag)

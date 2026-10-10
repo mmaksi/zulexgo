@@ -1,11 +1,5 @@
 import { cn } from "@/src/lib/utils"
 
-/**
- * design-standard.md §5.1 — the brand's only graphic device. Full bleed, thick
- * left to thin right, flat orange, never mirrored or stacked. Decoration only:
- * at most one section wedge per viewport height, plus the page terminator.
- * The geometry itself lives in globals.css.
- */
 export function Wedge({
   variant = "section",
   tone,

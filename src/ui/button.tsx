@@ -2,16 +2,11 @@ import { Button as ButtonPrimitive } from "@base-ui/react/button"
 import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/src/lib/utils"
 
-// design-standard.md §4.4/§6.3 — radius-md (radius-sm icon-only), 48px min
-// target, colour-only state changes (no lift, no scale), focus ring grau-dark
-// and never orange. §3.2: labels are Kanit 400, the weight for text under 16px.
-// §5.5 sets 20px for an icon in a button; Shadcn's default is 16px.
 const buttonVariants = cva(
   "group/button inline-flex shrink-0 items-center justify-center rounded-md border border-transparent bg-clip-padding text-small font-normal tracking-widest whitespace-nowrap uppercase transition-colors outline-none select-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-5",
   {
     variants: {
       variant: {
-        // §2.3 rule 1 — grau-dark on orange (6.40:1), never white.
         default:
           "bg-primary text-primary-foreground hover:bg-orange-dark active:bg-orange-pressed",
         outline:
@@ -53,15 +48,7 @@ function Button({
   )
 }
 
-/**
- * Classes for an anchor that should look like a button. Navigation is a link,
- * not an action, so it is styled rather than pushed through Base UI's button
- * (which would strip link semantics and warn about `nativeButton`).
- *
- * This merges, where raw `buttonVariants()` does not: the base sets
- * `border-transparent` and the outline variant sets `border-grau`, so without
- * tailwind-merge the border silently disappears.
- */
+// Links stay anchors: Base UI's button would strip their link semantics and warn about nativeButton.
 function buttonLink({
   className,
   ...variants

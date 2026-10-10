@@ -22,11 +22,6 @@ const EMPTY: Values = { evbNumber: "", part2Number: "", part2SecurityCode: "", f
 const fieldId = (field: Field) => `correct-${field}`
 const NOTHING_CHANGED = "Bitte ändern Sie mindestens eine Angabe."
 
-/**
- * What of the form's values the domain refuses, in the funnel's own words (the rules are the domain's, so the form
- * says no exactly where the server would). `identityVerified` is false only for an order whose identity check found
- * someone else than the owner, which is the one case the name and birth date may still be corrected.
- */
 function check(values: Values, ownerCorrectable: boolean): { errors: Errors; general?: string } {
   try {
     parseNewRegistrationCorrection(values, { identityVerified: !ownerCorrectable }, new Date())
@@ -38,12 +33,6 @@ function check(values: Values, ownerCorrectable: boolean): { errors: Errors; gen
   }
 }
 
-/**
- * site-contract §2.6, 5b of a Neuzulassung: the fields the service or the identity check can be given again. The eVB
- * number and the Teil II always; the owner's name and birth date only when the identity check found someone else than
- * the owner (`ownerCorrectable`), since once the identity was verified the person was checked against them. It starts
- * empty, so a stored code or name is never put back on the page; a field left blank stays as it was.
- */
 export function CorrectNewRegistration({ action, ownerCorrectable }: { action: CorrectNewRegistrationAction; ownerCorrectable: boolean }) {
   const router = useRouter()
   const [values, setValues] = useState(EMPTY)
@@ -74,7 +63,6 @@ export function CorrectNewRegistration({ action, ownerCorrectable }: { action: C
     focusFirstError.current = true
   }
 
-  // A failed submit takes the customer to the first field to fix (design-standard §6.4).
   useEffect(() => {
     if (!focusFirstError.current) return
     focusFirstError.current = false

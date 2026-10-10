@@ -15,16 +15,6 @@ import {
 
 export type NavItem = { label: string; href: string }
 
-/**
- * site-contract.md §3 — below the desktop breakpoint the nav collapses. The
- * primary action travels into the panel so the mobile header cannot overflow
- * at 320px. Every target is at least 48px (§4.4).
- *
- * The panel is controlled rather than using SheetClose for the destinations:
- * SheetClose is a button, and asking it to render an anchor forces button
- * semantics onto something that navigates. Closing on click keeps the links
- * real links.
- */
 export function MobileNav({ items }: { items: readonly NavItem[] }) {
   const [open, setOpen] = useState(false)
   const close = () => setOpen(false)

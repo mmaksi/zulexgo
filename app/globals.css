@@ -4,52 +4,36 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* ==========================================================================
-   ZulexGO design tokens — implements docs/design-standard.md
-   [S] = from the Zulex Style Guide. [D] = derived; see the doc before changing.
-   ========================================================================== */
-
 @theme {
-  /* --- Colour §2.1 -------------------------------------------------------- */
-  --color-orange: #f49405; /* [S] */
-  --color-orange-dark: #c37604; /* [S] */
-  --color-orange-bright: #fbb03f; /* [S] */
-  --color-orange-pressed: #a96503; /* [D] §6.3 primary button :active */
-  --color-grau: #444c54; /* [S] */
-  --color-grau-dark: #272828; /* [S] */
-  --color-grau-bright: #58626d; /* [S] */
-  --color-bg-blue: #edf5fc; /* [S] the only approved background tint */
-  --color-bg-blue-pressed: #dce8f5; /* [D] §6.3 secondary button :active */
+  --color-orange: #f49405;
+  --color-orange-dark: #c37604;
+  --color-orange-bright: #fbb03f;
+  --color-orange-pressed: #a96503;
+  --color-grau: #444c54;
+  --color-grau-dark: #272828;
+  --color-grau-bright: #58626d;
+  --color-bg-blue: #edf5fc;
+  --color-bg-blue-pressed: #dce8f5;
   --color-white: #ffffff;
 
-  /* Semantic §2.4 [D] — never reuse --color-orange in a status role */
   --color-success: #15703f;
   --color-success-tint: #e8f3ed;
   --color-error: #a32a1e;
   --color-error-tint: #fbeae8;
-  --color-warning: var(--color-orange-dark); /* icon + 4px border only */
+  --color-warning: var(--color-orange-dark);
   --color-warning-tint: #fef4e4;
   --color-info: var(--color-grau);
   --color-info-tint: var(--color-bg-blue);
 
-  /* §5.2 the one permitted blur */
   --color-scrim: rgb(39 40 40 / 0.5);
-  /* §7 the blue EU bar at the left of a licence plate: EU flag blue, plates only. */
   --color-eu-blue: #003399;
 
-  /* --- Type §3 ------------------------------------------------------------ */
   --font-sans: var(--font-kanit), "Helvetica Neue", Arial, sans-serif;
   --font-heading: var(--font-sans);
   --font-wordmark: var(--font-kanit-wordmark), var(--font-sans);
-  /* §3.1 Euro Plate's web licence is still open (§8.4), so nothing loads it
-     yet: plates fall back to Kanit 600 uppercase (plate-text below). */
+  /* Euro Plate is not licensed for the web yet, so nothing loads it: plates fall back to Kanit 600 */
   --font-plate: var(--font-euro-plate, "Euro Plate"), var(--font-sans);
 
-  /*
-   * §3.2. Sizes interpolate between the mobile value at 640px and the desktop
-   * value at 1024px; the size/leading ratio is the authoritative part.
-   * Headings are set tight (leading < 1) and everything below H1 is Light.
-   */
   --text-h1: clamp(40px, 6.25vw, 64px);
   --text-h1--line-height: 0.96;
   --text-h1--font-weight: 800;
@@ -78,27 +62,23 @@
   --text-body--line-height: 1.25;
   --text-body--font-weight: 300;
 
-  /* §3.2 legibility guard: Light only at >=16px, so Small is Regular */
   --text-small: 13px;
   --text-small--line-height: 1.38;
   --text-small--font-weight: 400;
   --text-small--letter-spacing: 0.01em;
 
-  /* --- Radius §4.5 -------------------------------------------------------- */
-  --radius-sm: 2px; /* inputs, badges, small controls */
-  --radius-md: 4px; /* buttons, cards, banners */
-  --radius-lg: 8px; /* modals, sheets */
-  --radius-xl: 8px; /* the standard caps UI radius at 8px */
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 8px;
+  --radius-xl: 8px;
   --radius-2xl: 8px;
   --radius-3xl: 8px;
   --radius-4xl: 8px;
-  --radius-full: 999px; /* avatars, status dots only */
+  --radius-full: 999px;
 
-  /* --- Elevation §5.3 ----------------------------------------------------- */
   --shadow-elev-1: 0 1px 2px rgb(39 40 40 / 0.06), 0 2px 8px rgb(39 40 40 / 0.04);
   --shadow-elev-2: 0 4px 16px rgb(39 40 40 / 0.1);
   --shadow-elev-3: 0 12px 32px rgb(39 40 40 / 0.16);
-  /* Keep stray Tailwind/shadcn shadows on the same three steps. */
   --shadow-2xs: var(--shadow-elev-1);
   --shadow-xs: var(--shadow-elev-1);
   --shadow-sm: var(--shadow-elev-1);
@@ -107,18 +87,15 @@
   --shadow-xl: var(--shadow-elev-3);
   --shadow-2xl: var(--shadow-elev-3);
 
-  /* --- Page frame §4.2 ---------------------------------------------------- */
   --container-page: 1200px;
-  --measure: 65ch; /* §3.3 body measure, 60-75 characters */
+  --measure: 65ch;
 
-  /* --- Motion §6.2 -------------------------------------------------------- */
   --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
   --ease-enter: cubic-bezier(0.2, 0, 0, 1);
   --ease-exit: cubic-bezier(0.4, 0, 1, 1);
   --default-transition-timing-function: var(--ease-standard);
   --default-transition-duration: 150ms;
 
-  /* §6.4 the only looping animation in the system; it stops when status resolves */
   --animate-status-pulse: status-pulse 1.5s var(--ease-standard) infinite;
   @keyframes status-pulse {
     0%,
@@ -132,38 +109,30 @@
 }
 
 :root {
-  /* --- Spacing §4.2-4.3 ---------------------------------------------------
-   * Tailwind's 4px spacing scale already carries §4.1. These are the values
-   * the scale cannot express: the responsive gutter and the vertical rhythm.
-   */
   --gutter: 20px;
   --section-gap: 64px;
   --heading-space-above: 32px;
-  --heading-space-below: 16px; /* the 2:1 above/below ratio groups a heading */
+  --heading-space-below: 16px;
   --field-gap: 20px;
 
-  /* --- Motion §6.2 --------------------------------------------------------- */
   --duration-instant: 100ms;
   --duration-fast: 150ms;
   --duration-base: 200ms;
   --duration-slow: 300ms;
 
-  /* --- Borders §5.4 -------------------------------------------------------- */
-  --border-subtle: 1px solid var(--color-bg-blue); /* card edges, table rows */
-  --border-default: 1px solid var(--color-grau-bright); /* inputs, controls */
-  --border-strong: 2px solid var(--color-grau); /* focus-within, selected */
+  --border-subtle: 1px solid var(--color-bg-blue);
+  --border-default: 1px solid var(--color-grau-bright);
+  --border-strong: 2px solid var(--color-grau);
 
-  /* --- The wedge §5.1 ------------------------------------------------------ */
-  --wedge-slope: 0.0186; /* 1.07 degrees - do not change */
+  --wedge-slope: 0.0186;
 
-  /* --- shadcn semantic aliases, mapped onto the brand palette -------------- */
   --background: var(--color-white);
   --foreground: var(--color-grau);
   --card: var(--color-white);
   --card-foreground: var(--color-grau);
   --popover: var(--color-white);
   --popover-foreground: var(--color-grau);
-  /* §2.3 rule 1: text on orange is grau-dark (6.40:1), never white (2.31:1). */
+  /* Text on orange is grau-dark (6.40:1); white fails contrast (2.31:1) */
   --primary: var(--color-orange);
   --primary-foreground: var(--color-grau-dark);
   --secondary: var(--color-bg-blue);
@@ -174,9 +143,9 @@
   --accent-foreground: var(--color-grau-dark);
   --destructive: var(--color-error);
   --destructive-foreground: var(--color-white);
-  --border: var(--color-bg-blue); /* colour of --border-subtle */
-  --input: var(--color-grau-bright); /* colour of --border-default */
-  /* §2.3 rule 3: focus rings are grau-dark. Orange on white fails 3:1. */
+  --border: var(--color-bg-blue);
+  --input: var(--color-grau-bright);
+  /* Focus rings are grau-dark: orange on white fails 3:1 contrast */
   --ring: var(--color-grau-dark);
   --chart-1: var(--color-orange);
   --chart-2: var(--color-orange-bright);
@@ -208,12 +177,6 @@
     --heading-space-below: 24px;
   }
 }
-
-/*
- * Dark mode is deliberately undefined — see design-standard.md §8.5. The brand
- * lives on white. If it is ever needed, the documented starting point is
- * grau-dark as the surface with orange-bright as the accent (8.01:1).
- */
 
 @theme inline {
   --color-background: var(--background);
@@ -268,8 +231,6 @@
     font-weight: 300;
   }
 
-  /* §3.2 Headings are uppercase, tight, and Light below H1. German compound
-     nouns must wrap rather than hyphenate or overflow. */
   h1,
   h2,
   h3,
@@ -309,10 +270,9 @@
   }
 
   p {
-    text-align: left; /* §3.3 never justify */
+    text-align: left;
   }
 
-  /* §6.3 Focus rings are never removed and never orange. */
   :focus-visible {
     outline: 2px solid var(--color-grau-dark);
     outline-offset: 2px;
@@ -325,13 +285,8 @@
 }
 
 @layer components {
-  /*
-   * §5.1 The wedge — the brand's only graphic device. Always full bleed,
-   * always thick on the left and thin on the right. Never mirror it, never
-   * flip it, never stack two, never round it. aria-hidden="true".
-   */
   .wedge {
-    --wedge-min: 2px; /* thickness at the RIGHT edge */
+    --wedge-min: 2px;
     width: 100%;
     height: calc(var(--wedge-min) + 100vw * var(--wedge-slope));
     background: var(--color-orange);
@@ -346,7 +301,6 @@
     --wedge-min: 8px;
   }
 
-  /* The only permitted recolours. */
   .wedge--grau {
     background: var(--color-grau);
   }
@@ -356,7 +310,6 @@
   }
 }
 
-/* §4.2 The page frame: a 1200px column with the responsive gutter outside it. */
 @utility page-frame {
   width: 100%;
   max-width: calc(var(--container-page) + 2 * var(--gutter));
@@ -364,13 +317,10 @@
   padding-inline: var(--gutter);
 }
 
-/* §3.3 Body measure. */
 @utility measure {
   max-width: var(--measure);
 }
 
-/* §7 Licence plates are the one place the plate face appears. §3.1 defines the
-   fallback: Kanit 600 uppercase, tracked out, inside the plate frame. */
 @utility plate-text {
   font-family: var(--font-plate);
   font-weight: 600;
@@ -378,7 +328,6 @@
   letter-spacing: 0.08em;
 }
 
-/* §7 Security-code fields. */
 @utility code-input {
   font-family: var(--font-sans);
   font-weight: 400;
@@ -387,7 +336,6 @@
   text-align: center;
 }
 
-/* §6.5 Colour and opacity still communicate state; movement is removed. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

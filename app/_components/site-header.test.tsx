@@ -1,11 +1,6 @@
 import { render, screen } from "@testing-library/react"
 import { SiteHeader } from "./site-header"
 
-/**
- * Regression guard: the header is shared with /impressum and the legal pages,
- * where the original bare `#hash` targets silently did nothing. typedRoutes is
- * off, so nothing else catches it.
- */
 describe("SiteHeader", () => {
   it("points in-page anchors at the landing page, not the current one", () => {
     render(<SiteHeader />)

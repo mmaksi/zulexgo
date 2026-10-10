@@ -3,7 +3,6 @@ import type { ReactNode } from "react"
 import { Wordmark } from "@/src/ui/wordmark"
 import { SiteFooter } from "./site-footer"
 
-/** site-contract §3: one task per page (funnel, status), so no landing nav; the logo is the only other exit. */
 export function TaskLayout({ children }: { children: ReactNode }) {
   return (
     <>

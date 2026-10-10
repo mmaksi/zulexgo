@@ -3,9 +3,7 @@ import { cn } from "@/src/lib/utils"
 
 import { Label } from "@/src/ui/label"
 
-// Shadcn's Field, trimmed to what the funnel uses. Helper and error text are
-// tied to the input through aria-describedby by the caller; the error has no
-// live role, since focus moves to the first invalid field instead.
+// The error has no live role: focus moves to the first invalid field instead.
 function Field({ className, ...props }: React.ComponentProps<"div">) {
   return <div role="group" data-slot="field" className={cn("flex flex-col gap-2", className)} {...props} />
 }

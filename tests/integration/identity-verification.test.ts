@@ -16,10 +16,7 @@ type Flow = ReturnType<typeof setupFlow>
 const sent = <Name extends EmailTemplate["name"]>(flow: Flow, name: Name) =>
   flow.deps.mailer.sent.map(({ template }) => template).filter((template): template is Extract<EmailTemplate, { name: Name }> => template.name === name)
 
-/**
- * A service that verifies the customer (Neuzulassung, launch plan Q45, provisional) is filed only after status 3. These run
- * the order through the real use cases on the fakes, as the poller and the webhook drive it.
- */
+// Provisional: launch plan Q45; a Neuzulassung is filed only after identity verification (status 3).
 describe("identity verification: a paid Neuzulassung waits for the customer's verified identity before anything is filed", () => {
   beforeEach(() => {
     jest.spyOn(console, "warn").mockImplementation(() => {})
@@ -51,7 +48,7 @@ describe("identity verification: a paid Neuzulassung waits for the customer's ve
       expect((await flow.stored(reference)).identityVerification?.deadline).toEqual(email.deadline)
     })
 
-    // Resend answers 409 to a key it holds with other content: a retried email 2 must carry the deadline of the first.
+    // Resend answers 409 to a held key with other content, so the retry must repeat the first deadline.
     it("repeats email 2 word for word when the order could not be saved after it went out, so the mailer accepts the retry", async () => {
       const flow = setupFlow()
       const update = flow.deps.repository.update.bind(flow.deps.repository)
@@ -82,7 +79,6 @@ describe("identity verification: a paid Neuzulassung waits for the customer's ve
       })
       await flow.deps.repository.setStatusToken(reference, flow.deps.tokens.generate())
       const send = flow.deps.mailer.send.bind(flow.deps.mailer)
-      // The first tick's email is slow: by the time the second composes its own, a minute has gone by.
       jest.spyOn(flow.deps.mailer, "send").mockImplementationOnce(async (message) => {
         flow.clock.advance(MINUTE)
         return send(message)
@@ -90,7 +86,6 @@ describe("identity verification: a paid Neuzulassung waits for the customer's ve
 
       const results = await Promise.allSettled([startIdentityVerification(flow.deps, paid), startIdentityVerification(flow.deps, paid)])
 
-      // One tick saves the order; the other loses the version check, which is the poller's business and moves nothing.
       expect(results.filter(({ status }) => status === "rejected").map((result) => (result as PromiseRejectedResult).reason)).toEqual([expect.any(StaleApplication)])
       expect(sent(flow, "identityVerificationRequested")).toHaveLength(1)
       expect((await flow.stored(reference)).status).toBe("awaiting_identity_verification")
@@ -109,7 +104,7 @@ describe("identity verification: a paid Neuzulassung waits for the customer's ve
     it("leaves a de-registration alone: it is filed at once, never asked to verify", async () => {
       const flow = setupFlow()
 
-      const reference = await flow.checkoutAndPay("card")
+      const reference = await flow.checkoutAndPay()
 
       expect((await flow.stored(reference)).status).toBe("submitted_to_kba")
       expect(flow.emails()).toEqual(["orderConfirmation", "submittedToKba"])
@@ -227,7 +222,6 @@ describe("identity verification: a paid Neuzulassung waits for the customer's ve
       const waiting = await flow.stored(reference)
       expect(waiting.status).toBe("awaiting_identity_verification")
       expect(flow.deps.registration.submissions).toEqual([])
-      // Backed off, not left due: a mailer that is down must not be asked again by every tick.
       expect(waiting.polling.nextPollAt!.getTime()).toBeGreaterThan(flow.clock.now().getTime())
 
       await flow.poll(5)
@@ -301,16 +295,6 @@ describe("identity verification: a paid Neuzulassung waits for the customer's ve
       expect(sent(flow, "refundIssued")[0].amount).toEqual(returned)
       expect(await flow.payment(reference)).toMatchObject({ status: "captured", captured: PROCESSING_FEE })
     })
-
-    it("takes the fee from a SEPA payment and refunds the rest, as it would for any 5c", async () => {
-      const flow = setupFlow()
-      const reference = await flow.checkoutAndPayNewRegistration("sepaDebit")
-      await flow.customerFailsVerification(reference)
-
-      await flow.poll(1)
-
-      expect(await flow.payment(reference)).toMatchObject({ status: "captured", refunded: SERVICE_PRICES.newRegistration.subtract(PROCESSING_FEE) })
-    })
   })
 
   describe("the customer does not verify in time (launch plan Q48, provisional: reminder after 2 days, deadline after 4)", () => {
@@ -326,7 +310,7 @@ describe("identity verification: a paid Neuzulassung waits for the customer's ve
       await flow.poll(60)
       await flow.poll(60)
 
-      // Attempted once, not once per visit: the mailer's own idempotency key only covers a day.
+      // The mailer's own idempotency key only covers a day, so the reminder is attempted once, not per visit.
       expect(reminders()).toHaveLength(1)
       const [requested] = sent(flow, "identityVerificationRequested")
       expect(sent(flow, "identityVerificationReminder")).toEqual([
@@ -341,8 +325,6 @@ describe("identity verification: a paid Neuzulassung waits for the customer's ve
       const reference = await flow.checkoutAndPayNewRegistration()
       const { deadline } = (await flow.stored(reference)).identityVerification!
 
-      // The visits are one minute, then up to an hour apart: the deadline must still be met to the minute.
-      // Bounded, so an order that is never rescheduled fails this test instead of hanging it.
       for (let visits = 0; flow.clock.now() < deadline; visits++) {
         expect(visits).toBeLessThan(200)
         expect((await flow.stored(reference)).status).toBe("awaiting_identity_verification")
@@ -363,7 +345,6 @@ describe("identity verification: a paid Neuzulassung waits for the customer's ve
       const flow = setupFlow()
       const reference = await flow.checkoutAndPayNewRegistration()
 
-      // One visit finds the reminder (day 2) and the deadline (day 4) both passed: the deadline wins.
       await flow.poll(4 * 24 * 60)
       await flow.poll(60)
 
@@ -376,24 +357,13 @@ describe("identity verification: a paid Neuzulassung waits for the customer's ve
       const flow = setupFlow()
       const reference = await flow.checkoutAndPayNewRegistration()
 
-      // 5.5 days: past the deadline (4) and inside the guard's capture margin (the hold lapses at 7, the margin is 2).
+      // Past the deadline (day 4) and inside the guard's capture margin (the hold lapses at 7, margin 2).
       await flow.poll(5.5 * 24 * 60)
 
       expect((await flow.stored(reference)).status).toBe("cancelled")
       expect(await flow.payment(reference)).toMatchObject({ status: "released" })
     })
 
-    it("refunds a payment that was captured, in full, since a SEPA debit cannot be held", async () => {
-      const flow = setupFlow()
-      const reference = await flow.checkoutAndPayNewRegistration("sepaDebit")
-
-      await flow.poll(4 * 24 * 60)
-
-      expect((await flow.stored(reference)).status).toBe("cancelled")
-      expect(await flow.payment(reference)).toMatchObject({ status: "captured", refunded: SERVICE_PRICES.newRegistration })
-    })
-
-    // A poller tick that read the answer `pending` and a callback that read it `verified` can be in flight together.
     it("never refunds an order that was verified and filed while the same tick was deciding to cancel it", async () => {
       const flow = setupFlow()
       const reference = await flow.checkoutAndPayNewRegistration()
@@ -423,7 +393,6 @@ describe("identity verification: a paid Neuzulassung waits for the customer's ve
       const send = flow.deps.mailer.send.bind(flow.deps.mailer)
       let cancelledMeanwhile = false
       jest.spyOn(flow.deps.mailer, "send").mockImplementation(async (message) => {
-        // Email 3 is going out when the other tick, which read `pending`, runs to the end.
         if (message.template.name === "identityVerified" && !cancelledMeanwhile) {
           cancelledMeanwhile = true
           jest.spyOn(flow.deps.identity, "getResult").mockResolvedValueOnce({ status: "pending" })
@@ -609,7 +578,6 @@ describe("identity verification: a paid Neuzulassung waits for the customer's ve
       expect((await handleIdentityNotification(flow.deps, callback(payload, signature))).status).toBe(200)
     })
 
-    // The framework would log what an uncaught error says, and a provider's error can quote the customer.
     it("answers 500 when the check fails, so the provider tries again, and logs the order and the kind of error, never the message", async () => {
       const flow = setupFlow()
       const reference = await flow.checkoutAndPayNewRegistration()

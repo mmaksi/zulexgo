@@ -16,14 +16,6 @@ export interface SeededPayment {
 
 const NOTHING = Money.ofCents(0)
 
-/**
- * Where each seeded order's money stands, as the real flow would have left it:
- * a card is held while the order waits for the customer to verify their identity,
- * is with the KBA or waits for a correction, captured on completion, and on a cancel or a final failure captured with all
- * but the fee sent back. Only the fake payment provider reads these, so dev's
- * seeded status pages can show refund amounts and the cancel button works; on
- * staging the payment provider is Stripe, which has never heard of them.
- */
 function stand(status: ApplicationStatus, total: Money): Pick<SeededPayment, "status" | "captured" | "refunded"> {
   switch (status) {
     case "awaiting_payment":

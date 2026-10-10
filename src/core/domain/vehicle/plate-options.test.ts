@@ -1,5 +1,8 @@
 import { ValidationError } from "@/src/core/errors/validation-error"
-import { parsePlateOptions } from "./plate-options"
+import { validate } from "@/src/core/domain/validate"
+import { plateOptionsSchema } from "./plate-options"
+
+const parsePlateOptions = (input: unknown) => validate(plateOptionsSchema, input, "plate")
 
 const fieldsRejected = (input: unknown) => {
   try {

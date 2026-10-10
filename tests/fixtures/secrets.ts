@@ -1,18 +1,11 @@
 import type { ServiceRequest } from "@/src/core/domain/application/service"
 
-/**
- * What the customer typed that must stay out of a log, an error, a rendered page or an email: a
- * de-registration's security codes, everything a Neuzulassung's owner and car papers carry. Read
- * from the request, so a test asserts on the value that was entered, not on a second copy of it.
- */
 export function secretsOf(request: ServiceRequest): string[] {
   if (request.service === "deregistration") {
-    // An order that has ended no longer holds its codes.
     const { rearPlate, frontPlate, certificate } = request.codes ?? {}
     return [rearPlate, frontPlate, certificate].flatMap((code) => (code ? [code.reveal()] : []))
   }
   const { owner, bankAccount, registrationCertificate, evbNumber } = request
-  // An order that has ended no longer holds its account.
   const { iban, bic, bankName } = bankAccount?.reveal() ?? {}
   return [
     evbNumber.reveal(),

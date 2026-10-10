@@ -1,11 +1,5 @@
 import { buttonLink } from "./button"
 
-/**
- * Regression guard: `buttonLink` exists because raw `buttonVariants()` only
- * concatenates. The base sets `border-transparent` and the outline variant
- * sets `border-grau`, so unmerged output silently rendered the secondary
- * button with no border at all.
- */
 describe("buttonLink", () => {
   it("resolves the border conflict the outline variant depends on", () => {
     const classes = buttonLink({ variant: "outline" })

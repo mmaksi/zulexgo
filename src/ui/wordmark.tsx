@@ -1,13 +1,5 @@
 import { cn } from "@/src/lib/utils"
 
-/**
- * design-standard.md §3.4 — Kanit SemiBold Italic, tracking -0.02em, the
- * two-tone split is mandatory in every variant. Never re-colour or rotate.
- * On dark surfaces the orange half becomes orange-bright (8.01:1 on grau-dark).
- *
- * The halves are decorative: the lockup carries one accessible name so it
- * announces as a single logotype rather than two text runs.
- */
 const TONES = {
   light: { name: "text-grau", suffix: "text-orange" },
   dark: { name: "text-white", suffix: "text-orange-bright" },

@@ -15,7 +15,6 @@ export const FAKE_REQUEST = {
   codes: { rearPlate: "AA1", frontPlate: "AA2", certificate: "AAAAAA1" },
 } as const
 
-/** What the funnel sends once the customer has ticked every box its service shows. */
 export const FAKE_CONSENTS = { terms: true, earlyStart: true } as const
 export const FAKE_NEW_REGISTRATION_CONSENTS = { ...FAKE_CONSENTS, powerOfAttorney: true } as const
 
@@ -23,12 +22,9 @@ const CREATED_AT = new Date("2026-01-01T00:00:00.000Z")
 
 let sequence = 0
 
-/** An order known to be a de-registration, for a test that reads its plate or codes. */
 export type DeregistrationApplication = Application & { readonly request: DeregistrationRequest }
-/** An order known to be a Neuzulassung, for a test that reads its owner or eVB number. */
 export type NewRegistrationApplication = Application & { readonly request: NewRegistrationRequest }
 
-/** What every service's order has; each call gets its own reference and idempotency key. */
 function anOrder(status: Application["status"]) {
   sequence += 1
   return {
@@ -45,12 +41,10 @@ function anOrder(status: Application["status"]) {
   }
 }
 
-/** A valid de-registration order in any status. */
 export function anApplication(overrides: Partial<DeregistrationApplication> = {}): DeregistrationApplication {
   return { ...anOrder(overrides.status ?? "awaiting_payment"), request: parseDeregistrationRequest(FAKE_REQUEST), ...overrides }
 }
 
-/** A valid Neuzulassung order in any status, paid for at its own price. */
 export function aNewRegistrationApplication(overrides: Partial<NewRegistrationApplication> = {}): NewRegistrationApplication {
   const order = anOrder(overrides.status ?? "awaiting_payment")
   return {

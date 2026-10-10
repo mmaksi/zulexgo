@@ -3,32 +3,16 @@ import { NotificationRejected } from "@/src/core/errors/mail/notification-reject
 import { anApplication } from "@/tests/fixtures/applications"
 import type { IdentityVerification, VerificationResult } from "./identity-verification"
 
-/** How a customer's attempt ends, which the server cannot cause: the adapter's test supplies it. */
 export type Finish = Exclude<VerificationResult, { status: "pending" }>
 
 export const VERIFIED_PERSON = { firstName: "Erika", lastName: "Mustermann", birthDate: new Secret("1990-05-17", "birth date") } as const
 
 export interface IdentityVerificationSubject {
   verification: IdentityVerification
-  /**
-   * What the customer does at the provider. The suite calls it a second time with the opposite outcome
-   * to prove the first one stands, so it must not throw for a verification already finished.
-   */
   customerFinishes(verificationId: string, finish: Finish): Promise<void>
-  /** What the provider would send once the customer finished: a signed notification in the shape `readNotification` accepts. */
   notificationOf(verificationId: string): { payload: string; signature: string }
 }
 
-/**
- * Every IdentityVerification adapter must pass this, including the fake.
- *
- * Pins down the port's guarantees: `start` opens one verification per
- * reference (a repeat returns the same id and link, another reference gets its
- * own) and its link is https; a result is `pending` until the customer
- * finishes, then `verified` (naming the person) or `failed`, and never changes
- * again; a notification is read only when the provider signed it, and names the
- * order it is about, never an outcome.
- */
 export function identityVerificationContract(name: string, makeSubject: () => IdentityVerificationSubject) {
   describe(`IdentityVerification contract: ${name}`, () => {
     let subject: IdentityVerificationSubject

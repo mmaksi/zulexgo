@@ -8,7 +8,6 @@ import type { PaymentMode } from "@/app/(funnel)/_components/payment-driver"
 import type { RegistrationActions } from "./registration-actions"
 import { ENGINE_CHOICES, MONTH_NAMES, type RegistrationData } from "./registration-data"
 
-/** The codes of the car's papers are never shown again, as the security codes are not in a de-registration's summary. */
 const MASK = "•••••••"
 
 const linkClass = "underline underline-offset-4 hover:text-orange-dark"
@@ -24,7 +23,6 @@ function plateOf({ engineType, electric, seasonal, seasonFrom, seasonUntil }: Re
   return ["Vergibt die Zulassungsstelle", ...options].join(", ")
 }
 
-/** site-contract §2.4: everything entered, the codes masked, then the full price, the fee notice and the consents before the pay button. */
 export function ReviewStep({
   data,
   payment,

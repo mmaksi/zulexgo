@@ -1,4 +1,3 @@
-/** A caller over the lookup limit: told to wait, told nothing about any link. */
 export function TooManyLookups({ retryAfterSeconds }: { retryAfterSeconds: number }) {
   return (
     <div className="flex flex-col gap-(--heading-space-below)">

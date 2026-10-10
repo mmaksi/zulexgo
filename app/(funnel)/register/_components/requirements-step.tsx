@@ -16,11 +16,7 @@ export interface RegistrationEligibility {
   ikfzStatus: IkfzStatus
 }
 
-/**
- * What a customer must have to register a car online (launch plan Q49, provisional), each with
- * why a "no" ends it and what to do instead (site-contract §2.2): the online path takes exactly this
- * case, and the authority takes every other.
- */
+// Provisional: launch plan Q49 (what an online registration requires)
 const REQUIREMENTS = [
   {
     key: "newCar",
@@ -53,18 +49,15 @@ type Requirement = (typeof REQUIREMENTS)[number]["key"]
 
 const POSTCODE_ID = "eligibility-postcode"
 
-/** site-contract §2.2: stops an ineligible customer before any effort or money. */
 export function RequirementsStep({
   initialPostcode,
   checkEligibility,
   onEligible,
 }: {
-  /** What the customer entered before, when they come back to this step. */
   initialPostcode?: string
   checkEligibility: RegistrationActions["checkEligibility"]
   onEligible: (eligibility: RegistrationEligibility) => void
 }) {
-  // Coming back to this step, the customer already said yes to everything.
   const [answers, setAnswers] = useState<Partial<Record<Requirement, boolean>>>(
     initialPostcode ? Object.fromEntries(REQUIREMENTS.map(({ key }) => [key, true])) : {},
   )
@@ -73,7 +66,6 @@ export function RequirementsStep({
   const [checking, setChecking] = useState(false)
   const ready = REQUIREMENTS.every(({ key }) => answers[key] === true) && postcode.trim() !== ""
 
-  /** The error has no live role, so it is rendered before focus moves to the field, which then announces it (site-contract §3). */
   const refuse = (message: string) => {
     flushSync(() => setError(message))
     document.getElementById(POSTCODE_ID)?.focus()
@@ -81,7 +73,6 @@ export function RequirementsStep({
 
   async function submit(event: FormEvent) {
     event.preventDefault()
-    // A second submit while a check is pending is ignored.
     if (!ready || checking) return
     setChecking(true)
     try {
@@ -92,11 +83,8 @@ export function RequirementsStep({
       }
       onEligible({ postcode: result.postcode, ikfzStatus: result.ikfzStatus })
     } catch {
-      // The request itself rejected (a lost connection, a server error): the customer hears the same as for an
-      // unreachable authority and can try again.
       refuse(UNREACHABLE)
     } finally {
-      // Always, so that no failure leaves the button busy for good.
       setChecking(false)
     }
   }

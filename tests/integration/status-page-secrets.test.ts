@@ -13,11 +13,6 @@ import { getStatusByToken } from "@/src/core/use-cases/status/get-status-by-toke
 
 jest.mock("next/navigation", () => ({ useRouter: () => ({ refresh: jest.fn() }) }))
 
-/**
- * CLAUDE.md non-negotiable: security codes and status tokens never appear in
- * a rendered status page. Checked for an application in every status, as the
- * seed has one per status.
- */
 const seeded = seedFor("dev")
 const repository = new InMemoryApplicationRepository(seeded)
 const documents = new InMemoryDocumentStore(seedDocumentsFor("dev"))
@@ -35,7 +30,7 @@ describe("the rendered status page", () => {
 
       expect(html).toContain(application.reference)
       for (const secret of secretsOf(request)) expect(html).not.toContain(secret)
-      // The link to a document is the one place the page repeats its own token: it is where the download lives.
+      // Document links are the one place the page repeats its token: the download lives there.
       expect(html.replaceAll(`/status/${token}/documents/`, "")).not.toContain(token)
       expect(html).not.toContain(request.vin)
     },

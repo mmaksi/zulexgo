@@ -9,7 +9,6 @@ import { RegistrationFunnel } from "./_components/registration-funnel"
 export const metadata: Metadata = { title: "Fahrzeug zulassen — ZulexGO" }
 
 export default async function RegisterPage() {
-  // The funnel collects an IBAN and a birth date, so it exists only where checkout will take the order.
   await requireOnSale("newRegistration")
 
   return (

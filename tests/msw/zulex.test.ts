@@ -7,10 +7,6 @@ import { parseDeregistrationRequest } from "@/src/core/domain/application/deregi
 import { parseNewRegistrationRequest } from "@/src/core/domain/application/new-registration-request"
 import { createBody } from "@/src/adapters/registration/zulex/request-bodies"
 
-/**
- * The double stands in for Zulex in every adapter test, so what it refuses has to be what Zulex
- * refuses: a body the spec rejects (400), and an application asked after at another service's endpoint (404).
- */
 const server = setupServer()
 let zulex = new ZulexDouble()
 

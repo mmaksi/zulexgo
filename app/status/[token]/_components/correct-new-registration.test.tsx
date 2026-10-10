@@ -86,7 +86,6 @@ describe("CorrectNewRegistration", () => {
 
   it("puts the funnel's wording at a field that is wrong, described by it, focuses it, and does not send", async () => {
     const { action, user } = setup()
-    // The alphabet has no I and no O.
     await user.type(field(/eVB-Nummer/), "FAKEEVI")
     await user.type(field(/Teil-II-Sicherheitscode/), "NEWCODE")
 
@@ -183,11 +182,6 @@ describe("CorrectNewRegistration", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(/nicht geklappt/)
   })
 
-  /**
-   * The form is on screen before its script has run, and for good where the script is blocked or fails.
-   * A native submit then sends every field as a query string: the eVB number, the Teil II number and its
-   * security code would end up in the status page's address, the history and the server's logs.
-   */
   describe("before its script has run", () => {
     const html = () => renderToStaticMarkup(<CorrectNewRegistration action={jest.fn()} ownerCorrectable />)
 

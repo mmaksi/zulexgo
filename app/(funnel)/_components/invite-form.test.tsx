@@ -107,11 +107,6 @@ describe("InviteForm", () => {
     finish({ status: "refused" })
   })
 
-  /**
-   * The form is on screen before its script has run, and for good where the script is blocked or fails.
-   * A native submit then sends the field as a query string: the code would end up in the address bar,
-   * the history and the server's logs.
-   */
   describe("before its script has run", () => {
     const html = () => renderToStaticMarkup(<InviteForm service="Neuzulassung" action={jest.fn()} />)
 

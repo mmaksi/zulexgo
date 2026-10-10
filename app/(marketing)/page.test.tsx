@@ -1,11 +1,6 @@
 import { render, screen } from "@testing-library/react"
 import LandingPage from "./page"
 
-/**
- * Heading structure is an accessibility contract that breaks invisibly: a
- * second H1 or a skipped level is invisible on screen and wrong for screen
- * readers and search engines.
- */
 describe("Landing page", () => {
   it("has exactly one H1", () => {
     render(<LandingPage />)

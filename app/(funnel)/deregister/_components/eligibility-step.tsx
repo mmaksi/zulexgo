@@ -22,7 +22,6 @@ export interface Eligibility {
   ikfzStatus: IkfzStatus
 }
 
-/** site-contract §2.2: stops an ineligible customer before any effort or money. */
 export function EligibilityStep({
   initial,
   checkEligibility,
@@ -39,7 +38,6 @@ export function EligibilityStep({
   const [error, setError] = useState<string>()
   const [checking, setChecking] = useState(false)
 
-  /** The error has no live role, so it is rendered before focus moves to the field, which then announces it (site-contract §3). */
   const refuse = (message: string) => {
     flushSync(() => setError(message))
     document.getElementById(PREFIX_ID)?.focus()
@@ -47,28 +45,18 @@ export function EligibilityStep({
 
   async function submit(event: FormEvent) {
     event.preventDefault()
-    // A second submit while a check is pending is ignored.
     if (!plateCount || hasDocuments !== true || checking) return
     setChecking(true)
     try {
       const result = await checkEligibility(prefix)
-      if (!result.ok) {
-        if (result.reason === "limited") refuse(tooManyAttempts(result.retryAfterMinutes))
-        else
-          refuse(
-            result.reason === "invalidPrefix"
-              ? "Für dieses Ortskürzel finden wir keine Zulassungsstelle. Prüfen Sie die 1 bis 3 Buchstaben vor dem ersten Leerzeichen."
-              : UNREACHABLE,
-          )
-        return
-      }
-      onEligible({ plateCount, prefix: result.prefix, ikfzStatus: result.ikfzStatus })
+      if (result.ok) return onEligible({ plateCount, prefix: result.prefix, ikfzStatus: result.ikfzStatus })
+      if (result.reason === "limited") refuse(tooManyAttempts(result.retryAfterMinutes))
+      else if (result.reason === "invalidPrefix")
+        refuse("Für dieses Ortskürzel finden wir keine Zulassungsstelle. Prüfen Sie die 1 bis 3 Buchstaben vor dem ersten Leerzeichen.")
+      else refuse(UNREACHABLE)
     } catch {
-      // The request itself rejected (a lost connection, a server error): the customer hears the same as for an
-      // unreachable authority and can try again.
       refuse(UNREACHABLE)
     } finally {
-      // Always, so that no failure leaves the button busy for good.
       setChecking(false)
     }
   }
@@ -121,7 +109,7 @@ export function EligibilityStep({
         className="max-w-60"
       />
 
-      {/* Launch plan J11: a de-registration request cannot say E, H or seasonal, and the provider has not said whether such plates go through. */}
+      {/* Provisional: launch plan J11, a request cannot say E, H or seasonal. */}
       <label className="measure flex cursor-pointer items-start gap-3 text-body text-grau-dark">
         <Checkbox checked={specialPlate} onCheckedChange={(value) => setSpecialPlate(value === true)} />
         <span>Mein Kennzeichen ist ein E-, H- oder Saisonkennzeichen.</span>

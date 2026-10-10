@@ -3,14 +3,8 @@ import { FAKE_CONSENTS, FAKE_REQUEST } from "@/tests/fixtures/applications"
 import { submitCheckout } from "@/src/core/use-cases/checkout/submit-checkout"
 import { webhookRequest, withVendorsAtTheNetwork } from "./network-harness"
 
-/**
- * M4: checkout → Stripe holds the card → signed webhook → status 1, email 1 →
- * filed with Zulex → status 4. Real Stripe and Zulex adapters, both vendors
- * stubbed at the network. Identity verification is not in the flow yet.
- */
 const { world, stored, emails } = withVendorsAtTheNetwork()
 
-/** PaymentIntent, PaymentMethod, Charge, Customer, Refund, Payment, Source, Card, SetupIntent, Event. */
 const STRIPE_OBJECT_ID = /\b(?:pi|pm|ch|cus|re|py|src|card|seti|evt)_[A-Za-z0-9]+/g
 
 async function checkout() {
@@ -22,7 +16,7 @@ async function checkout() {
 describe("de-registration checkout", () => {
   it("starts the application from Stripe's signed webhook once the card is held, files it with Zulex, and takes an online authority's money", async () => {
     const { reference, paymentId } = await checkout()
-    world.stripe.customerPays(paymentId, "card")
+    world.stripe.customerPays(paymentId)
 
     const response = await handlePaymentNotification(
       world.deps,
@@ -44,7 +38,7 @@ describe("de-registration checkout", () => {
 
   it("tags the PaymentIntent with Zulex's application id once Zulex accepts the application", async () => {
     const { reference, paymentId } = await checkout()
-    world.stripe.customerPays(paymentId, "card")
+    world.stripe.customerPays(paymentId)
 
     await handlePaymentNotification(world.deps, webhookRequest(world.stripe.event("payment_intent.amount_capturable_updated", paymentId)))
 
@@ -59,7 +53,7 @@ describe("de-registration checkout", () => {
   it("still files the application and tells the customer when Stripe refuses the tag, and says so in the log", async () => {
     const warn = jest.spyOn(console, "warn").mockImplementation(() => {})
     const { reference, paymentId } = await checkout()
-    world.stripe.customerPays(paymentId, "card")
+    world.stripe.customerPays(paymentId)
     world.stripe.refuseUpdates()
 
     await handlePaymentNotification(world.deps, webhookRequest(world.stripe.event("payment_intent.amount_capturable_updated", paymentId)))
@@ -72,7 +66,7 @@ describe("de-registration checkout", () => {
 
   it("keeps the PaymentIntent id and nothing else of Stripe's in the application record", async () => {
     const { reference, clientSecret, paymentId } = await checkout()
-    world.stripe.customerPays(paymentId, "card")
+    world.stripe.customerPays(paymentId)
 
     await handlePaymentNotification(world.deps, webhookRequest(world.stripe.event("payment_intent.amount_capturable_updated", paymentId)))
 
@@ -83,7 +77,7 @@ describe("de-registration checkout", () => {
 
   it("sends Zulex the vehicle the customer entered, with our idempotency key", async () => {
     const { reference, paymentId } = await checkout()
-    world.stripe.customerPays(paymentId, "card")
+    world.stripe.customerPays(paymentId)
 
     await handlePaymentNotification(world.deps, webhookRequest(world.stripe.event("payment_intent.amount_capturable_updated", paymentId)))
 
@@ -94,7 +88,7 @@ describe("de-registration checkout", () => {
 
   it("acts once on a webhook Stripe delivers twice", async () => {
     const { paymentId } = await checkout()
-    world.stripe.customerPays(paymentId, "card")
+    world.stripe.customerPays(paymentId)
     const event = world.stripe.event("payment_intent.amount_capturable_updated", paymentId)
 
     await handlePaymentNotification(world.deps, webhookRequest(event))
@@ -110,7 +104,7 @@ describe("de-registration checkout", () => {
     ["forged", (event: { payload: string; signature: string }) => ({ payload: event.payload.replace("requires_capture", "succeeded"), signature: event.signature })],
   ])("rejects an %s webhook and starts nothing", async (_, tamper) => {
     const { reference, paymentId } = await checkout()
-    world.stripe.customerPays(paymentId, "card")
+    world.stripe.customerPays(paymentId)
 
     const response = await handlePaymentNotification(
       world.deps,

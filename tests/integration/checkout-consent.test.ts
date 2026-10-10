@@ -5,11 +5,7 @@ import { ConsentRequired } from "@/src/core/errors/application/consent-required"
 import { submitCheckout } from "@/src/core/use-cases/checkout/submit-checkout"
 import { setupFlow } from "./flow-harness"
 
-/**
- * Launch plan D9: what the customer agreed to is kept with the order, and an order cannot be made
- * without it. A funnel's server action is reachable by any POST, so the use case is the gate, not the
- * checkboxes.
- */
+// A funnel's server action is reachable by any POST, so the use case is the gate, not the checkboxes.
 function checkoutOf(service: "deregistration" | "newRegistration") {
   const flow = setupFlow()
   const deps = { ...flow.deps, servicesOnSale: ["deregistration", "newRegistration"] as const }

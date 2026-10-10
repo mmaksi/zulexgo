@@ -1,6 +1,9 @@
 import { inspect } from "node:util"
 import { ValidationError } from "@/src/core/errors/validation-error"
-import { parseEvbNumber } from "./evb-number"
+import { validate } from "@/src/core/domain/validate"
+import { evbNumberSchema } from "./evb-number"
+
+const parseEvbNumber = (input: unknown) => validate(evbNumberSchema, input, "evbNumber")
 
 describe("parseEvbNumber", () => {
   it("takes seven letters and digits, tidied like the funnel tidies them", () => {
@@ -11,7 +14,6 @@ describe("parseEvbNumber", () => {
   it("leaves out the letters I and O, which the insurers never issue", () => {
     expect(() => parseEvbNumber("9ABC12I")).toThrow(ValidationError)
     expect(() => parseEvbNumber("9ABC12O")).toThrow(ValidationError)
-    // Typed in lower case, they are the same letters once tidied.
     expect(() => parseEvbNumber("9abc12i")).toThrow(ValidationError)
     expect(parseEvbNumber("9ABC12J").reveal()).toBe("9ABC12J")
   })
@@ -20,12 +22,10 @@ describe("parseEvbNumber", () => {
     expect(() => parseEvbNumber(input)).toThrow(ValidationError)
   })
 
-  // The API's own pattern is not anchored, so it would accept a valid number inside a longer string.
   it.each(["XX9ABC12DXX", "9ABC12D-", "9ABC 12D"])("refuses %p, which only contains a valid number", (input) => {
     expect(() => parseEvbNumber(input)).toThrow(ValidationError)
   })
 
-  // Upper-casing turns ß into SS and ſ into S, so a seven-character result could come from a character that is not a letter of the alphabet.
   it.each(["ABCDEß", "ABCDEFſ", "ABCDEFﬀ", "ÄBCDEFG"])("refuses %p, whose upper case is not what was typed", (input) => {
     expect(() => parseEvbNumber(input)).toThrow(ValidationError)
   })

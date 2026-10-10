@@ -2,11 +2,7 @@ import { readFileSync } from "node:fs"
 import { readdir } from "node:fs/promises"
 import { join } from "node:path"
 
-/**
- * `environments` skill: `next build` sets `NODE_ENV=production` for the staging
- * build too, so any behaviour that branches on it is wrong in exactly the place
- * it matters. `APP_ENV`, read through `src/config/env.ts`, is the only switch.
- */
+// next build sets NODE_ENV=production for the staging build too: only APP_ENV may select the stage.
 const ROOTS = ["app", "src"]
 const SOURCE = /\.(ts|tsx)$/
 
@@ -26,7 +22,6 @@ async function sourceFiles(dir: string): Promise<string[]> {
 
 describe("stage selection", () => {
   it("catches a file that branches on NODE_ENV", () => {
-    // A scan that can only ever pass is not a guard.
     expect(readsNodeEnv('if (process.env.NODE_ENV === "production") {}')).toBe(true)
     expect(readsNodeEnv('if (env.APP_ENV === "production") {}')).toBe(false)
   })

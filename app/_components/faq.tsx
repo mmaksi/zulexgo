@@ -10,9 +10,6 @@ import {
 } from "@/src/ui/accordion"
 import { Section, SectionHeading } from "@/src/ui/section"
 
-// site-contract.md §2.1 — 5-8 items, question <=80, answer <=400 chars, plain German.
-// The answers hold for every service and never say which are on sale: the cards do, per stage.
-// What only one service needs is named as that service's.
 const FAQ = [
   {
     question: "Sind die Online-Leistungen offiziell gültig?",
@@ -63,8 +60,6 @@ export function Faq() {
         title="Alles, was Sie wissen sollten"
       />
 
-      {/* keepMounted keeps the answers in the HTML, so they are indexable
-          and readable without JavaScript. */}
       <Accordion keepMounted className="max-w-3xl">
         {FAQ.map((item) => (
           <AccordionItem key={item.question} className="border-border">

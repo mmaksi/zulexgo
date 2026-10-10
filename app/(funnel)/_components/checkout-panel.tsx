@@ -17,23 +17,13 @@ import { StripePaymentFields } from "./stripe/stripe-payment-fields"
 export type StartCheckoutResult =
   | { ok: true; reference: string; clientSecret: string }
   | { ok: false; reason: "invalid" | "consent" | "duplicate" | "unavailable" }
-  /** The service is in its beta: the customer's invite no longer opens it, or the day's places are all taken. */
   | { ok: false; reason: "invite" | "full" }
-  /** The address opened too many checkouts: it may try again after `retryAfterMinutes`. */
   | { ok: false; reason: "limited"; retryAfterMinutes: number }
 
-/** How many boxes the pay button's hint names, in words. */
 const COUNT_WORDS: Record<number, string> = { 2: "die beiden", 3: "alle drei" }
 
 const linkClass = "underline underline-offset-4 hover:text-orange-dark"
 
-/**
- * The end of every funnel, site-contract §2.4: the customer's own data (`children`), the full
- * price, the fee notice, the payment form and the consents, before the pay button. The funnel
- * says what is sold and what is ticked; the panel owns the order of events. Payment is confirmed
- * only once the order exists, and a declined card is retried on the same order, never a second one,
- * also after going back and returning with the same data (the frame keeps the order).
- */
 export function CheckoutPanel({
   total,
   priceLabel,
@@ -48,18 +38,13 @@ export function CheckoutPanel({
 }: {
   total: Money
   priceLabel: string
-  /** Every box the customer must tick before paying, in the order shown. */
   consents: readonly { kind: ConsentKind; label: ReactNode }[]
   payment: PaymentMode
-  /** Where Stripe returns a customer whose payment needs a redirect: the funnel's `bestaetigung` page. */
   returnPath: string
-  /** What the order is opened for, as a string: an order opened for another key is not paid, a new one is opened. */
   orderKey: string
-  /** The funnel's own order data goes in; what the panel adds is what was ticked and whether a duplicate was confirmed. */
   startCheckout(input: { consents: Partial<Record<ConsentKind, boolean>>; acknowledgedDuplicate?: true }): Promise<StartCheckoutResult>
   completeSimulatedPayment(reference: string): Promise<{ ok: boolean }>
   onPaid(reference: string): void
-  /** The summary of what was entered. */
   children: ReactNode
 }) {
   const driverRef = useRef<PaymentDriver | null>(null)
@@ -79,7 +64,6 @@ export function CheckoutPanel({
   async function pay(event: FormEvent) {
     event.preventDefault()
     if (!consented || paying) return
-    // The payment form registers itself once loaded; Stripe.js can be slow, blocked, or fail to load.
     if (!driverRef.current) {
       setError("Das Zahlungsformular ist noch nicht geladen. Bitte warten Sie einen Moment oder laden Sie die Seite neu. Ein Werbeblocker kann es verhindern.")
       return
@@ -90,11 +74,8 @@ export function CheckoutPanel({
       const failed = await takePayment(driverRef.current)
       if (failed) setError(failed)
     } catch {
-      // A request that rejected (a lost connection, a server error). The order created so far is kept (`order`), so
-      // trying again pays the same one instead of opening a second.
       setError("Das hat gerade nicht geklappt. Bitte versuchen Sie es in ein paar Minuten noch einmal.")
     } finally {
-      // Always, so that no failure leaves the button busy, or the funnel locked, for good.
       busy(false)
     }
   }
@@ -103,7 +84,6 @@ export function CheckoutPanel({
     const invalid = await driver.prepare()
     if (invalid) return invalid
 
-    // A declined card is retried on the same order, never a second one, unless what the order holds has changed since.
     let order = funnel.orderFor(orderKey)
     if (!order) {
       const started = await startCheckout({
@@ -189,7 +169,6 @@ export function CheckoutPanel({
         </Alert>
       ) : null}
 
-      {/* site-contract §3: on phones the CTA docks at the bottom with the total. */}
       <div className="flex flex-col gap-2 max-md:fixed max-md:inset-x-0 max-md:bottom-0 max-md:z-40 max-md:border-t max-md:border-border max-md:bg-white max-md:px-(--gutter) max-md:py-3 max-md:shadow-elev-2">
         <div className="flex items-center justify-between gap-4 md:justify-start">
           <span className="text-body text-grau-dark md:hidden">{formatEuros(total)}</span>

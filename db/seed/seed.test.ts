@@ -18,7 +18,6 @@ describe("seedFor", () => {
     expect(seedFor(stage).length).toBeGreaterThan(0)
   })
 
-  // Statuses 2 and 3 are Neuzulassung's alone: a de-registration goes from payment straight to the KBA.
   it.each(Object.keys(JOURNEYS) as OrderableService[])(
     "seeds at least one %s in every status its journey passes through, so every UI state is visible on boot",
     (service) => {
@@ -43,7 +42,6 @@ describe("seedFor", () => {
     }
   })
 
-  // The verification an order waited on stays with it once it moves on, and only an order that waited on one has it.
   it("records the identity verification of exactly the orders that reached status 2", () => {
     for (const { application } of seedFor("dev")) {
       const reachedStatus2 = application.history.some(({ status }) => status === "awaiting_identity_verification")

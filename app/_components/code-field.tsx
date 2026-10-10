@@ -3,7 +3,6 @@
 import { LocatorPhoto } from "@/app/_components/locator-photo"
 import { TextField } from "@/app/_components/text-field"
 
-/** design-standard §7: one centred box per code, paired with where to find it (photo placeholder until M7). */
 export function CodeField({
   length,
   where,

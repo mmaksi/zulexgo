@@ -108,7 +108,7 @@ Use cases receive their ports as a function parameter, `Dependencies` (`src/core
 
 | Port | Real adapter | Notes | Vendor source of truth |
 |---|---|---|---|
-| `PaymentProvider` | Stripe (manual capture for cards; SEPA Direct Debit captured at checkout) | Hold expiry is a documented port guarantee; partial refunds for the 19.99 € processing fee | Stripe MCP (docs search, API details, sandbox reads) |
+| `PaymentProvider` | Stripe (cards only, manual capture) | Hold expiry is a documented port guarantee; partial refunds for the 19.99 € processing fee | Stripe MCP (docs search, API details, sandbox reads) |
 | `RegistrationGateway` | Zulex API | Also the KBA status source; see `docs/launch-plan.md` | `docs/api-1.yaml`, local only (confidential, gitignored); no MCP |
 | `Mailer` | Resend; `ConsoleMailer` prints instead of sending (`MAIL_DRIVER=console`) | The status and refund emails (including Verimi's two and the verification reminder), status link delivery | The `resend`, `react-email` and `email-best-practices` skills; no MCP connected |
 | `ApplicationRepository` | Postgres | Owns our status machine, not the vendor's | `supabase` and `supabase-postgres-best-practices` skills, Supabase MCP |

@@ -15,28 +15,6 @@ import { guardHold, guardHoldQuietly } from "@/src/core/use-cases/payment/secure
 import { settlePayment } from "@/src/core/use-cases/payment/settle-payment"
 import { afterFailure, submitToKba } from "./submit-to-kba"
 
-/**
- * One poller step for one due application: resubmit it, watch its money, or ask
- * the service how it is doing. Called by `pollDueApplications` for every order whose
- * `nextPollAt` has passed; what the step is depends on where the order stands:
- *
- * - `submitted_and_paid`: not filed yet, or filed but its follow-up failed (an outage
- *   being waited out, a failed email 4), so `submitToKba` runs again. For a service that verifies
- *   the customer first it is the verification that did not start yet (an outage of the provider, a
- *   failed email 2), so `startIdentityVerification` runs again.
- * - `awaiting_identity_verification` (2): `checkIdentityVerification` reads the provider's answer, then the
- *   deadline, the reminder and the card hold.
- * - `identity_verified` (3): verified but not yet filed (the filing died), so `submitToKba` runs again.
- * - `failed_correctable` (5b): waiting for the customer; only the money is looked at.
- * - `submitted_to_kba`: ask the registration service how the KBA is doing. Still working:
- *   back off. Finished with a confirmation: 5a. Failed, or finished with only a rejection
- *   document: the error algorithm decides (`handleFailure`).
- * - Any other status is not polled, and nothing happens.
- *
- * Every step is safe to repeat. One that fails part-way leaves the order at its old status
- * and backs it off (`backOffOnFailure`), so a later tick redoes it without hammering the
- * service, the provider or the mailer.
- */
 export async function advanceStatus(deps: Dependencies, application: Application): Promise<void> {
   if (application.status === "submitted_and_paid") {
     const proceed = requiresIdentityVerification(application.request.service) ? startIdentityVerification : submitToKba
@@ -47,22 +25,19 @@ export async function advanceStatus(deps: Dependencies, application: Application
   if (application.status === "failed_correctable") return watchHold(deps, application)
   if (application.status !== "submitted_to_kba") return
 
-  // A hand-processed order's card is held for days; the status check must not wait on the provider, so a failed look is only logged.
   if (application.ikfzStatus !== "online") await guardHoldQuietly(deps, application)
 
   let status: GatewayStatus
   try {
     status = await deps.registration.getStatus(application.request.service, application.zulexApplicationId!)
   } catch (error) {
-    // Back off on any failure, not just an outage: an id the service rejects would otherwise be asked about every tick.
+    // Back off on any failure: an id the service rejects would otherwise be asked about every tick.
     const unavailable = error instanceof GatewayUnavailable
     await deps.repository.update(scheduleNextPoll(deps, application, unavailable ? error.retryAfterMs : undefined))
     if (!unavailable) throw error
     return
   }
 
-  // Also how a state tag the vendor adds later arrives (see the gateway port), so a new
-  // one only keeps the order waiting instead of breaking the poll.
   if (status.state === "inProgress") {
     await deps.repository.update(scheduleNextPoll(deps, application))
     return
@@ -71,9 +46,7 @@ export async function advanceStatus(deps: Dependencies, application: Application
   await backOffOnFailure(deps, application, async () => {
     const failure = failureOf(status)
     if (failure) {
-      // If the algorithm retries silently, that means asking the service to resume this
-      // application (no data change), then looking again on the usual schedule. A retry the
-      // service refuses still counts as used, or the next look would ask again for ever.
+      // A refused retry still counts as used, or the next look would ask again for ever.
       await handleFailure(deps, application, failure, async (retrying) => {
         try {
           await deps.registration.retry(retrying.zulexApplicationId!)
@@ -90,11 +63,7 @@ export async function advanceStatus(deps: Dependencies, application: Application
   })
 }
 
-/**
- * Storage, settlement, retry and mail failures leave the order at its old status; without a backoff it would stay
- * first in the queue. The write is version-checked: it is dropped when another tick already moved the order, and
- * when it lands first the other tick's last write fails instead, so that tick is simply redone on the next poll.
- */
+// Without a backoff the order stays first in the queue; a stale backoff write is dropped harmlessly.
 async function backOffOnFailure(deps: Dependencies, application: Application, step: () => Promise<void>): Promise<void> {
   try {
     await step()
@@ -104,16 +73,8 @@ async function backOffOnFailure(deps: Dependencies, application: Application, st
   }
 }
 
-/**
- * A 5b waits for the customer, who may take longer than the hold lasts: take the
- * money in time, then stop looking.
- *
- * The order is visited daily (launch plan Q20, a provisional answer) while its payment
- * is still a hold: `guardHold` captures it once it is close to lapsing, and a payment
- * that is captured or released has nothing left to watch. The KBA is not asked again.
- */
+// Provisional: launch plan Q20. A 5b's hold is looked at daily until it is captured or released.
 async function watchHold(deps: Dependencies, application: Application): Promise<void> {
-  // The attempt count is kept. With no delay there is no next poll, so the order is no longer due.
   const reschedule = (afterMs?: number) => ({
     ...application,
     polling: { attempts: application.polling.attempts, nextPollAt: afterMs === undefined ? undefined : new Date(deps.clock.now().getTime() + afterMs) },
@@ -123,20 +84,13 @@ async function watchHold(deps: Dependencies, application: Application): Promise<
   try {
     held = (await guardHold(deps, application)).status === "held"
   } catch (error) {
-    // The provider could not be asked: look again within the hour, not tomorrow, and let the
-    // poll log show the failure.
     await deps.repository.update(reschedule(HOLD_RETRY_MS))
     throw error
   }
   await deps.repository.update(reschedule(held ? HOLD_CHECK_INTERVAL_MS : undefined))
 }
 
-/**
- * Whether the service's answer is a failure for the error algorithm. The API does not
- * say whether a rejection comes as an error or as a finished application with a rejection
- * document (launch plan Q23), so both are read. A confirmation wins over a rejection
- * document sent alongside it; a finished application with no documents at all is a success.
- */
+// Launch plan Q23: a rejection may come as an error or as a rejection document; a confirmation wins.
 function failureOf(status: Exclude<GatewayStatus, { state: "inProgress" }>): Failure | undefined {
   if (status.state === "failed") return { kind: "kbaError", code: status.error.code }
   const kinds = status.documents.map((document) => document.kind)
@@ -144,15 +98,8 @@ function failureOf(status: Exclude<GatewayStatus, { state: "inProgress" }>): Fai
   return undefined
 }
 
-/**
- * The KBA finished with a result we accept (5a). Every step is safe to rerun, so a failure
- * anywhere leaves the order at `submitted_to_kba`, backed off by `backOffOnFailure`: the documents are stored first, so that email 5a never
- * reaches the customer before the downloads it offers; then the money is settled (a card
- * still held is captured in full), then the email, then the status.
- */
+// Documents first, so email 5a never offers downloads not yet stored; then money, email, status.
 async function complete(deps: Dependencies, application: Application, documents: readonly DocumentRef[]) {
-  // Our copy of what the service holds, so the page serves it without calling the service.
-  // Storing a document again replaces it, so a rerun duplicates nothing.
   for (const document of documents) {
     await deps.documents.put(application.reference, document, await deps.registration.fetchDocument(document.id))
   }
@@ -162,15 +109,11 @@ async function complete(deps: Dependencies, application: Application, documents:
     ...applyEvent(application, "kbaCompleted", deps.clock.now()),
     polling: { attempts: application.polling.attempts },
   }
-  // Email before the status, so a failed send leaves the application at its old status and a later poll redoes these idempotent steps.
+  // Email before status: a failed send leaves the old status for a later poll to redo.
   await mailCustomer(deps, completed, "completed")
   await deps.repository.update(completed)
 }
 
-/**
- * `attempts` counts checks made, so it indexes the delay before the next one.
- * `retryAfterMs` is the service's own Retry-After: the delay is never shorter than it.
- */
 function scheduleNextPoll(deps: Dependencies, application: Application, retryAfterMs?: number): Application {
   const attempts = application.polling.attempts + 1
   const nextPoll = nextPollAt({ ikfzStatus: application.ikfzStatus, attempts, now: deps.clock.now(), retryAfterMs })

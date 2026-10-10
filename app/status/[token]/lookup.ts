@@ -9,11 +9,6 @@ export type StatusLookup =
   | { kind: "invalid" }
   | { kind: "limited"; retryAfterSeconds: number }
 
-/**
- * What the status page shows for a link. Every lookup, right link or wrong,
- * counts against the caller's address before anything is read, so guessing
- * links is bounded and an address over its limit costs the database nothing.
- */
 export async function lookupStatus(
   deps: Parameters<typeof getStatusByToken>[0] & { rateLimiter: RateLimiter },
   headers: Headers,

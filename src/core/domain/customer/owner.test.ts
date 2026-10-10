@@ -1,6 +1,9 @@
 import { inspect } from "node:util"
 import { ValidationError } from "@/src/core/errors/validation-error"
-import { parseOwner } from "./owner"
+import { validate } from "@/src/core/domain/validate"
+import { ownerSchema } from "./owner"
+
+const parseOwner = (input: unknown, now: Date) => validate(ownerSchema(now), input, "owner")
 
 const NOW = new Date("2026-03-15T10:00:00.000Z")
 
@@ -87,7 +90,6 @@ describe("parseOwner: the keeper the car is registered to", () => {
     })
 
     describe("must be 18 or over, the day counted in Germany (launch plan Q49: private persons of age)", () => {
-      // 2026-03-15, mid-morning: today is the 15th everywhere.
       it("accepts someone whose 18th birthday is today", () => {
         expect(parseOwner({ ...valid, birthDate: "2008-03-15" }, NOW).birthDate.reveal()).toBe("2008-03-15")
       })
@@ -101,7 +103,6 @@ describe("parseOwner: the keeper the car is registered to", () => {
         expect(fieldsRejected({ ...valid, birthDate: "2009-03-15" })).toEqual(["birthDate"])
       })
 
-      // 23:30 UTC on the 14th is 00:30 on the 15th in Berlin (CET, UTC+1): the birthday has begun there.
       it("counts the day in Berlin, so a birthday begins at midnight there, not at midnight UTC (winter)", () => {
         const justAfterMidnightInBerlin = new Date("2026-03-14T23:30:00.000Z")
         const justBeforeMidnightInBerlin = new Date("2026-03-14T22:30:00.000Z")
@@ -110,7 +111,6 @@ describe("parseOwner: the keeper the car is registered to", () => {
         expect(fieldsRejected({ ...valid, birthDate: "2008-03-15" }, justBeforeMidnightInBerlin)).toEqual(["birthDate"])
       })
 
-      // 22:30 UTC on the 14th is 00:30 on the 15th in Berlin in summer (CEST, UTC+2).
       it("counts the day in Berlin in summer time too", () => {
         const justAfterMidnightInBerlin = new Date("2026-07-14T22:30:00.000Z")
         const justBeforeMidnightInBerlin = new Date("2026-07-14T21:30:00.000Z")
@@ -119,7 +119,6 @@ describe("parseOwner: the keeper the car is registered to", () => {
         expect(fieldsRejected({ ...valid, birthDate: "2008-07-15" }, justBeforeMidnightInBerlin)).toEqual(["birthDate"])
       })
 
-      // Never accepts a minor: someone born on 29 February is adult from 1 March in a year without one.
       it("lets someone born on 29 February in from 1 March in a year that has no 29 February", () => {
         const feb28 = new Date("2026-02-28T12:00:00.000Z")
         const mar1 = new Date("2026-03-01T12:00:00.000Z")

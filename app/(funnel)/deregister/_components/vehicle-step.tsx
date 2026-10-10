@@ -40,7 +40,6 @@ export function VehicleStep({
   function submit(event: FormEvent) {
     event.preventDefault()
     const found = validateVehicle(data, plateCount)
-    // Rendered before focus moves, so the field announces its error as it is focused.
     flushSync(() => setErrors(found))
     const firstInvalid = fieldsFor(plateCount).find((field) => found[field])
     if (firstInvalid) {
@@ -61,7 +60,7 @@ export function VehicleStep({
         <legend className="mb-2 text-small font-normal text-grau-dark">Kennzeichen</legend>
         <PlateFrame className="sm:max-w-md">
           <div className="grid grid-cols-[1fr_1fr_1.4fr] gap-2 p-2">
-            <TextField {...bind("prefix")} label="Ortskürzel" maxLength={3} inputClassName="plate-text" />
+            <TextField {...bind("prefix")} label="Ortskürzel" disabled inputClassName="plate-text" />
             <TextField {...bind("letters")} label="Buchstaben" maxLength={2} inputClassName="plate-text" />
             <TextField {...bind("numbers")} label="Ziffern" maxLength={4} inputMode="numeric" inputClassName="plate-text" />
           </div>

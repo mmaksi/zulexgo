@@ -12,7 +12,7 @@ const headers = new Headers({ "x-forwarded-for": "203.0.113.7" })
 async function correctableOrder() {
   const flow = setupFlow()
   flow.deps.registration.failNext("submit", new GatewayRejected())
-  const reference = await flow.checkoutAndPay("card")
+  const reference = await flow.checkoutAndPay()
   return { ...flow, reference, token: (await flow.deps.repository.getStatusToken(reference))! }
 }
 
@@ -35,7 +35,7 @@ describe("cancelOrder", () => {
 
   it("answers alike for a link that opens nothing and for an order that cannot be cancelled, so it tells nothing about either", async () => {
     const flow = setupFlow()
-    const reference = await flow.checkoutAndPay("card")
+    const reference = await flow.checkoutAndPay()
 
     expect(await cancelOrder(flow.deps, headers, "faketoken-unknown")).toEqual({ status: "notPossible" })
     expect(await cancelOrder(flow.deps, headers, (await flow.deps.repository.getStatusToken(reference))!)).toEqual({ status: "notPossible" })
@@ -72,7 +72,7 @@ const fix = { vin: "FAKEVIN0000000009", certificate: "AAAAAA9" }
 
 async function correctableAtTheKba() {
   const flow = setupFlow()
-  const reference = await flow.checkoutAndPay("card")
+  const reference = await flow.checkoutAndPay()
   flow.deps.registration.setStatus(await flow.zulexId(reference), { state: "failed", error: { code: 101, details: [] }, documents: [] })
   await flow.poll(1)
   return { ...flow, reference, token: (await flow.deps.repository.getStatusToken(reference))! }
@@ -140,7 +140,7 @@ describe("correctOrder", () => {
 
   it("answers alike for a link that opens nothing and for an order that cannot be corrected", async () => {
     const flow = setupFlow()
-    const reference = await flow.checkoutAndPay("card")
+    const reference = await flow.checkoutAndPay()
 
     expect(await correctOrder(flow.deps, headers, "faketoken-unknown", fix)).toEqual({ status: "notPossible" })
     expect(await correctOrder(flow.deps, headers, (await flow.deps.repository.getStatusToken(reference))!, fix)).toEqual({ status: "notPossible" })
@@ -169,7 +169,6 @@ describe("correctOrder", () => {
   })
 })
 
-/** A Neuzulassung the identity check sent back: the customer typed "Erika", the provider found "Erik". Nothing is filed. */
 async function mismatchedNewRegistration() {
   const flow = setupFlow()
   const reference = await flow.checkoutAndPayNewRegistration()

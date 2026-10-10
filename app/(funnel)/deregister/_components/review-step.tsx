@@ -12,7 +12,6 @@ const MASK = "•••"
 
 const linkClass = "underline underline-offset-4 hover:text-orange-dark"
 
-/** site-contract §2.4: masked summary, full price, the fee notice and consent before the pay button. */
 export function ReviewStep({
   plateCount,
   vehicle,

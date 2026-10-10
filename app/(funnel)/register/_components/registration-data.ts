@@ -1,22 +1,14 @@
 import { newRegistrationRequestSchema } from "@/src/core/domain/application/new-registration-request"
 
-/**
- * What the customer typed for a Neuzulassung, as typed: the browser holds text, and the server
- * parses it (`parseNewRegistrationRequest`). The form is never put in the URL or in browser storage:
- * it holds an IBAN, a birth date and the codes of the car's papers.
- */
 export interface RegistrationData {
   vin: string
-  /** `electric`, `hybrid` or `combustion`; empty until chosen. */
   engineType: string
   evbNumber: string
   part2Number: string
   part2SecurityCode: string
   firstName: string
   lastName: string
-  /** `female`, `male`, `diverse` or `unspecified`; empty until chosen. */
   gender: string
-  /** `YYYY-MM-DD`, as a date input gives it. */
   birthDate: string
   birthPlace: string
   street: string
@@ -24,11 +16,9 @@ export interface RegistrationData {
   postcode: string
   city: string
   phone: string
-  /** The keeper's address, which is also where the status link and every email go. */
   email: string
   electric: boolean
   seasonal: boolean
-  /** A month, `1` to `12`; empty until chosen. */
   seasonFrom: string
   seasonUntil: string
   iban: string
@@ -38,14 +28,12 @@ export interface RegistrationData {
 
 export type RegistrationField = keyof RegistrationData
 
-/** What drives the car, as the customer calls it, by the domain's engine type. */
 export const ENGINE_CHOICES = [
   { value: "electric", label: "Elektro" },
   { value: "hybrid", label: "Hybrid" },
   { value: "combustion", label: "Benzin oder Diesel" },
 ] as const
 
-/** The months of a seasonal plate, January first: a month's number is its position plus one. */
 export const MONTH_NAMES = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"] as const
 
 export const EMPTY_REGISTRATION: RegistrationData = {
@@ -74,7 +62,6 @@ export const EMPTY_REGISTRATION: RegistrationData = {
   bankName: "",
 }
 
-/** The fields that hold what the customer typed or chose, not a toggle: each is checked at the domain's own path. */
 export type TextualField = Exclude<RegistrationField, "electric" | "seasonal">
 
 const PATHS: Record<TextualField, string> = {
@@ -101,7 +88,6 @@ const PATHS: Record<TextualField, string> = {
   bankName: "bankAccount.bankName",
 }
 
-/** site-contract §2.3: human, action-oriented, never the API's text. */
 export const MESSAGES: Record<Exclude<TextualField, "iban">, string> = {
   vin: "Die FIN eines Neuwagens hat genau 17 Stellen: Buchstaben und Ziffern, Feld E im Fahrzeugschein.",
   engineType: "Wählen Sie, wie Ihr Fahrzeug angetrieben wird.",
@@ -125,10 +111,9 @@ export const MESSAGES: Record<Exclude<TextualField, "iban">, string> = {
   bankName: "Geben Sie den Namen Ihrer Bank ein.",
 }
 
-/** Launch plan Q54, provisional: German accounts only, as `bank-account.ts` has it. */
+// Provisional: launch plan Q54 (German accounts only)
 const GERMAN_IBAN_SHAPE = /^DE\d{20}$/
 
-/** A typo that keeps the shape fails the checksum; a wrong country or length is another mistake, and the customer is told which. */
 function ibanMessage(iban: string): string {
   return GERMAN_IBAN_SHAPE.test(iban.replace(/\s+/g, "").toUpperCase())
     ? "Diese IBAN ist ungültig, vermutlich ein Tippfehler. Prüfen Sie jede Ziffer."
@@ -139,7 +124,6 @@ const messageFor = (field: TextualField, data: RegistrationData) => (field === "
 
 export type Step = "vehicle" | "keeper" | "plate" | "tax"
 
-/** The fields a step asks for, in the order it shows them. The plate step's two toggles carry no text to check. */
 export function fieldsOf(step: Step, data: RegistrationData): TextualField[] {
   switch (step) {
     case "vehicle":
@@ -153,7 +137,6 @@ export function fieldsOf(step: Step, data: RegistrationData): TextualField[] {
   }
 }
 
-/** The shape `parseNewRegistrationRequest` expects. An E-plate counts only for an electric car, whatever was ticked before the engine changed. */
 export function toRequest(data: RegistrationData) {
   return {
     vin: data.vin,
@@ -178,12 +161,6 @@ export function toRequest(data: RegistrationData) {
   }
 }
 
-/**
- * The wording for each of `fields` the server would refuse, keyed by field. The rules are the domain's
- * own (the request schema, checked against `now`, the browser's clock), so the form says no exactly
- * where the server would, and a field is only reported when it is one of `fields`: a step is
- * checked on its own, the others being empty or not yet shown.
- */
 export function validateFields(data: RegistrationData, fields: readonly TextualField[], now: Date): Partial<Record<TextualField, string>> {
   const result = newRegistrationRequestSchema(now).safeParse(toRequest(data))
   if (result.success) return {}

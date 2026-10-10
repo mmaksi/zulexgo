@@ -1,8 +1,6 @@
 import { render, screen } from "@testing-library/react"
 import { Hero } from "./hero"
 
-// A description list pairs each term with its value; a label that is both the
-// term and part of the value is announced twice by a screen reader.
 describe("Hero stats", () => {
   it("pairs each label with its value, announcing each once", () => {
     render(<Hero />)

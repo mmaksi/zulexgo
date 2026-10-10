@@ -1,12 +1,5 @@
 import type { Clock } from "./clock"
 
-/**
- * Every Clock adapter must pass this, including the fake.
- *
- * Pins down the port's guarantees: `now()` is a valid `Date`, successive
- * readings never go backwards (a clock that stands still passes), and each call
- * returns a fresh `Date`, so a caller mutating one cannot move the clock.
- */
 export function clockContract(name: string, makeSubject: () => Clock) {
   describe(`Clock contract: ${name}`, () => {
     it("returns a valid Date", () => {

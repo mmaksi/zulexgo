@@ -250,8 +250,7 @@ describe("the beta", () => {
   })
 })
 
-// Launch plan Q45, provisional: the KBA registers a car in the name of whoever the order says, so a service that does
-// that must not go on sale on a check that proves nobody's identity.
+// Provisional: launch plan Q45
 describe("the identity check", () => {
   it("may be the fake in production while no service on sale verifies the customer, as today", () => {
     expect(parseEnv({ ...production, IDENTITY_DRIVER: "fake" }).IDENTITY_DRIVER).toBe("fake")

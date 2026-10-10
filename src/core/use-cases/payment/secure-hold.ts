@@ -4,37 +4,21 @@ import { HoldExpired } from "@/src/core/errors/payment/hold-expired"
 import type { Payment } from "@/src/core/ports/payment/payment-provider"
 import type { Dependencies } from "@/src/core/use-cases/dependencies"
 
-/**
- * Takes the whole held amount (launch plan Q7: an online authority's order once
- * Zulex accepts it). Safe to repeat: a payment no longer held is left alone.
- * Called by `submitToKba` for an online authority, once the service has the application.
- */
+// Launch plan Q7: an online authority's order is captured in full once Zulex accepts it.
 export const captureHold = (deps: Pick<Dependencies, "payments" | "clock">, application: Application): Promise<Payment> =>
   secure(deps, application, () => true)
 
-/**
- * Takes the money of a hold that is close to lapsing (launch plan Q20), and leaves any other alone.
- * Called by the poller for a hand-processed order still at the KBA and for a 5b waiting on the
- * customer, whose hold can otherwise run out first.
- */
+// Launch plan Q20: capture a hold that is close to lapsing.
 export const guardHold = (deps: Pick<Dependencies, "payments" | "clock">, application: Application): Promise<Payment> =>
   secure(deps, application, (payment) => shouldCaptureAhead(payment, deps.clock.now()))
 
-/**
- * `guardHold` for a visit whose real business is something else (a status check, a verification): a
- * failed look is only logged, by order and kind of error (the message could hold personal data), so
- * it never stops the visit. The next visit looks again.
- */
+// Logged by order and error name only: the message could hold personal data.
 export const guardHoldQuietly = (deps: Pick<Dependencies, "payments" | "clock">, application: Application): Promise<void> =>
   guardHold(deps, application).then(
     () => undefined,
     (error) => console.error(`[payments] ${application.reference}: hold not checked: ${error instanceof Error ? error.name : "unknown error"}`),
   )
 
-/**
- * Reads the payment first and captures only a hold that `mustCapture` says to take; a payment
- * in any other state (a SEPA debit is taken at checkout) is returned as it is.
- */
 async function secure(
   { payments }: Pick<Dependencies, "payments">,
   { reference, payment: { id, total } }: Application,
@@ -47,8 +31,7 @@ async function secure(
     return await payments.capture(id, total)
   } catch (error) {
     if (!(error instanceof HoldExpired)) throw error
-    // The hold ran out between the read and the capture. Not an error: the order goes on
-    // and settlement later treats a released hold as nothing to take or return.
+    // The hold lapsed between read and capture: not an error, settlement treats it as nothing taken.
     console.warn(`[payments] ${reference}: the hold lapsed before it could be taken`)
     return payments.getPayment(id)
   }

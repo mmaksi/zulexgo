@@ -9,11 +9,6 @@ jest.mock("next/server", () => ({ connection: async () => undefined }))
 const notFound = { digest: "NEXT_HTTP_ERROR_FALLBACK;404" }
 const confirmation = () => ConfirmationPage({ searchParams: Promise.resolve({}) } as never)
 
-/**
- * The funnel collects an IBAN and a birth date, so it must not exist for a customer while checkout would refuse
- * the order. Whether it does is the deployment's setting (`SERVICES_ON_SALE`), staging's and production's apart.
- * Its confirmation page collects nothing and is where Stripe sends a customer who has paid, so it always exists.
- */
 describe("the Neuzulassung funnel while the service is not on sale", () => {
   beforeEach(() => {
     mockContainer.servicesOnSale = ["deregistration"]

@@ -25,17 +25,11 @@ describe("the verification deadline and reminder (launch plan Q48, provisional: 
     expect(VERIFICATION_REMINDER_AFTER_MS).toBeLessThan(VERIFICATION_DEADLINE_AFTER_MS)
   })
 
-  // The money is held on the customer's card while they have not verified. If the deadline ran past the guard's
-  // margin, the guard would capture the payment of an order that is then cancelled for nothing, and refund it,
-  // instead of releasing the hold untouched.
   describe("ends before the card hold would be captured ahead of its expiry (Q20)", () => {
     it("so a deadline that passes releases the hold untouched, never a captured payment", () => {
       expect(VERIFICATION_DEADLINE_AFTER_MS + HOLD_CAPTURE_MARGIN_MS).toBeLessThan(CARD_HOLD_LIFETIME_MS)
     })
 
-    // The poller visits an order once per check interval, so it can find the deadline up to one interval late. The hold is
-    // placed at checkout and the verification starts moments after payment is confirmed, so the count from `startedAt` is
-    // the hold's own to within those moments. Whatever visits the order must also check the deadline before the hold.
     it("with one check interval to spare, so a visit that comes late still finds the deadline before the guard's margin", () => {
       expect(VERIFICATION_DEADLINE_AFTER_MS + HOLD_CAPTURE_MARGIN_MS + HOLD_CHECK_INTERVAL_MS).toBeLessThanOrEqual(CARD_HOLD_LIFETIME_MS)
     })
@@ -63,7 +57,6 @@ describe("the verification deadline and reminder (launch plan Q48, provisional: 
       expect(verificationDue({ startedAt: STARTED, deadline: DEADLINE, reminderSent: false }, after(5 * DAY))).toBe("expired")
     })
 
-    // The customer was told this deadline in email 2. A later change of the policy must not move it under them.
     it("enforces the deadline the customer was given, not the one the policy would give today", () => {
       const promised = after(6 * DAY)
 

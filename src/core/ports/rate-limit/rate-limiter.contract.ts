@@ -3,23 +3,11 @@ import type { RateLimit, RateLimiter } from "./rate-limiter"
 const SECOND = 1_000
 const THREE_PER_MINUTE: RateLimit = { max: 3, windowMs: 60 * SECOND }
 
-/** A limiter and the way to move the time it counts by; adapters may not share a fake clock, so each test supplies its own. */
 export interface RateLimiterSubject {
   limiter: RateLimiter
-  /** Moves the time the limiter counts by, so no test sleeps. */
   advance(milliseconds: number): void
 }
 
-/**
- * Every RateLimiter adapter must pass this, including the fake.
- *
- * Pins down the port's guarantees: a fixed window that allows the first `max`
- * attempts and refuses the rest until `windowMs` after the first, then starts
- * over; a refusal reports the time left and never lengthens the window; a
- * window longer than a day is a `RangeError`; keys count separately; attempts
- * made together never allow more than `max`. Keyed hashing of stored keys is
- * not checked here.
- */
 export function rateLimiterContract(name: string, makeSubject: () => RateLimiterSubject) {
   describe(`RateLimiter contract: ${name}`, () => {
     let subject: RateLimiterSubject
@@ -85,7 +73,6 @@ export function rateLimiterContract(name: string, makeSubject: () => RateLimiter
       expect(await attempts(second, 3)).toEqual([true, true, true])
     })
 
-    // Twelve at once: a shared store must count atomically (Postgres does it in one statement).
     it("never allows more than the limit when attempts arrive together", async () => {
       const key = newKey()
 

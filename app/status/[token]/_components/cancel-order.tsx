@@ -18,11 +18,6 @@ import { Button } from "@/src/ui/button"
 
 export type CancelOrderAction = () => Promise<OrderChangeState>
 
-/**
- * site-contract §2.6, 5b: cancelling keeps the fee, so the amounts stand next
- * to the button and again in the confirmation. Nothing happens until the
- * customer confirms, and a second press while the first is running is ignored.
- */
 export function CancelOrder({ action, returned, retained }: { action: CancelOrderAction; returned: string; retained: string }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)

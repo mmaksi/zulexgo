@@ -1,6 +1,6 @@
 import type { RegistrationData } from "@/app/(funnel)/register/_components/registration-data"
 
-/** What a customer types for the fake car: obviously fake values that pass the same validation as production input. */
+/** Obviously fake values that pass the same validation as production input. */
 export const FILLED_REGISTRATION_FORM: RegistrationData = {
   vin: "fakevin0000000002",
   engineType: "combustion",

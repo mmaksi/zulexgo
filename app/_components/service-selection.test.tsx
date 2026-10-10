@@ -3,12 +3,6 @@ import { formatEuros } from "@/src/core/domain/payment/money"
 import { SERVICE_PRICES } from "@/src/core/domain/payment/pricing"
 import { ServiceSelection } from "./service-selection"
 
-/**
- * prd.md §3 — the MVP sells de-registration only. Making another card
- * actionable would take money for a service that does not exist, and nothing
- * else in the build would catch it. Which services a deployment sells is its
- * setting (`SERVICES_ON_SALE`); the cards only follow it.
- */
 describe("ServiceSelection", () => {
   it("offers exactly one purchasable service", () => {
     render(<ServiceSelection servicesOnSale={["deregistration"]} />)
@@ -44,7 +38,6 @@ describe("ServiceSelection", () => {
   it("marks every other service as unavailable, not merely unlinked", () => {
     render(<ServiceSelection servicesOnSale={["deregistration"]} />)
 
-    // aria-disabled so the state reaches assistive tech, plus visible copy.
     const items = screen.getAllByRole("listitem")
     const unavailable = items.filter((item) =>
       item.querySelector('[aria-disabled="true"]')
@@ -55,10 +48,7 @@ describe("ServiceSelection", () => {
   })
 })
 
-/**
- * One price everywhere (PAngV): a card that quoted a different amount than the
- * checkout charges would be an offer the business has to honour or break.
- */
+// PAngV: a card must quote exactly what checkout charges
 describe("ServiceSelection prices", () => {
   const cards = () => screen.getAllByRole("listitem")
 

@@ -5,7 +5,6 @@ import { Field, FieldDescription, FieldError, FieldLabel } from "@/src/ui/field"
 import { Input } from "@/src/ui/input"
 import { Alert } from "@/src/ui/alert"
 
-/** A labelled input with its helper text and error, both announced with the field. */
 export function TextField({
   id,
   label,

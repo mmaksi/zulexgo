@@ -1,9 +1,4 @@
-/**
- * What the funnel sends for a Neuzulassung, with obviously fake values that still pass the same
- * validation as production input: the name is the German placeholder, the address is a made-up
- * street, the IBAN is the published example IBAN, the phone number is in the range the
- * Bundesnetzagentur reserves for fiction, and the email is on `example.test`.
- */
+// Obviously fake but valid: the published example IBAN, a phone number in the range kept for fiction.
 export const FAKE_NEW_REGISTRATION = {
   vin: "FAKEVIN0000000002",
   engineType: "combustion",
@@ -23,5 +18,4 @@ export const FAKE_NEW_REGISTRATION = {
   plate: { electric: false },
 } as const
 
-/** A date on which `FAKE_NEW_REGISTRATION`'s owner is of age. */
 export const FAKE_NEW_REGISTRATION_NOW = new Date("2026-03-01T09:00:00.000Z")

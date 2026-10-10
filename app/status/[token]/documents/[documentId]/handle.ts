@@ -5,7 +5,7 @@ import type { Dependencies } from "@/src/core/use-cases/dependencies"
 import { getDocumentByToken } from "@/src/core/use-cases/status/get-document-by-token"
 import { clientAddress } from "@/src/lib/client-address"
 
-/** ASCII, since a filename in a header is not the place for umlauts. */
+// ASCII only: a filename in a header is no place for umlauts
 const FILE_LABELS: Record<DocumentKind, string> = {
   confirmation: "Bestaetigung",
   temporaryCertificate: "Zulassungsnachweis",
@@ -16,11 +16,6 @@ const FILE_LABELS: Record<DocumentKind, string> = {
 
 const isPdf = (bytes: Uint8Array) => new TextDecoder().decode(bytes.subarray(0, 5)) === "%PDF-"
 
-/**
- * The official document, streamed only to the link its order belongs to.
- * Every miss is the same empty 404, and a wrong link counts against the
- * address like a right one, since guessing links is what a limit is for.
- */
 export async function handleDocumentDownload(
   deps: Pick<Dependencies, "repository" | "documents" | "rateLimiter">,
   request: Request,

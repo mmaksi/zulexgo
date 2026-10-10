@@ -16,11 +16,6 @@ import type { ApplicationReference } from "@/src/core/domain/application/applica
 import { SERVICE_PRICES } from "@/src/core/domain/payment/pricing"
 import type { Dependencies } from "@/src/core/use-cases/dependencies"
 
-/**
- * The real Stripe and Zulex adapters, with both vendors stubbed at the network
- * boundary; repository, mail and storage in memory. Registers the msw
- * lifecycle, so call it once at the top of a test file.
- */
 export function withVendorsAtTheNetwork() {
   const server = setupServer()
   const world = {} as {
@@ -54,11 +49,6 @@ export function withVendorsAtTheNetwork() {
   })
   afterAll(() => server.close())
 
-  /**
-   * A Neuzulassung as the identity step leaves it: paid, the card held at Stripe, the identity
-   * verified and nothing filed yet, with the status link the filing email carries. Made directly
-   * rather than through the step (`identity-verification.test.ts` runs that), so a test can file it itself.
-   */
   async function verifiedNewRegistration() {
     const order = aNewRegistrationApplication({ status: "identity_verified", ikfzStatus: "online" })
     const { paymentId } = await world.deps.payments.createPayment({
@@ -67,7 +57,7 @@ export function withVendorsAtTheNetwork() {
       amount: SERVICE_PRICES.newRegistration,
       email: order.email,
     })
-    world.stripe.customerPays(paymentId, "card")
+    world.stripe.customerPays(paymentId)
     const at = world.clock.now()
     const created = await world.deps.repository.create({
       ...order,

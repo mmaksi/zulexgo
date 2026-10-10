@@ -15,13 +15,12 @@ import { SERVICES, type Service } from "./service"
 
 type Move = [ApplicationStatus, ApplicationEvent, ApplicationStatus]
 
-/** Owned by the test, not imported: business logic §1–§3 for a service that goes 1 → 4 (de-registration, Q4). */
+// Owned by the test, not imported, so a changed move in the source fails it. Launch plan Q4.
 const DIRECT: Move[] = [
   ["awaiting_payment", "paymentConfirmed", "submitted_and_paid"],
   ["submitted_and_paid", "submittedToKba", "submitted_to_kba"],
   ["submitted_and_paid", "failedCorrectable", "failed_correctable"],
   ["submitted_and_paid", "failedFinal", "failed_final"],
-  ["submitted_to_kba", "kbaProcessing", "submitted_to_kba"],
   ["submitted_to_kba", "kbaCompleted", "completed"],
   ["submitted_to_kba", "failedCorrectable", "failed_correctable"],
   ["submitted_to_kba", "failedFinal", "failed_final"],
@@ -30,12 +29,7 @@ const DIRECT: Move[] = [
   ["failed_correctable", "cancelledByCustomer", "cancelled"],
 ]
 
-/**
- * Business logic §1–§3 for a service that verifies the customer's identity between payment (1) and
- * filing (4), through statuses 2 and 3 (Neuzulassung, launch plan Q45, provisional). These moves hold
- * whether or not the identity was verified yet. `submitted_and_paid --failedFinal-->` is the way out when
- * the verification cannot be started at all (our fault, so a full refund, as an unconfirmed filing is).
- */
+// Provisional: launch plan Q45
 const VERIFIED_ANY: Move[] = [
   ["awaiting_payment", "paymentConfirmed", "submitted_and_paid"],
   ["submitted_and_paid", "identityVerificationStarted", "awaiting_identity_verification"],
@@ -46,23 +40,15 @@ const VERIFIED_ANY: Move[] = [
   ["awaiting_identity_verification", "failedCorrectable", "failed_correctable"],
   ["identity_verified", "failedCorrectable", "failed_correctable"],
   ["identity_verified", "failedFinal", "failed_final"],
-  ["submitted_to_kba", "kbaProcessing", "submitted_to_kba"],
   ["submitted_to_kba", "kbaCompleted", "completed"],
   ["submitted_to_kba", "failedCorrectable", "failed_correctable"],
   ["submitted_to_kba", "failedFinal", "failed_final"],
   ["failed_correctable", "cancelledByCustomer", "cancelled"],
 ]
 
-/**
- * An order whose identity was never verified (a 5b that a mismatch caused, launch plan Q47, provisional) can only
- * be sent back to be checked again: nothing may file it, patch it or refile it.
- */
+// Provisional: launch plan Q47
 const NEVER_VERIFIED: Move[] = [...VERIFIED_ANY, ["failed_correctable", "correctionRechecked", "awaiting_identity_verification"]]
 
-/**
- * An order whose identity was verified once never needs it again: a refused filing is refiled back to 3, not 1, and what
- * the KBA holds is patched. Nothing is filed before 3, so filing starts there.
- */
 const VERIFIED_ONCE: Move[] = [
   ...VERIFIED_ANY,
   ["identity_verified", "submittedToKba", "submitted_to_kba"],
@@ -79,11 +65,6 @@ const JOURNEYS: [Service, boolean, Move[]][] = [
 
 const IDENTITY_STATUSES: ApplicationStatus[] = ["awaiting_identity_verification", "identity_verified"]
 
-/**
- * Every state an order of the service can reach by any sequence of events from the first status, together with whether the
- * identity was ever verified, tracked as the app does it: by having entered status 3 (`identityVerified` below is the
- * event that actually verified it).
- */
 function explore(service: Service) {
   const key = (state: { status: ApplicationStatus; entered: boolean; verifiedByEvent: boolean }) => JSON.stringify(state)
   const seen = new Map([[key({ status: "awaiting_payment", entered: false, verifiedByEvent: false }), { status: "awaiting_payment" as ApplicationStatus, entered: false, verifiedByEvent: false }]])
@@ -141,8 +122,6 @@ describe("the path of each service", () => {
     expect([...new Set(explore("newRegistration").map(({ status }) => status))].sort()).toEqual([...APPLICATION_STATUSES].sort())
   })
 
-  // The security property of the step: the KBA registers a car in a named person's name only after that person was verified.
-  // Every sequence of events is tried, including a verification mismatch that is corrected and refiled.
   it("never lets a Neuzulassung reach status 3, the KBA or completion without the verification event having happened", () => {
     const unverified = explore("newRegistration").filter(
       ({ status, verifiedByEvent }) => ["identity_verified", "submitted_to_kba", "completed"].includes(status) && !verifiedByEvent,
@@ -215,8 +194,6 @@ describe("the statuses that are looked at on a schedule, or that a second order 
     ])
   })
 
-  // The poller visits status 2 for the deadline, the reminder and the card hold; status 3 so an order whose filing
-  // was interrupted is resumed, as one at status 1 is.
   it.each(IDENTITY_STATUSES)("includes %s, paid and not finished", (status) => {
     expect(OPEN_STATUSES).toContain(status)
     expect(POLLED_STATUSES).toContain(status)

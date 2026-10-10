@@ -7,10 +7,6 @@ const statusLink = "https://zulexgo.example.test/status/faketoken-contract"
 const verificationLink = "https://verification.example.test/fake-verification-contract"
 const deadline = new Date("2026-03-05T09:00:00.000Z")
 
-/**
- * One of each EmailTemplate, with fixed fake values. Also the input of the
- * render tests that review the HTML, so a new template must be added here.
- */
 export const EVERY_TEMPLATE: EmailTemplate[] = [
   { name: "orderConfirmation", service: "deregistration", reference, statusLink },
   { name: "identityVerificationRequested", reference, verificationLink, deadline },
@@ -24,10 +20,6 @@ export const EVERY_TEMPLATE: EmailTemplate[] = [
   { name: "statusLinkResent", reference, statusLink },
 ]
 
-/**
- * The emails whose wording is a Neuzulassung's: what was ordered, what the KBA did, what the customer may correct.
- * Each carries the same fields as its de-registration twin, so only the words differ.
- */
 export const NEW_REGISTRATION_TEMPLATES: EmailTemplate[] = [
   { name: "orderConfirmation", service: "newRegistration", reference, statusLink },
   { name: "submittedToKba", service: "newRegistration", reference, statusLink, manualProcessing: false },
@@ -44,17 +36,9 @@ export const NEW_REGISTRATION_TEMPLATES: EmailTemplate[] = [
   { name: "rejected", service: "newRegistration", reference, statusLink, reason: "Ihre Identität konnte nicht bestätigt werden.", refund: Money.ofCents(10901), retained: Money.ofCents(1999) },
 ]
 
-/** What a test names an email by: its name, and the service it speaks for when the wording depends on one. */
 export const labelOf = (template: EmailTemplate) =>
   `${template.name}${"service" in template ? ` (${template.service}${"identityMismatch" in template && template.identityMismatch ? ", identity mismatch" : ""})` : ""}`
 
-/**
- * Every Mailer adapter must pass this, including the fake.
- *
- * Pins down one guarantee of the port: every template can be sent and `send`
- * resolves. The idempotency-key guarantee is not checked here; the adapters'
- * own tests do it (the fake and Resend).
- */
 export function mailerContract(name: string, makeSubject: () => Mailer) {
   describe(`Mailer contract: ${name}`, () => {
     it.each([...EVERY_TEMPLATE, ...NEW_REGISTRATION_TEMPLATES].map((template, index) => [labelOf(template), template, index] as const))(
