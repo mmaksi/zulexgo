@@ -1,4 +1,4 @@
-import { act, render, screen, within } from "@testing-library/react"
+import { act, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import type { RegistrationActions } from "./registration-actions"
 import { RegistrationFunnel } from "./registration-funnel"
@@ -153,6 +153,21 @@ describe("Neuzulassung funnel", () => {
       expect(heading()).toHaveTextContent("Können Sie online zulassen?")
     })
 
+    it.each([
+      ["no authority answers", jest.fn(async () => ({ ok: false as const, reason: "invalidPostcode" as const }))],
+      ["the request rejects", jest.fn(async () => Promise.reject(new Error("Network lost")))],
+    ])("moves focus to the postcode when %s, with the error already described, so a screen reader hears it", async (_, checkEligibility) => {
+      const { user } = setup({ checkEligibility })
+      const postcode = screen.getByLabelText("Postleitzahl Ihres Wohnorts")
+      let describedOnFocus: string | null = null
+      postcode.addEventListener("focus", () => (describedOnFocus = postcode.getAttribute("aria-describedby")))
+
+      await passRequirements(user)
+
+      await waitFor(() => expect(postcode).toHaveFocus())
+      expect(describedOnFocus).toContain("eligibility-postcode-error")
+    })
+
     it("tells the customer how long to wait when their address asked too often, and keeps them on the step", async () => {
       const { user } = setup({ checkEligibility: jest.fn(async () => ({ ok: false as const, reason: "limited" as const, retryAfterMinutes: 42 })) })
 
@@ -197,6 +212,19 @@ describe("Neuzulassung funnel", () => {
       expect(screen.getByLabelText("Fahrzeug-Identifizierungsnummer (FIN)")).toHaveAttribute("aria-invalid", "true")
       expect(screen.getByLabelText("eVB-Nummer")).toHaveAccessibleDescription(/7 Zeichen aus Buchstaben und Ziffern/)
       expect(screen.getByRole("group", { name: "Antrieb" })).toHaveAccessibleDescription(/angetrieben/)
+    })
+
+    it("moves focus to the first empty field with its error already described, so a screen reader hears it", async () => {
+      const { user } = setup()
+      await passRequirements(user)
+      const vin = screen.getByLabelText("Fahrzeug-Identifizierungsnummer (FIN)")
+      let describedOnFocus: string | null = null
+      vin.addEventListener("focus", () => (describedOnFocus = vin.getAttribute("aria-describedby")))
+
+      await next(user)
+
+      expect(vin).toHaveFocus()
+      expect(describedOnFocus).toContain("registration-vin-error")
     })
 
     it("hides the codes of the car's papers while they are typed", async () => {
@@ -336,6 +364,24 @@ describe("Neuzulassung funnel", () => {
       expect(await screen.findByLabelText("Postleitzahl")).toHaveAccessibleDescription(/keine Zulassungsstelle/)
       expect(screen.getByLabelText("Postleitzahl")).toHaveFocus()
       expect(heading()).toHaveTextContent("Der Halter")
+    })
+
+    it.each([
+      ["no authority answers for it", async () => ({ ok: false, reason: "invalidPostcode" })],
+      ["the request rejects", async () => Promise.reject(new Error("Network lost"))],
+    ])("moves focus to a changed postcode when %s, with the error already described, so a screen reader hears it", async (_, answer) => {
+      const checkEligibility = jest.fn().mockResolvedValueOnce({ ok: true, postcode: "10115", ikfzStatus: "online" }).mockImplementationOnce(answer)
+      const { user } = setup({ checkEligibility })
+      await reachKeeper(user)
+      const postcode = screen.getByLabelText("Postleitzahl")
+      await user.clear(postcode)
+      let describedOnFocus: string | null = null
+      postcode.addEventListener("focus", () => (describedOnFocus = postcode.getAttribute("aria-describedby")))
+
+      await fillKeeperWithPostcode(user, "99999")
+
+      await waitFor(() => expect(postcode).toHaveFocus())
+      expect(describedOnFocus).toContain("registration-postcode-error")
     })
 
     async function fillKeeperWithPostcode(user: User, postcode: string) {

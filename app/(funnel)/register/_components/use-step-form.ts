@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { flushSync } from "react-dom"
 import { fieldsOf, validateFields, type RegistrationData, type RegistrationField, type Step, type TextualField } from "./registration-data"
 
 export const fieldId = (field: RegistrationField) => `registration-${field}`
@@ -29,7 +30,7 @@ export function useStepForm(step: Step, data: RegistrationData, onChange: StepPr
   const check = (): boolean => {
     const fields = fieldsOf(step, data)
     const found = validateFields(data, fields, new Date())
-    setErrors(found)
+    flushSync(() => setErrors(found))
     const firstWrong = fields.find((field) => found[field])
     if (firstWrong) document.getElementById(fieldId(firstWrong))?.focus()
     return firstWrong === undefined

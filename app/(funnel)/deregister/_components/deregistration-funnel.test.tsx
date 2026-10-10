@@ -190,6 +190,19 @@ describe("de-registration funnel", () => {
       expect(screen.getByLabelText("E-Mail-Adresse")).toHaveAttribute("aria-invalid", "true")
     })
 
+    it("moves focus to the first invalid field with its error already described, so a screen reader hears it", async () => {
+      const { user } = setup()
+      await passEligibility(user)
+      const letters = screen.getByLabelText("Buchstaben")
+      let describedOnFocus: string | null = null
+      letters.addEventListener("focus", () => (describedOnFocus = letters.getAttribute("aria-describedby")))
+
+      await user.click(screen.getByRole("button", { name: "Weiter" }))
+
+      expect(letters).toHaveFocus()
+      expect(describedOnFocus).toContain("vehicle-letters-error")
+    })
+
     it("warns, without blocking, when a VIN is shorter than the modern 17 characters", async () => {
       const { user } = setup()
       await passEligibility(user)

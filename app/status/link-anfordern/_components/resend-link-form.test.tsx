@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react"
+import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { renderToStaticMarkup } from "react-dom/server"
 import type { ResendFormState } from "@/app/status/link-anfordern/resend-form-state"
@@ -37,6 +37,21 @@ describe("ResendLinkForm", () => {
     expect(reference).toHaveAccessibleDescription(expect.stringContaining("Bitte geben Sie Ihre Auftragsnummer ein."))
     expect(reference).toHaveValue("ZG-1")
     expect(screen.getByLabelText("E-Mail-Adresse")).toHaveAccessibleDescription(expect.stringContaining("gültige E-Mail-Adresse"))
+  })
+
+  it.each([
+    ["the order number when both fields are wrong", { reference: "Bitte geben Sie Ihre Auftragsnummer ein.", email: "Bitte geben Sie eine gültige E-Mail-Adresse ein." }, "Auftragsnummer", "resend-reference-error"],
+    ["the email address when only it is wrong", { email: "Bitte geben Sie eine gültige E-Mail-Adresse ein." }, "E-Mail-Adresse", "resend-email-error"],
+  ])("moves focus to %s, with its error already described, so a screen reader hears it", async (_, errors, label, errorId) => {
+    const { user } = setup({ status: "invalid", errors })
+    const field = screen.getByLabelText(label)
+    let describedOnFocus: string | null = null
+    field.addEventListener("focus", () => (describedOnFocus = field.getAttribute("aria-describedby")))
+
+    await fill(user, "ZG-1", "kunde")
+
+    await waitFor(() => expect(field).toHaveFocus())
+    expect(describedOnFocus).toContain(errorId)
   })
 
   it("tells a caller who asked too often how long to wait", async () => {

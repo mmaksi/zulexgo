@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation"
 import { useRef, useState, useTransition, type FormEvent } from "react"
+import { flushSync } from "react-dom"
 import { TextField } from "@/app/_components/text-field"
 import { tooManyAttempts } from "@/app/(funnel)/too-many-attempts"
 import { useHydrated } from "@/src/hooks/use-hydrated"
@@ -25,21 +26,23 @@ export function InviteForm({ service, action }: { service: string; action: (code
   const field = useRef<HTMLInputElement>(null)
   const hydrated = useHydrated()
 
+  const refuse = (answer: { status: "empty" | "refused" }) => {
+    flushSync(() => setAnswer(answer))
+    field.current?.focus()
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (pending) return
     const code = String(new FormData(event.currentTarget).get("invite") ?? "")
-    if (!code.trim()) {
-      setAnswer({ status: "empty" })
-      return field.current?.focus()
-    }
+    if (!code.trim()) return refuse({ status: "empty" })
 
     setPending(true)
     try {
       const result = await action(code)
+      if (result.status === "refused") return refuse(result)
       setAnswer(result)
       if (result.status === "accepted") startRefresh(() => router.refresh())
-      if (result.status === "refused") field.current?.focus()
     } catch {
       setAnswer({ status: "unavailable" })
     } finally {

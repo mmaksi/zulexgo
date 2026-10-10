@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, type FormEvent } from "react"
+import { flushSync } from "react-dom"
 import type { IkfzStatus } from "@/src/core/domain/registration/registration-authority"
 import { Choice } from "@/app/(funnel)/_components/choice"
 import { TextField } from "@/app/_components/text-field"
@@ -66,7 +67,7 @@ export function RequirementsStep({
   const ready = REQUIREMENTS.every(({ key }) => answers[key] === true) && postcode.trim() !== ""
 
   const refuse = (message: string) => {
-    setError(message)
+    flushSync(() => setError(message))
     document.getElementById(POSTCODE_ID)?.focus()
   }
 

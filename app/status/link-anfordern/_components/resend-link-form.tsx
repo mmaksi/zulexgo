@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, type FormEvent } from "react"
+import { flushSync } from "react-dom"
 import { TextField } from "@/app/_components/text-field"
 import type { ResendFormState } from "@/app/status/link-anfordern/resend-form-state"
 import { useHydrated } from "@/src/hooks/use-hydrated"
@@ -8,6 +9,9 @@ import { Alert } from "@/src/ui/alert"
 import { Button } from "@/src/ui/button"
 
 export type ResendLinkAction = (input: { reference: string; email: string }) => Promise<ResendFormState>
+
+const FIELDS = ["reference", "email"] as const
+const fieldId = (field: (typeof FIELDS)[number]) => `resend-${field}`
 
 export function ResendLinkForm({ action }: { action: ResendLinkAction }) {
   const [state, setState] = useState<ResendFormState>()
@@ -21,7 +25,11 @@ export function ResendLinkForm({ action }: { action: ResendLinkAction }) {
     const data = new FormData(event.currentTarget)
     setPending(true)
     try {
-      setState(await action({ reference: String(data.get("reference") ?? ""), email: String(data.get("email") ?? "") }))
+      const answer = await action({ reference: String(data.get("reference") ?? ""), email: String(data.get("email") ?? "") })
+      if (answer.status !== "invalid") return setState(answer)
+      flushSync(() => setState(answer))
+      const first = FIELDS.find((field) => answer.errors[field])
+      if (first) document.getElementById(fieldId(first))?.focus()
     } catch {
       setState({ status: "unavailable" })
     } finally {
@@ -32,7 +40,7 @@ export function ResendLinkForm({ action }: { action: ResendLinkAction }) {
   return (
     <form noValidate method="post" onSubmit={submit} className="measure flex flex-col gap-6">
       <TextField
-        id="resend-reference"
+        id={fieldId("reference")}
         name="reference"
         label="Auftragsnummer"
         helper="Sie steht in Ihrer E-Mail von ZulexGO, zum Beispiel ZG-ABC123."
@@ -42,7 +50,7 @@ export function ResendLinkForm({ action }: { action: ResendLinkAction }) {
         spellCheck={false}
       />
       <TextField
-        id="resend-email"
+        id={fieldId("email")}
         name="email"
         type="email"
         inputMode="email"
