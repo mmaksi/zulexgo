@@ -11,24 +11,21 @@ import { correctApplication } from "@/src/core/use-cases/application/correct-app
 import { InMemoryApplicationRepository } from "@/src/adapters/repository/fake/in-memory-application-repository"
 import { CODES, setupFlow } from "./flow-harness"
 
-/** M6, 5b option A: the customer corrects, the service resubmits to the KBA, and the order is back at status 4. */
 const KBA_REFUSES = { state: "failed", error: { code: 101, details: [] }, documents: [] } as const
 
-/** A 5b the KBA sent back after accepting the application: the service holds it, so the fix is a PATCH. */
 async function refusedByKba() {
   const flow = setupFlow()
-  const reference = await flow.checkoutAndPay("card")
+  const reference = await flow.checkoutAndPay()
   const id = await flow.zulexId(reference)
   flow.deps.registration.setStatus(id, KBA_REFUSES)
   await flow.poll(1)
   return { ...flow, reference, id, token: (await flow.deps.repository.getStatusToken(reference))! }
 }
 
-/** A 5b the service refused outright: it holds nothing, so the fix files the application afresh. */
 async function refusedAtSubmission() {
   const flow = setupFlow()
   flow.deps.registration.failNext("submit", new GatewayRejected())
-  const reference = await flow.checkoutAndPay("card")
+  const reference = await flow.checkoutAndPay()
   return { ...flow, reference, token: (await flow.deps.repository.getStatusToken(reference))! }
 }
 
@@ -214,7 +211,6 @@ describe("correctApplication, an order the service holds", () => {
 })
 
 describe("correctApplication, against a cancel that got part of the way", () => {
-  /** A cancel that moved the money and then failed on the refund email: the order is still at 5b, its money already gone back. */
   async function halfCancelled(flow: Awaited<ReturnType<typeof refusedByKba>>) {
     jest.spyOn(flow.deps.mailer, "send").mockRejectedValueOnce(new Error("Resend is down"))
     await expect(cancelApplication(flow.deps, flow.token)).rejects.toThrow("Resend is down")

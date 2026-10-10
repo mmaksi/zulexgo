@@ -75,18 +75,6 @@ describe("refundPolicy (business logic §3)", () => {
     })
   })
 
-  describe("customer corrects: charge the difference only, if any", () => {
-    it("charges the extra amount when the corrected order costs more", () => {
-      expect(summary(refundPolicy({ type: "corrected", newTotal: euros(79.99) }, captured))).toEqual({
-        action: "chargeAdditional", amount: 1000, retained: 6999, returned: 0,
-      })
-    })
-
-    it.each([euros(69.99), euros(59.99)])("charges nothing when it costs the same or less (%o)", (newTotal) => {
-      expect(summary(refundPolicy({ type: "corrected", newTotal }, held)).action).toBe("none")
-    })
-  })
-
   it("refuses an order that does not exceed the processing fee, which cannot be priced", () => {
     expect(() => refundPolicy({ type: "cancelled" }, { state: "held", total: euros(19.99) })).toThrow(RangeError)
   })

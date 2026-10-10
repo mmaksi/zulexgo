@@ -3,7 +3,7 @@
 import { TaskLayout } from "@/app/_components/task-layout"
 import { Button } from "@/src/ui/button"
 
-/** Any unexpected error below the root layout. The message stays generic: an error may carry data a customer entered. */
+// Generic message: an error may carry data a customer entered
 export default function ErrorPage({ retry }: { error: Error & { digest?: string }; retry: () => void }) {
   return (
     <TaskLayout>

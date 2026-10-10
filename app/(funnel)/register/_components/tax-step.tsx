@@ -5,12 +5,7 @@ import { TextField } from "@/app/_components/text-field"
 import { Button } from "@/src/ui/button"
 import { useStepForm, type StepProps } from "./use-step-form"
 
-/**
- * site-contract §2.3: the account the vehicle tax is collected from by direct debit. It cannot be
- * corrected once the application is filed, so the IBAN is checked as strictly as it can be. The
- * mandate itself is given with the power of attorney when paying (launch plan Q46, Q54, provisional;
- * the wording is the lawyer's).
- */
+// Provisional: launch plan Q46, Q54 (the mandate is given with the power of attorney at payment)
 export function TaxStep({ data, onChange, onNext }: StepProps) {
   const { bind, check } = useStepForm("tax", data, onChange)
 

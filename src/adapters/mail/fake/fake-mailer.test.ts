@@ -31,7 +31,6 @@ describe("FakeMailer", () => {
     expect(mailer.sent).toHaveLength(1)
   })
 
-  // Resend answers 409 to a key it already holds with other content, so a retry that rebuilds its email must rebuild it identically.
   it("refuses a key that was already sent with other content, as the real mailer does, and delivers nothing", async () => {
     const mailer = new FakeMailer()
     const { reference, email } = anApplication()

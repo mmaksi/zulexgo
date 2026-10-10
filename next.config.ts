@@ -1,10 +1,5 @@
 import type { NextConfig } from "next";
 
-/**
- * Baseline security headers. The Content-Security-Policy is deliberately absent
- * until M7, when Stripe Elements' script and frame origins are known — a CSP
- * guessed now would either be wrong or be widened until it means nothing.
- */
 const securityHeaders = [
   { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
   { key: "X-Content-Type-Options", value: "nosniff" },
@@ -13,9 +8,7 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
-  // Next logs every Server Function call with its arguments in development.
-  // The checkout action's arguments are the security codes, which are never
-  // logged in any stage.
+  // Next logs Server Function arguments in dev; checkout's are security codes, never logged in any stage.
   logging: { serverFunctions: false },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];

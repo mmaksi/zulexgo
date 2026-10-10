@@ -1,5 +1,8 @@
 import { ValidationError } from "@/src/core/errors/validation-error"
-import { parseLicencePlate } from "./licence-plate"
+import { validate } from "@/src/core/domain/validate"
+import { licencePlateSchema } from "./licence-plate"
+
+const parseLicencePlate = (input: unknown) => validate(licencePlateSchema, input, "licencePlate")
 
 describe("parseLicencePlate", () => {
   it("accepts a plate and normalises case and whitespace", () => {

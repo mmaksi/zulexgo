@@ -4,12 +4,6 @@ import { pollDueApplications } from "@/src/core/use-cases/registration/poll-due-
 import { submitToKba } from "@/src/core/use-cases/registration/submit-to-kba"
 import { withVendorsAtTheNetwork } from "./network-harness"
 
-/**
- * N4: a Neuzulassung whose identity is verified is filed through the real Zulex adapter and its
- * documents come back through it, with Zulex and Stripe stubbed at the network. The verification
- * itself is proven in `identity-verification.test.ts`; here the order is made as the step leaves it
- * (paid, held, verified), so the test files it and watches the filing alone.
- */
 const { world, stored, emails, verifiedNewRegistration: verifiedOrder } = withVendorsAtTheNetwork()
 
 const HOUR = 60 * 60_000

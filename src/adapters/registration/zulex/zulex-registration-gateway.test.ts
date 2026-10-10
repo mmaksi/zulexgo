@@ -7,9 +7,9 @@ import { createRegistrationApplicationSpec, patchRegistrationApplicationSpec, ZU
 import { ZULEX_TEST_API_KEY, ZulexDouble } from "@/tests/msw/zulex"
 import { parseDeregistrationRequest } from "@/src/core/domain/application/deregistration-request"
 import { parseNewRegistrationRequest } from "@/src/core/domain/application/new-registration-request"
-import { parseEvbNumber } from "@/src/core/domain/vehicle/evb-number"
-import { parseRegistrationCertificatePart2 } from "@/src/core/domain/vehicle/registration-certificate-part2"
-import { parseVin } from "@/src/core/domain/vehicle/vin"
+import { evbNumberSchema } from "@/src/core/domain/vehicle/evb-number"
+import { registrationCertificatePart2Schema } from "@/src/core/domain/vehicle/registration-certificate-part2"
+import { vinSchema } from "@/src/core/domain/vehicle/vin"
 import { SecurityCode } from "@/src/core/domain/vehicle/security-code"
 import { GatewayRejected } from "@/src/core/errors/registration/gateway-rejected"
 import { GatewayUnavailable } from "@/src/core/errors/registration/gateway-unavailable"
@@ -47,7 +47,6 @@ const filedNewRegistration = async () => (await gateway().submit(newRegistration
 
 const OWNER_ADDRESS = { street: "Beispielstraße", houseNumber: "12a", zipCode: "10115", city: "Berlin" }
 
-/** Everything the customer entered that the API's response echoes back to us. */
 const ECHOED_SECRETS = secretsOf(newRegistrationWith())
 
 describe("ZulexRegistrationGateway", () => {
@@ -184,7 +183,6 @@ describe("ZulexRegistrationGateway", () => {
         expect(await gateway().getStatus("newRegistration", applicationId)).toEqual({ state: "inProgress" })
       })
 
-      // The API returns the owner's data, the IBAN, the eVB number and the Teil II code it was given (plan finding 5).
       it("hands on only the state, the documents and the error of a response that echoes the owner's data", async () => {
         const applicationId = await filedNewRegistration()
         zulex.setStatus(applicationId, "ERROR", { errorInfo: { code: 1 }, documents: [{ id: "8", type: "REJECTION" }] })
@@ -212,7 +210,6 @@ describe("ZulexRegistrationGateway", () => {
     })
 
     describe("a response that is not JSON", () => {
-      // JSON.parse quotes the stretch of the body it choked on in its error, and an echo of the filing has an IBAN in it.
       it("keeps what it echoed out of the error", async () => {
         const applicationId = await filedNewRegistration()
         server.use(
@@ -232,7 +229,7 @@ describe("ZulexRegistrationGateway", () => {
       it("patches the changed fields only, under the registration endpoint", async () => {
         const applicationId = await filedNewRegistration()
 
-        await gateway().correct("newRegistration", applicationId, { evbNumber: parseEvbNumber("NEWEVB1"), part2Number: "NEW0002" })
+        await gateway().correct("newRegistration", applicationId, { evbNumber: evbNumberSchema.parse("NEWEVB1"), part2Number: "NEW0002" })
 
         const sent = zulex.requests.at(-1)!
         expect(sent).toMatchObject({ method: "PATCH", path: `/zulex-api/v1/registration-applications/${applicationId}` })
@@ -243,7 +240,7 @@ describe("ZulexRegistrationGateway", () => {
       it("sends a corrected Teil II code under the name the spec gives it", async () => {
         const applicationId = await filedNewRegistration()
 
-        await gateway().correct("newRegistration", applicationId, { part2SecurityCode: parseRegistrationCertificatePart2({ number: "X", securityCode: "NEWCODE" }).securityCode })
+        await gateway().correct("newRegistration", applicationId, { part2SecurityCode: registrationCertificatePart2Schema.parse({ number: "X", securityCode: "NEWCODE" }).securityCode })
 
         expect(zulex.requests.at(-1)?.body).toEqual({ registrationCertificatePart2SecurityCode: "NEWCODE" })
       })
@@ -384,7 +381,7 @@ describe("ZulexRegistrationGateway", () => {
     const applicationId = await submitted()
 
     await gateway().correct("deregistration", applicationId, {
-      vin: parseVin("FAKEVIN0000000002"),
+      vin: vinSchema.parse("FAKEVIN0000000002"),
       codes: { rearPlate: SecurityCode.parse("rearPlate", "AA3") },
     })
 

@@ -53,7 +53,6 @@ const STEPS = {
   cancelled: ["submitted_and_paid", "awaiting_identity_verification", "failed_correctable", "cancelled"],
 } as const satisfies Record<string, readonly Application["status"][]>
 
-/** A Neuzulassung's view, built from the history it would really have, so its steps are the ones the page gets. */
 function newRegistrationView(path: keyof typeof STEPS, overrides: Partial<Extract<View, { service: "newRegistration" }>> = {}): View {
   const history = STEPS[path].map((status, index) => ({ status, at: new Date(T0.getTime() + index * 60_000) }))
   const order = aNewRegistrationApplication({ status: history.at(-1)!.status, history })

@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, type FormEvent } from "react"
+import { flushSync } from "react-dom"
 import type { IkfzStatus } from "@/src/core/domain/registration/registration-authority"
 import { Button } from "@/src/ui/button"
 import { RadioGroup } from "@/src/ui/radio-group"
@@ -12,13 +13,15 @@ import { Alert } from "@/src/ui/alert"
 import { Checkbox } from "@/src/ui/checkbox"
 import { tooManyAttempts } from "@/app/(funnel)/too-many-attempts"
 
+const PREFIX_ID = "eligibility-prefix"
+const UNREACHABLE = "Die Zulassungsstelle ist gerade nicht zu erreichen. Bitte versuchen Sie es in ein paar Minuten noch einmal."
+
 export interface Eligibility {
   plateCount: PlateCount
   prefix: string
   ikfzStatus: IkfzStatus
 }
 
-/** site-contract §2.2: stops an ineligible customer before any effort or money. */
 export function EligibilityStep({
   initial,
   checkEligibility,
@@ -35,30 +38,25 @@ export function EligibilityStep({
   const [error, setError] = useState<string>()
   const [checking, setChecking] = useState(false)
 
+  const refuse = (message: string) => {
+    flushSync(() => setError(message))
+    document.getElementById(PREFIX_ID)?.focus()
+  }
+
   async function submit(event: FormEvent) {
     event.preventDefault()
-    // A second submit while a check is pending is ignored.
     if (!plateCount || hasDocuments !== true || checking) return
     setChecking(true)
     try {
       const result = await checkEligibility(prefix)
-      if (!result.ok) {
-        if (result.reason === "limited") setError(tooManyAttempts(result.retryAfterMinutes))
-        else
-          setError(
-            result.reason === "invalidPrefix"
-              ? "Für dieses Ortskürzel finden wir keine Zulassungsstelle. Prüfen Sie die 1 bis 3 Buchstaben vor dem ersten Leerzeichen."
-              : "Die Zulassungsstelle ist gerade nicht zu erreichen. Bitte versuchen Sie es in ein paar Minuten noch einmal.",
-          )
-        return
-      }
-      onEligible({ plateCount, prefix: result.prefix, ikfzStatus: result.ikfzStatus })
+      if (result.ok) return onEligible({ plateCount, prefix: result.prefix, ikfzStatus: result.ikfzStatus })
+      if (result.reason === "limited") refuse(tooManyAttempts(result.retryAfterMinutes))
+      else if (result.reason === "invalidPrefix")
+        refuse("Für dieses Ortskürzel finden wir keine Zulassungsstelle. Prüfen Sie die 1 bis 3 Buchstaben vor dem ersten Leerzeichen.")
+      else refuse(UNREACHABLE)
     } catch {
-      // The request itself rejected (a lost connection, a server error): the customer hears the same as for an
-      // unreachable authority and can try again.
-      setError("Die Zulassungsstelle ist gerade nicht zu erreichen. Bitte versuchen Sie es in ein paar Minuten noch einmal.")
+      refuse(UNREACHABLE)
     } finally {
-      // Always, so that no failure leaves the button busy for good.
       setChecking(false)
     }
   }
@@ -96,7 +94,7 @@ export function EligibilityStep({
       ) : null}
 
       <TextField
-        id="eligibility-prefix"
+        id={PREFIX_ID}
         label="Ortskürzel Ihres Kennzeichens"
         helper="Die Buchstaben vor dem ersten Leerzeichen, z. B. „B“ bei B AB 123."
         error={error}
@@ -111,7 +109,7 @@ export function EligibilityStep({
         className="max-w-60"
       />
 
-      {/* Launch plan J11: a de-registration request cannot say E, H or seasonal, and the provider has not said whether such plates go through. */}
+      {/* Provisional: launch plan J11, a request cannot say E, H or seasonal. */}
       <label className="measure flex cursor-pointer items-start gap-3 text-body text-grau-dark">
         <Checkbox checked={specialPlate} onCheckedChange={(value) => setSpecialPlate(value === true)} />
         <span>Mein Kennzeichen ist ein E-, H- oder Saisonkennzeichen.</span>

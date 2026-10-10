@@ -1,14 +1,8 @@
 import { parseStoredNewRegistrationRequest, type StoredNewRegistrationRequest } from "@/src/core/domain/application/new-registration-request"
 
-/**
- * Everything of a Neuzulassung request that is not the VIN (a plain column), as the plain JSON the
- * request parses back from. The one place besides the cipher where a Neuzulassung's secrets are
- * revealed: the result is encrypted at once, bound to the order's reference, and never stored or logged as is.
- * An order that has ended has no bank account, so the details hold none (launch plan Q54).
- */
+// An ended order holds no bank account, so its details hold none (launch plan Q54).
 export function detailsOf({ engineType, evbNumber, registrationCertificate, owner, bankAccount, plate }: StoredNewRegistrationRequest): string {
   const account = bankAccount?.reveal()
-  // Every field of the request but the VIN (a plain column) and the service (a column of its own): one left out would be lost on write.
   const details = {
     engineType,
     evbNumber: evbNumber.reveal(),
@@ -29,11 +23,6 @@ export function detailsOf({ engineType, evbNumber, registrationCertificate, owne
   return JSON.stringify(details)
 }
 
-/**
- * Parsed again as any request is, so a row that no longer validates fails loudly. The keeper's age is
- * checked against `checkedAt`, a day on or after the one the details were entered: an order stored when
- * its keeper was of age stays readable, whatever today's date is.
- */
 export function requestFrom(vin: string, details: string, checkedAt: Date): StoredNewRegistrationRequest {
   return parseStoredNewRegistrationRequest({ vin, ...JSON.parse(details) }, checkedAt)
 }

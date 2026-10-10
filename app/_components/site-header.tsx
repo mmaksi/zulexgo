@@ -3,9 +3,6 @@ import { buttonLink } from "@/src/ui/button"
 import { Wordmark } from "@/src/ui/wordmark"
 import { MobileNav, type NavItem } from "./mobile-nav"
 
-// site-contract.md §3 — the landing header is sticky and carries at most three
-// nav items plus the single primary action. The header is shared with the legal
-// pages, so every target is absolute.
 const NAV: readonly NavItem[] = [
   { label: "Leistungen", href: "/#leistungen" },
   { label: "Ablauf", href: "/#ablauf" },
@@ -40,9 +37,6 @@ export function SiteHeader() {
         </nav>
 
         <div className="flex items-center gap-2">
-          {/* Below 640px the header would overflow at 320px, so the action
-              lives in the nav panel instead. Secondary, because design-standard
-              §2.2 allows one orange action per view and the page owns it. */}
           <Link
             href="/#leistungen"
             className={buttonLink({

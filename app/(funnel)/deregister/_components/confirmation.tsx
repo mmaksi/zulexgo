@@ -1,4 +1,3 @@
-/** site-contract §2.5: the order ID, and where the status link went. */
 export function Confirmation({ reference, email }: { reference: string; email?: string }) {
   return (
     <div className="flex flex-col gap-(--heading-space-below)">

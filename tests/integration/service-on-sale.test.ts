@@ -3,10 +3,7 @@ import { ServiceNotOnSale } from "@/src/core/errors/application/service-not-on-s
 import { submitCheckout } from "@/src/core/use-cases/checkout/submit-checkout"
 import { setupFlow } from "./flow-harness"
 
-/**
- * Hiding a card on the landing page stops nothing: the server action behind a funnel is reachable
- * by any POST. What is sold is decided where the order is created.
- */
+// The server action behind a funnel is reachable by any POST, so hiding its card stops nothing.
 describe("checkout of a service that is not on sale", () => {
   it.each(["newRegistration", "reRegistration", "changeOfKeeper", "addressChange", "not-a-service"])(
     "refuses %s before any payment is opened",

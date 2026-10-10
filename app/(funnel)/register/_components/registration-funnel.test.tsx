@@ -17,7 +17,6 @@ function setup(overrides: Partial<RegistrationActions> = {}) {
 
 type User = ReturnType<typeof userEvent.setup>
 
-/** Pasting is one event per field, where typing is one per key: the forms are long. */
 async function enter(user: User, label: string, value: string) {
   await user.click(screen.getByLabelText(label))
   await user.paste(value)
@@ -75,11 +74,10 @@ async function reachReview(user: User, engine?: string) {
   await passRequirements(user)
   await fillVehicle(user, engine)
   await fillKeeper(user)
-  await next(user) // the plate step asks nothing the customer must answer
+  await next(user)
   await fillTax(user)
 }
 
-/** Every field a customer can type into or choose from has a name a screen reader can read. */
 function expectEveryControlNamed() {
   const controls = [...screen.queryAllByRole("textbox"), ...screen.queryAllByRole("radio"), ...screen.queryAllByRole("checkbox"), ...screen.queryAllByRole("combobox")]
   expect(controls.length).toBeGreaterThan(0)
@@ -340,7 +338,6 @@ describe("Neuzulassung funnel", () => {
       expect(heading()).toHaveTextContent("Der Halter")
     })
 
-    /** `fillKeeper` for a form whose postcode is empty, as the test cleared it. */
     async function fillKeeperWithPostcode(user: User, postcode: string) {
       await enter(user, "Postleitzahl", postcode)
       await fillKeeper(user)

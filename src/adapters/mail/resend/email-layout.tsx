@@ -2,7 +2,7 @@ import { Body, Button, Container, Head, Heading, Html, Preview, Section, Text } 
 import { SUPPORT_EMAIL } from "@/src/core/domain/customer/contact"
 import type { EmailCopy } from "./copy"
 
-/** design-standard §2: literal values, since no email client reads the app's CSS variables. */
+// Mail clients ignore CSS variables, web fonts and stylesheets, and render flexbox and grid unreliably.
 const COLOR = {
   ink: "#272828",
   text: "#444c54",
@@ -13,10 +13,8 @@ const COLOR = {
   card: "#ffffff",
 } as const
 
-/** A system stack, not the app's Kanit (design-standard §3.1): mail can't rely on web fonts. */
 const FONT = "Arial, Helvetica, sans-serif"
 
-/** Inline style objects only: mail clients handle stylesheets, flexbox and grid unreliably. */
 const styles = {
   body: { margin: 0, padding: "24px 0", backgroundColor: COLOR.page, fontFamily: FONT },
   container: { maxWidth: "560px", margin: "0 auto", backgroundColor: COLOR.card },
@@ -48,16 +46,7 @@ const styles = {
   footer: { padding: "0 24px 24px", fontSize: "13px", lineHeight: "20px", color: COLOR.muted },
 } as const
 
-/**
- * One layout for every customer email: greeting, heading, paragraphs, an optional callout and one
- * button.
- *
- * Everything variable comes from `copyFor`'s `EmailCopy` (minus `subject`, which belongs to the
- * envelope); the layout adds only the ZulexGO header bar, a fixed German greeting and the
- * automated-mail footer naming the support address. The greeting has no name because no
- * template carries one. `preview` is the inbox preview text, not shown in the body. Paragraph
- * text doubles as the React key, so one email must not repeat a paragraph.
- */
+// Paragraph text is the React key, so one email must not repeat a paragraph.
 export function EmailLayout({ preview, heading, paragraphs, note, action }: Omit<EmailCopy, "subject">) {
   return (
     <Html lang="de" dir="ltr">

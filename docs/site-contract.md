@@ -56,7 +56,7 @@ Per section, page order: fields with constraints (length / format / tone). Tone:
 
 ### 2.3 Application Form (contextual)
 Per field: label ≤40, helper ≤150, locator image (where to find it), error ≤120 chars — human-readable, action-oriented ("Check the 3-character code on the rear plate seal"), never raw API text.
-- **Licence plate** — 3 inputs: `[A-ZÄÖÜ]{1,3}` / `[A-Z]{1,2}` / 1–4 digits, no leading 0. Auto-uppercase.
+- **Licence plate** — 3 inputs: `[A-ZÄÖÜ]{1,3}` / `[A-Z]{1,2}` / 1–4 digits, no leading 0. Auto-uppercase. The prefix is the one checked in §2.2 and is locked here.
 - **VIN** — 1–17 chars `[A-Z0-9]`; warn (not block) if ≠17.
 - **Certificate part 1 security code** — exactly 7 alphanumeric; masked.
 - **Rear plate security code** — exactly 3 alphanumeric.

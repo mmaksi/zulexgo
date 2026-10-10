@@ -100,7 +100,6 @@ describe("startRegistrationCheckout", () => {
   it("opens nothing once the address is over its limit: no order, no payment, no call to the registration service", async () => {
     const { deps, createPayment, findAuthorities } = setup()
     const { max } = RATE_LIMITS.checkout
-    // Invalid every time: the attempts count even though none of them opens anything.
     for (let attempt = 0; attempt < max; attempt++) await startRegistrationCheckout(deps, from("203.0.113.7"), { ...input, data: { ...FILLED_REGISTRATION_FORM, iban: "" } })
 
     const refused = await startRegistrationCheckout(deps, from("203.0.113.7"), input)

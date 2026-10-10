@@ -1,8 +1,5 @@
 import { cn } from "./utils"
 
-// globals.css defines type-scale and elevation tokens tailwind-merge does not
-// know. Unregistered, `text-h4` reads as a colour and a later `text-grau-dark`
-// silently deletes the size.
 describe("cn", () => {
   it.each(["h1", "h2", "h3", "h4", "subtitle", "body", "small"])(
     "keeps the text-%s size when a text colour follows",

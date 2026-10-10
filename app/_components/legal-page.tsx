@@ -1,9 +1,5 @@
 import type { ReactNode } from "react"
 
-/**
- * site-contract.md §1 — legal pages are single-column static text. Body copy
- * stays inside the measure; headings keep the 2:1 above/below rhythm.
- */
 export function LegalPage({
   title,
   children,
@@ -40,7 +36,6 @@ export function LegalSection({
   )
 }
 
-/** §6.3 inline link: underline thickens on hover, colour goes to orange-dark. */
 export function LegalLink({
   href,
   external,

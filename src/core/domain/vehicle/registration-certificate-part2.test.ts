@@ -1,6 +1,9 @@
 import { inspect } from "node:util"
 import { ValidationError } from "@/src/core/errors/validation-error"
-import { parseRegistrationCertificatePart2 } from "./registration-certificate-part2"
+import { validate } from "@/src/core/domain/validate"
+import { registrationCertificatePart2Schema } from "./registration-certificate-part2"
+
+const parseRegistrationCertificatePart2 = (input: unknown) => validate(registrationCertificatePart2Schema, input, "registrationCertificate")
 
 const valid = { number: "AB123456", securityCode: "K9Z2W4M" }
 

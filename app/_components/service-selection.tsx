@@ -22,13 +22,6 @@ import {
 } from "@/src/ui/card"
 import { Section, SectionHeading } from "@/src/ui/section"
 
-/**
- * prd.md §3 — a card is actionable only for a service on sale (`SERVICES_ON_SALE`, per stage); every
- * other service is visible but disabled, so the roadmap is legible without being clickable.
- * site-contract.md §2.1 — title <=30, description <=90 chars.
- * Prices come from the price list, so a card can never quote what the
- * checkout does not charge.
- */
 const SERVICES: { service: Service; title: string; description: string }[] = [
   {
     service: "deregistration",
@@ -67,7 +60,6 @@ export function ServiceSelection({
   betaServices = [],
 }: {
   servicesOnSale: readonly OrderableService[]
-  /** The services on sale to invited customers only: they stay linked, since an invited customer starts from here. */
   betaServices?: readonly OrderableService[]
 }) {
   const cards = SERVICES.map((card) => ({
@@ -108,16 +100,12 @@ export function ServiceSelection({
                 ) : null}
               </CardContent>
 
-              {/* The price and the action slot are the same height in every
-                  card, so the row reads as one line across the grid. */}
               <CardFooter className="flex-col items-start gap-4">
                 <p className="text-h3 font-light text-grau-dark">
                   {formatEuros(SERVICE_PRICES[service.service])}
                 </p>
                 <div className="flex min-h-12 w-full items-center">
                   {service.funnel ? (
-                    // The link stretches over the card, so the whole card is
-                    // the click target its hover state promises (§5.3).
                     <Link
                       href={service.funnel.href}
                       className={buttonLink({ className: "w-full after:absolute after:inset-0" })}

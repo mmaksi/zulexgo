@@ -2,8 +2,6 @@ import * as React from "react"
 import { ChevronDownIcon } from "lucide-react"
 import { cn } from "@/src/lib/utils"
 
-// Shadcn's NativeSelect, styled as `Input` (design-standard.md §4.4/§6.3): a native <select>, so a phone
-// opens its own picker, with the same 48px height, border and focus as a text field.
 function NativeSelect({ className, ...props }: React.ComponentProps<"select">) {
   return (
     <div data-slot="native-select-wrapper" className="relative w-full has-[select:disabled]:opacity-60">

@@ -26,11 +26,7 @@ const STEPS = [
 
 const CONFIRMATION = STEPS.length - 1
 
-/**
- * The Neuzulassung funnel, one decision per screen (registration plan N6). State lives here, never in
- * the URL or in browser storage: it holds an IBAN, a birth date and the codes of the car's papers, so
- * going back keeps what was entered and a reload loses it, which the leave-page warning says.
- */
+// Never in the URL or browser storage: it holds an IBAN, a birth date and the car's codes
 export function RegistrationFunnel({ payment, actions }: { payment: PaymentMode; actions: RegistrationActions }) {
   const [eligibility, setEligibility] = useState<RegistrationEligibility>()
   const [data, setData] = useState<RegistrationData>(EMPTY_REGISTRATION)
@@ -56,7 +52,6 @@ export function RegistrationFunnel({ payment, actions }: { payment: PaymentMode;
               />
             ) : null}
 
-            {/* Every later step needs what the first one found. After a reload the browser's back button can land on one without it. */}
             {step === 1 && eligibility ? (
               <div className="flex flex-col gap-(--field-gap)">
                 <AvailabilityNotice ikfzStatus={eligibility.ikfzStatus} />

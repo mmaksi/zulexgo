@@ -2,11 +2,7 @@ import { NotificationRejected } from "@/src/core/errors/mail/notification-reject
 import type { Dependencies } from "@/src/core/use-cases/dependencies"
 import { confirmPayment } from "@/src/core/use-cases/payment/confirm-payment"
 
-/**
- * Stripe's webhook: verify, then act. A rejected signature is a 400, which
- * Stripe does not retry; any other failure is a 500, which it does. Acting
- * twice on one event is harmless: only an application awaiting payment moves.
- */
+// 400 only for a bad signature: Stripe does not retry it, and retries any 500
 export async function handlePaymentNotification(deps: Dependencies, request: Request): Promise<Response> {
   let notification
   try {

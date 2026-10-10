@@ -1,8 +1,4 @@
-/**
- * Zulex payloads, modelled on docs/api-1.yaml: no response has been captured yet, so these follow the
- * spec. When a spike has run, scrubbed real responses replace them. Values are obviously fake and
- * pass the spec's patterns.
- */
+// Modelled on docs/api-1.yaml: no real Zulex response has been captured yet.
 import { z } from "zod"
 
 export const ZULEX_BASE_URL = "https://integration-zulex.de/zulex-api/v1"
@@ -39,12 +35,7 @@ export interface CreateDeregistrationBody {
   correlationId?: string
 }
 
-/**
- * The spec's `CreateRegistrationApplicationRequest` for a private person's standard registration, field by
- * field with the spec's own patterns (the eVB one unanchored, as there). Strict: a field the spec does
- * not name, or a misspelt one, fails. `oneOf` branches this service never sends (a legal entity, a
- * day registration) are left out, so a body built for one fails here too.
- */
+// The spec's CreateRegistrationApplicationRequest; its eVB pattern is unanchored, as in the spec.
 const address = z.strictObject({
   city: z.string().min(1),
   houseNumber: z.string().regex(/^(\d{1,4})(?!\d)(.*)$/).optional(),
@@ -128,7 +119,6 @@ export const createRegistrationApplicationSpec = z.strictObject({
 
 export type CreateRegistrationBody = z.output<typeof createRegistrationApplicationSpec>
 
-/** The spec's `PatchRegistrationApplicationRequest`: the only four things a filed registration can change. */
 export const patchRegistrationApplicationSpec = z.strictObject({
   evbNumber: evbNumber.optional(),
   registrationCertificatePart2Number: part2Number.optional(),
@@ -136,11 +126,7 @@ export const patchRegistrationApplicationSpec = z.strictObject({
   wishLicencePlate: wishLicencePlate.optional(),
 })
 
-/**
- * The body of a GET of an application as JSON text: what was filed, echoed back (the API returns the
- * personal data and the security codes it was given), then its state. Document ids are written as bare
- * int64 numbers, as the API sends them.
- */
+// The API echoes back what was filed, codes included; document ids are bare int64 numbers, as sent.
 export function applicationResponseJson(input: {
   applicationId: string
   echoed: object
@@ -158,7 +144,6 @@ export function applicationResponseJson(input: {
   return `{"documents":[${documents.join(",")}],${rest.slice(1)}`
 }
 
-/** GetDeregistrationApplicationResponse as JSON text. */
 export const deregistrationResponseJson = (input: {
   applicationId: string
   body: CreateDeregistrationBody

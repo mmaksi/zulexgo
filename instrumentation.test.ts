@@ -2,7 +2,6 @@ const ORIGINAL_ENV = process.env
 
 async function registerWith(env: Record<string, string>) {
   process.env = { NODE_ENV: ORIGINAL_ENV.NODE_ENV, ...env, NEXT_RUNTIME: "nodejs" }
-  // getContainer() memoises per process; each case needs a fresh module graph.
   const { register } = await import("./instrumentation")
   return register()
 }

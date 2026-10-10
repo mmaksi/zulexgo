@@ -5,7 +5,6 @@ import { Wordmark } from "@/src/ui/wordmark"
 import { CurrentYear } from "./current-year"
 import { KbaSeal } from "./kba-seal"
 
-// site-contract.md §2.1 — the footer carries the statutory links and support contact.
 const LEGAL = [
   { label: "Impressum", href: "/impressum" },
   { label: "AGB", href: "/agb" },
@@ -15,7 +14,6 @@ const LEGAL = [
 export function SiteFooter() {
   return (
     <footer className="mt-auto">
-      {/* §5.1 the page terminator closes the page above the footer */}
       <Wedge variant="page" />
 
       <div className="bg-grau-dark text-white">

@@ -1,10 +1,6 @@
 import Image from "next/image"
 
-/**
- * The founder's KBA seal, shown unaltered: never round, tint or recolour it.
- * The file has a transparent background and dark lettering, so it belongs on
- * a white surface: the page itself, or a white tile on a dark one.
- */
+// The KBA seal is shown unaltered, on white: never round, tint or recolour it
 export function KbaSeal({
   sizes,
   className,

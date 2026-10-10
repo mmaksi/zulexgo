@@ -4,7 +4,6 @@ import { orderReport, type OrderTrail } from "./order-report"
 const NOW = new Date("2026-03-10T12:00:00.000Z")
 const hoursAgo = (hours: number) => new Date(NOW.getTime() - hours * 3_600_000)
 
-/** An order that reached `statuses` in turn, the first one `hours` ago and one more every hour after. */
 function trail(statuses: ApplicationStatus[], options: { hours?: number; deadlineInHours?: number } = {}): OrderTrail {
   const first = options.hours ?? 48
   return {
@@ -75,7 +74,6 @@ describe("how verifications ended", () => {
   it("gives the failure and abandonment rates among the verifications that ended, not those still waiting", () => {
     const report = orderReport([verified, verified, mismatched, failed, expired, unresolved], NOW)
 
-    // Five ended: two of them failed or did not match, one ran out.
     expect(report.verification.failureRate).toBeCloseTo(2 / 5)
     expect(report.verification.abandonmentRate).toBeCloseTo(1 / 5)
   })

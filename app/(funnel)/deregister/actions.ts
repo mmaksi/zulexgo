@@ -6,8 +6,6 @@ import { getContainer } from "@/src/config/container"
 import type { CheckoutActions } from "./_components/checkout-actions"
 import { checkPrefix, startDeregistrationCheckout } from "./requests"
 
-/** Reachable by any POST: `requests.ts` counts each call against the caller's address and validates what it receives. */
-
 export const checkEligibilityAction: CheckoutActions["checkEligibility"] = async (prefix) =>
   checkPrefix(getContainer(), await headers(), prefix)
 

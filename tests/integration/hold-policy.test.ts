@@ -4,10 +4,7 @@ import { SERVICE_PRICES } from "@/src/core/domain/payment/pricing"
 import { GatewayRejected } from "@/src/core/errors/registration/gateway-rejected"
 import { CODES, MINUTE, setupFlow } from "./flow-harness"
 
-/**
- * M6, J7: a card hold lasts 7 days, so money is taken in full before it can
- * lapse (launch plan Q7 and Q20, both still the founder's to confirm).
- */
+// Provisional: launch plan Q7 and Q20; a card hold lasts 7 days, so money is taken before it lapses.
 const DAY = 24 * 60 * MINUTE
 const { prefix } = FAKE_REQUEST.licencePlate
 
@@ -25,7 +22,7 @@ describe("hold policy", () => {
     it("takes the full amount as soon as Zulex accepts the application, before the KBA answers", async () => {
       const { stored, payment, checkoutAndPay } = setup("online")
 
-      const reference = await checkoutAndPay("card")
+      const reference = await checkoutAndPay()
 
       expect((await stored(reference)).status).toBe("submitted_to_kba")
       expect(await payment(reference)).toMatchObject({ status: "captured", captured: SERVICE_PRICES.deregistration })
@@ -35,7 +32,7 @@ describe("hold policy", () => {
   describe("an authority that works by hand", () => {
     it("holds the card while the KBA works, and takes it in full once the hold is within two days of lapsing", async () => {
       const { payment, pollDays, checkoutAndPay } = setup("unavailable")
-      const reference = await checkoutAndPay("card")
+      const reference = await checkoutAndPay()
 
       await pollDays(1)
       expect(await payment(reference)).toMatchObject({ status: "held" })
@@ -49,7 +46,7 @@ describe("hold policy", () => {
 
     it("completes an order after the early capture without taking anything twice", async () => {
       const { deps, stored, zulexId, payment, pollDays, checkoutAndPay } = setup("unavailable")
-      const reference = await checkoutAndPay("card")
+      const reference = await checkoutAndPay()
       await pollDays(5)
       deps.registration.setStatus(await zulexId(reference), { state: "finished", documents: [] })
 
@@ -61,7 +58,7 @@ describe("hold policy", () => {
 
     it("returns all but the fee after the early capture, when the KBA then refuses for good", async () => {
       const { deps, stored, zulexId, payment, pollDays, checkoutAndPay } = setup("unavailable")
-      const reference = await checkoutAndPay("card")
+      const reference = await checkoutAndPay()
       await pollDays(5)
       deps.registration.setStatus(await zulexId(reference), { state: "failed", error: { code: 202, details: [] }, documents: [] })
 
@@ -79,7 +76,7 @@ describe("hold policy", () => {
       async (authority) => {
         const { deps, stored, payment, pollDays, checkoutAndPay } = setup(authority)
         deps.registration.failNext("submit", new GatewayRejected())
-        const reference = await checkoutAndPay("card")
+        const reference = await checkoutAndPay()
         expect((await stored(reference)).status).toBe("failed_correctable")
         expect((await payment(reference)).status).toBe("held")
 
@@ -101,7 +98,7 @@ describe("hold policy", () => {
     it("still completes the order the KBA finished, absorbing the loss, and says so once, naming the order", async () => {
       const warn = warnings()
       const { deps, clock, stored, zulexId, payment, poll, checkoutAndPay } = setup("unavailable")
-      const reference = await checkoutAndPay("card")
+      const reference = await checkoutAndPay()
       clock.advance(8 * DAY)
       deps.registration.setStatus(await zulexId(reference), { state: "finished", documents: [] })
 
@@ -121,7 +118,7 @@ describe("hold policy", () => {
     it("fails the order for good when the KBA refuses it, returning everything since nothing was kept", async () => {
       const warn = warnings()
       const { deps, clock, emails, stored, zulexId, poll, checkoutAndPay } = setup("unavailable")
-      const reference = await checkoutAndPay("card")
+      const reference = await checkoutAndPay()
       clock.advance(8 * DAY)
       deps.registration.setStatus(await zulexId(reference), { state: "failed", error: { code: 202, details: [] }, documents: [] })
 

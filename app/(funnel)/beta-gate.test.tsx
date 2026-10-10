@@ -11,7 +11,6 @@ jest.mock("next/navigation", () => ({ useRouter: () => ({ refresh: jest.fn() }) 
 
 const show = async () => render(await BetaGate({ service: "newRegistration", name: "Neuzulassung", children: <p>Der Antrag</p> }))
 
-/** A funnel collects personal data, so a service in beta shows it only to a browser that redeemed a code checkout still accepts. */
 describe("the gate in front of a funnel", () => {
   beforeEach(() => {
     mockContainer.beta = { invites: { newRegistration: ["K7M2-QX9P"] }, dailyPlaces: 5 }

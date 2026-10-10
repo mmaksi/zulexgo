@@ -15,16 +15,11 @@ import type { CorrectionField, OrderChangeState } from "./order-change-state"
 
 const MINUTE = 60_000
 
-/**
- * Counted before anything is read, whatever the link, so guessing links through
- * this door is bounded like the page itself; an address over its limit moves no money.
- */
 async function limited(deps: Pick<Dependencies, "rateLimiter">, headers: Headers): Promise<OrderChangeState | undefined> {
   const attempt = await deps.rateLimiter.consume(`order-change:${clientAddress(headers)}`, RATE_LIMITS.orderChange)
   return attempt.allowed ? undefined : { status: "limited", retryAfterMinutes: Math.ceil(attempt.retryAfterMs / MINUTE) }
 }
 
-/** An unknown link and an order that cannot be cancelled get one answer, so neither is told apart from outside. */
 export async function cancelOrder(deps: Dependencies, headers: Headers, token: string): Promise<OrderChangeState> {
   const over = await limited(deps, headers)
   if (over) return over
@@ -44,19 +39,16 @@ const DEREGISTRATION_FIELDS = ["vin", "rearPlate", "frontPlate", "certificate"] 
 const NEW_REGISTRATION_FIELDS = ["evbNumber", "part2Number", "part2SecurityCode", "firstName", "lastName", "birthDate"] as const
 const FIELDS: CorrectionField[] = [...DEREGISTRATION_FIELDS, ...NEW_REGISTRATION_FIELDS]
 
-/** Any POST can reach this, so only text in the known fields gets through; anything else reads as blank. */
 function toInput(raw: unknown): OrderCorrectionInput {
   const given = (typeof raw === "object" && raw !== null ? raw : {}) as Record<string, unknown>
   return Object.fromEntries(FIELDS.map((field) => [field, typeof given[field] === "string" ? given[field] : undefined]))
 }
 
-/** The funnel's own wording for a wrong field: a Neuzulassung's from the registration funnel, a de-registration's from its own. */
 function wordingFor(field: CorrectionField, value: string): string {
   if ((NEW_REGISTRATION_FIELDS as readonly string[]).includes(field)) return NEW_REGISTRATION_MESSAGES[field as (typeof NEW_REGISTRATION_FIELDS)[number]]
   return validateField(field as (typeof DEREGISTRATION_FIELDS)[number], value) ?? "Bitte prüfen Sie diese Angabe."
 }
 
-/** The funnel's own wording for each wrong field, taken from the value that was sent, which is never sent back. */
 function invalid(error: ValidationError, input: OrderCorrectionInput): OrderChangeState {
   const errors: Partial<Record<CorrectionField, string>> = {}
   for (const field of FIELDS) {

@@ -7,23 +7,20 @@ import { TokenInvalid } from "@/src/core/errors/application/token-invalid"
 import { cancelApplication } from "@/src/core/use-cases/application/cancel-application"
 import { CODES, MINUTE, setupFlow } from "./flow-harness"
 
-/** M6, 5b option B: the customer cancels; 19.99 € stays, the rest goes back, and email 6 follows. */
 const REFUND = SERVICE_PRICES.deregistration.subtract(PROCESSING_FEE)
 
-/** A 5b whose card was already captured, as an online authority's is once the KBA refuses the data. */
 async function correctableAfterCapture() {
   const flow = setupFlow()
-  const reference = await flow.checkoutAndPay("card")
+  const reference = await flow.checkoutAndPay()
   flow.deps.registration.setStatus(await flow.zulexId(reference), { state: "failed", error: { code: 101, details: [] }, documents: [] })
   await flow.poll(1)
   return { ...flow, reference }
 }
 
-/** A 5b whose card is still held: the service refused the data before accepting anything. */
 async function correctableBeforeCapture() {
   const flow = setupFlow()
   flow.deps.registration.failNext("submit", new GatewayRejected())
-  const reference = await flow.checkoutAndPay("card")
+  const reference = await flow.checkoutAndPay()
   return { ...flow, reference }
 }
 
@@ -72,7 +69,7 @@ describe("cancelApplication", () => {
 
   it.each(["submitted_to_kba", "completed", "failed_final"] as const)("refuses an order that is %s, and moves no money", async (target) => {
     const flow = setupFlow()
-    const reference = await flow.checkoutAndPay("card")
+    const reference = await flow.checkoutAndPay()
     const id = await flow.zulexId(reference)
     if (target === "completed") flow.deps.registration.setStatus(id, { state: "finished", documents: [] })
     if (target === "failed_final") flow.deps.registration.setStatus(id, { state: "failed", error: { code: 202, details: [] }, documents: [] })

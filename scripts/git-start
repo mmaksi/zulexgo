@@ -1,10 +1,4 @@
 #!/usr/bin/env bash
-#
-# git start <branch-name>
-#
-# Creates a branch from the current origin/staging, which is where all work
-# starts. Starting from main instead leaves you on the last released code and
-# drags main's merge commits back into staging — see CONTRIBUTING.md.
 
 set -euo pipefail
 
@@ -19,8 +13,7 @@ echo "Fetching $BASE..."
 git fetch origin
 
 echo "Creating $1 from $BASE..."
-# --no-track, or the new branch would take origin/staging as its upstream and a
-# later bare `git push` would aim at the protected branch instead of its own.
+# --no-track, or a later bare `git push` would aim at the protected origin/staging.
 git switch --no-track -c "$1" "$BASE"
 
 echo

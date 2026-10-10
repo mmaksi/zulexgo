@@ -6,22 +6,17 @@ import { correctApplication } from "@/src/core/use-cases/application/correct-app
 import { pollDueApplications } from "@/src/core/use-cases/registration/poll-due-applications"
 import { webhookRequest, withVendorsAtTheNetwork } from "./network-harness"
 
-/**
- * M6 through the real Stripe and Zulex adapters, both stubbed at the network:
- * what a cancel asks Stripe for, and what a correction sends Zulex.
- */
 const { world, stored, emails } = withVendorsAtTheNetwork()
 const MINUTE = 60_000
 
 async function payAndFile() {
   const { reference } = await submitCheckout(world.deps, { service: "deregistration", request: FAKE_REQUEST, email: "customer@example.test", consents: FAKE_CONSENTS })
   const { payment } = await stored(reference)
-  world.stripe.customerPays(payment.id, "card")
+  world.stripe.customerPays(payment.id)
   await handlePaymentNotification(world.deps, webhookRequest(world.stripe.event("payment_intent.amount_capturable_updated", payment.id)))
   return { reference, paymentId: payment.id, token: (await world.deps.repository.getStatusToken(reference))! }
 }
 
-/** The KBA finished with only a rejection document: correctable, so 5b. */
 async function rejectedByKba() {
   const filed = await payAndFile()
   const zulexId = (await stored(filed.reference)).zulexApplicationId!

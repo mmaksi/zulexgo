@@ -5,11 +5,6 @@ import { parseApplicationReference } from "@/src/core/domain/application/applica
 import { confirmPayment } from "@/src/core/use-cases/payment/confirm-payment"
 import { failedBecause } from "./failed-because"
 
-/**
- * Only where no real payment provider is configured: plays the customer paying, then handles the
- * payment as the provider's webhook would. The same for every funnel; it knows the order by its
- * reference alone.
- */
 export async function completeSimulatedPaymentAction(reference: string): Promise<{ ok: boolean }> {
   const container = getContainer()
   if (!container.simulateCustomerPayment) return { ok: false }

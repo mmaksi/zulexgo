@@ -63,7 +63,6 @@ describe("parseNewRegistrationRequest", () => {
 
     it.each<[string, unknown]>([
       ["vin", { ...FAKE, vin: "not a vin!" }],
-      // PATCH cannot change the VIN, so a dropped character would end the order: a new car's has 17.
       ["vin", { ...FAKE, vin: "FAKEVIN000000002" }],
       ["engineType", { ...FAKE, engineType: "NO_ENGINE" }],
       ["evbNumber", { ...FAKE, evbNumber: "FAKEEVI" }],
@@ -185,7 +184,7 @@ describe("parseNewRegistrationRequest", () => {
   })
 })
 
-// Launch plan Q54: the bank account is held only until the order ends, so a stored order may lack it where a checkout may not.
+// Provisional: launch plan Q54
 describe("an order's request once its bank account is gone", () => {
   const stored = () => parseStoredNewRegistrationRequest(without("bankAccount"), NOW)
 

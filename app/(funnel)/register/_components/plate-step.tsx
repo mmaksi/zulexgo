@@ -9,11 +9,7 @@ import { SelectField } from "@/app/_components/select-field"
 import { MONTH_NAMES } from "./registration-data"
 import { fieldId, useStepForm, type StepProps } from "./use-step-form"
 
-/**
- * site-contract §2.3: the plate is assigned by the authority (launch plan Q51, provisional: no wish
- * plate), so there is little to choose: an E-plate for an electric car, and a season if the car is
- * not used all year.
- */
+// Provisional: launch plan Q51 (no wish plate; the authority assigns the plate)
 export function PlateStep({ data, onChange, onNext }: StepProps) {
   const { errors, set, check } = useStepForm("plate", data, onChange)
   const electric = data.engineType === "electric"

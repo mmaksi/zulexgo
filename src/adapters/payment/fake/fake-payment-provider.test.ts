@@ -5,7 +5,6 @@ import type { Clock } from "@/src/core/ports/clock/clock"
 import { paymentProviderContract } from "@/src/core/ports/payment/payment-provider.contract"
 import { FakePaymentProvider } from "./fake-payment-provider"
 
-/** Adapters may not import each other, so this test keeps its own movable clock. */
 function movableClock(start: Date) {
   let now = start.getTime()
   const clock: Clock = { now: () => new Date(now) }
@@ -16,7 +15,7 @@ paymentProviderContract("FakePaymentProvider", () => {
   const provider = new FakePaymentProvider(movableClock(new Date("2026-03-01T09:00:00.000Z")).clock)
   return {
     provider,
-    customerPays: (id, method) => provider.customerPays(id, method),
+    customerPays: (id) => provider.customerPays(id),
     notificationOfPayment: async (id) => provider.notificationOfPayment(id),
   }
 })
@@ -29,7 +28,7 @@ describe("FakePaymentProvider hold expiry, driven by the clock", () => {
     const provider = new FakePaymentProvider(clock)
     const { reference, email } = anApplication()
     const { paymentId } = await provider.createPayment({ reference, service: "deregistration", amount: Money.ofCents(6999), email })
-    await provider.customerPays(paymentId, "card")
+    await provider.customerPays(paymentId)
 
     expect((await provider.getPayment(paymentId)).holdExpiresAt).toEqual(new Date("2026-03-08T09:00:00.000Z"))
 

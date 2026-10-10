@@ -17,11 +17,6 @@ export type InviteAnswer =
 const ASK = "Bitte geben Sie den Einladungscode ein, den Sie von uns erhalten haben."
 const REFUSED = "Dieser Code ist nicht gültig. Prüfen Sie ihn auf Tippfehler."
 
-/**
- * What a visitor sees in place of a funnel while its service is in beta: one field for the invite code.
- * Once the code is accepted the server keeps it for the browser, and the page loads again with the
- * funnel in its place.
- */
 export function InviteForm({ service, action }: { service: string; action: (code: string) => Promise<InviteAnswer> }) {
   const router = useRouter()
   const [answer, setAnswer] = useState<InviteAnswer | { status: "empty" }>()
@@ -77,7 +72,6 @@ export function InviteForm({ service, action }: { service: string; action: (code
           {pending ? "Wird geprüft …" : "Weiter"}
         </Button>
         {answer?.status === "accepted" && !pending && !refreshing ? (
-          // The page has loaded again and still asks: the server took the code and the browser did not keep it.
           <Alert variant="warning" role="alert">
             Ihr Browser hat den Code nicht gespeichert. Bitte erlauben Sie Cookies für diese Seite und versuchen Sie es erneut.
           </Alert>

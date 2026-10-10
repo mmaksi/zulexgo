@@ -3,15 +3,10 @@ import type { NewRegistrationRequest, StoredNewRegistrationRequest } from "@/src
 import type { OrderableService, ServiceRequest } from "@/src/core/domain/application/service"
 import type { Correction, Corrections, NewRegistrationPatch } from "@/src/core/ports/registration/registration-gateway"
 
-/** What the API's enums call what the customer chose. A new value fails to compile until it is named here. */
 const ENGINE_TYPES = { electric: "ELECTRICAL", hybrid: "HYBRID", combustion: "COMBUSTION" } as const satisfies Record<NewRegistrationRequest["engineType"], string>
 const GENDERS = { female: "FEMALE", male: "MALE", diverse: "DIVERSE", unspecified: "UNSPECIFIED" } as const satisfies Record<NewRegistrationRequest["owner"]["gender"], string>
 
-/**
- * The create body of a de-registration. The front plate code is sent only for a two-plate vehicle.
- * Reserving the plate is out of scope for the MVP (founder decision). An order that has ended has no codes, and
- * is never filed again.
- */
+// reserveLicencePlate: false is a founder decision: reserving the plate is out of MVP scope.
 function deregistrationBody({ licencePlate, vin, codes }: StoredDeregistrationRequest) {
   if (!codes) throw new Error("A de-registration without its security codes cannot be filed")
   return {
@@ -24,16 +19,6 @@ function deregistrationBody({ licencePlate, vin, codes }: StoredDeregistrationRe
   }
 }
 
-/**
- * The create body of a Neuzulassung for a private person, in the shape of the spec's
- * `CreateRegistrationApplicationRequest`. What is the same for every order at launch is fixed here
- * (a car, normal use, a standard registration, shipping to the owner's name and address, the vehicle
- * tax by direct debit from the owner's account, no H-plate, no wish plate). The plate is the one the
- * authority assigns. Every secret is revealed here and nowhere else, only to be sent.
- *
- * An order that has ended no longer holds its bank account (`withoutBankAccount`), and nothing files an
- * ended order, so a request without one is a mistake in the caller, named without a word of the request.
- */
 function newRegistrationBody({ vin, engineType, evbNumber, registrationCertificate, owner, bankAccount, plate }: StoredNewRegistrationRequest) {
   if (!bankAccount) throw new Error("A Neuzulassung without its bank account cannot be filed: its order has ended")
   const { street, houseNumber, postcode, city } = owner.address.reveal()
@@ -76,7 +61,6 @@ function newRegistrationBody({ vin, engineType, evbNumber, registrationCertifica
   }
 }
 
-/** The create body for the service the request names. */
 export function createBody(request: ServiceRequest): object {
   switch (request.service) {
     case "deregistration":
@@ -86,7 +70,6 @@ export function createBody(request: ServiceRequest): object {
   }
 }
 
-/** Only the fields the customer changed, so everything else stays as Zulex holds it. */
 function deregistrationPatch({ licencePlate, vin, codes }: Correction) {
   return {
     ...(licencePlate ? { licencePlate } : {}),
@@ -97,7 +80,6 @@ function deregistrationPatch({ licencePlate, vin, codes }: Correction) {
   }
 }
 
-/** The three fields the spec's `PatchRegistrationApplicationRequest` takes of a filed Neuzulassung, when changed. */
 function newRegistrationPatch({ evbNumber, part2Number, part2SecurityCode }: NewRegistrationPatch) {
   return {
     ...(evbNumber ? { evbNumber: evbNumber.reveal() } : {}),
@@ -106,7 +88,6 @@ function newRegistrationPatch({ evbNumber, part2Number, part2SecurityCode }: New
   }
 }
 
-/** The patch body for each service. */
 export const PATCH_BODIES: { [Service in OrderableService]: (correction: Corrections[Service]) => object } = {
   deregistration: deregistrationPatch,
   newRegistration: newRegistrationPatch,

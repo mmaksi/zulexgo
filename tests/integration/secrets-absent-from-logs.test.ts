@@ -16,19 +16,12 @@ import { InMemoryDocumentStore } from "@/src/adapters/storage/fake/in-memory-doc
 import { FakeTokenGenerator } from "@/src/adapters/tokens/fake/fake-token-generator"
 import { GatewayUnavailable } from "@/src/core/errors/registration/gateway-unavailable"
 import { confirmPayment } from "@/src/core/use-cases/payment/confirm-payment"
-import { confirmRefund } from "@/src/core/use-cases/payment/confirm-refund"
 import { pollDueApplications } from "@/src/core/use-cases/registration/poll-due-applications"
 import { submitToKba } from "@/src/core/use-cases/registration/submit-to-kba"
 import { resendStatusLink } from "@/src/core/use-cases/status/resend-status-link"
 import { submitCheckout } from "@/src/core/use-cases/checkout/submit-checkout"
 import { withVendorsAtTheNetwork } from "./network-harness"
 
-/**
- * CLAUDE.md non-negotiable: security codes never reach a log, in any stage.
- * Status tokens may appear only in dev, where the console mailer prints the
- * link so a developer can open the status page; every other stage keeps them
- * out, since its logs outlive the request.
- */
 const CODES = Object.values(FAKE_REQUEST.codes)
 const CONSOLE_METHODS = ["log", "info", "warn", "error", "debug"] as const
 
@@ -42,7 +35,6 @@ function captureConsole() {
   return { output: () => lines.join("\n"), restore: () => spies.forEach((spy) => spy.mockRestore()) }
 }
 
-/** Every path that logs: each email, a silent retry, a final failure with its refund, a re-sent link, and a rejected checkout. */
 async function runEveryPath(revealStatusLinks: boolean): Promise<string[]> {
   const clock = new FakeClock(new Date("2026-03-01T09:00:00.000Z"))
   const deps = {
@@ -65,7 +57,7 @@ async function runEveryPath(revealStatusLinks: boolean): Promise<string[]> {
   }
   const checkoutAndPay = async () => {
     const { reference } = await submitCheckout(deps, { service: "deregistration", request: FAKE_REQUEST, email: "customer@example.test", consents: FAKE_CONSENTS })
-    await deps.payments.customerPays((await deps.repository.get(reference))!.payment.id, "card")
+    await deps.payments.customerPays((await deps.repository.get(reference))!.payment.id)
     await confirmPayment(deps, reference)
     return reference
   }
@@ -81,7 +73,6 @@ async function runEveryPath(revealStatusLinks: boolean): Promise<string[]> {
   const rejected = await checkoutAndPay()
   deps.registration.setStatus(await zulexId(rejected), { state: "failed", error: { code: 202, details: [] }, documents: [] })
   await poll(5)
-  await confirmRefund(deps, rejected)
   await resendStatusLink(deps, { reference: completed, email: "customer@example.test" })
 
   const badCodes = { ...FAKE_REQUEST, codes: { ...FAKE_REQUEST.codes, certificate: `${FAKE_REQUEST.codes.certificate}X` } }
@@ -120,10 +111,6 @@ describe("secrets in logs", () => {
   })
 })
 
-/**
- * The Zulex API echoes back everything a Neuzulassung was filed with (the owner, the address, the IBAN,
- * the eVB number, the Teil II code), and its KBA error text can quote it. None of it may reach a log.
- */
 describe("a Neuzulassung's secrets in logs", () => {
   const { world, stored, verifiedNewRegistration } = withVendorsAtTheNetwork()
   const HOUR = 60 * 60_000
@@ -132,12 +119,10 @@ describe("a Neuzulassung's secrets in logs", () => {
     await pollDueApplications(world.deps, 50)
   }
 
-  /** Every path through the Zulex adapter that logs: an outage, an answer it cannot read, a KBA error that quotes a secret, a refusal. */
   async function runEveryPath(): Promise<string[]> {
     const order = await verifiedNewRegistration()
     const secrets = secretsOf(order.request)
 
-    // The outage leaves the order at status 3 and due again: the poller files it on a later tick.
     world.zulex.failNext("create", new Response(null, { status: 503 }))
     await submitToKba(world.deps, order)
     await poll()
@@ -174,14 +159,9 @@ describe("a Neuzulassung's secrets in logs", () => {
   })
 })
 
-/**
- * What the identity step handles: the owner it compares against, the person the provider reports (name and birth date),
- * the provider's verification id and the link that starts someone's check. Every way the wait can end logs something.
- */
 describe("an identity verification's secrets in logs", () => {
   const verifiedAs = (firstName: string, lastName: string, birthDate: string) => ({ firstName, lastName, birthDate: new Secret(birthDate, "birth date") })
 
-  /** Every path that logs: filed, failed, a person who is not the owner, a deadline that passes, a provider that is down. */
   async function runEveryPath() {
     const flow = setupFlow()
     const deps = { ...flow.deps, mailer: new ConsoleMailer({ revealStatusLinks: false }) }

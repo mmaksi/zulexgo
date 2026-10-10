@@ -1,7 +1,6 @@
 import Link from "next/link"
 import { SUPPORT_EMAIL } from "@/src/core/domain/customer/contact"
 
-/** site-contract §3: neutral, the same for every invalid link, disclosing nothing. */
 export default function StatusLinkNotFound() {
   return (
     <div className="flex flex-col gap-(--heading-space-below)">

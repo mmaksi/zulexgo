@@ -6,7 +6,6 @@ import { Migrator, readMigrations } from "./migrator"
 import { PostgresRateLimiter } from "./postgres-rate-limiter"
 import { createTestDatabase, describeWithPostgres, type TestDatabase } from "./test-database"
 
-/** Adapters may not import each other, so this test keeps its own movable clock. */
 function movableClock() {
   let now = new Date("2026-03-01T09:00:00.000Z").getTime()
   const clock: Clock = { now: () => new Date(now) }

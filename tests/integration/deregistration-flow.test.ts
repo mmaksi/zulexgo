@@ -5,7 +5,6 @@ import { GatewayRejected } from "@/src/core/errors/registration/gateway-rejected
 import { GatewayUnavailable } from "@/src/core/errors/registration/gateway-unavailable"
 import { confirmPayment } from "@/src/core/use-cases/payment/confirm-payment"
 import { OpenApplicationExists } from "@/src/core/errors/application/open-application-exists"
-import { confirmRefund } from "@/src/core/use-cases/payment/confirm-refund"
 import { submitCheckout } from "@/src/core/use-cases/checkout/submit-checkout"
 import { CODES, keepServiceDown, MINUTE, setupFlow as setup } from "./flow-harness"
 
@@ -13,7 +12,7 @@ describe("de-registration flow on fakes", () => {
   describe("J1, happy path", () => {
     it("goes from checkout to completed, one email per step, capturing the held card in full", async () => {
       const { deps, emails, stored, zulexId, payment, poll, checkoutAndPay } = setup()
-      const reference = await checkoutAndPay("card")
+      const reference = await checkoutAndPay()
 
       expect((await stored(reference)).status).toBe("submitted_to_kba")
       expect(emails()).toEqual(["orderConfirmation", "submittedToKba"])
@@ -32,16 +31,6 @@ describe("de-registration flow on fakes", () => {
       expect(emails()).toEqual(["orderConfirmation", "submittedToKba", "completed"])
       expect(await payment(reference)).toMatchObject({ status: "captured", captured: SERVICE_PRICES.deregistration })
       expect(await deps.documents.list(reference)).toEqual([{ id: "77", kind: "confirmation" }])
-    })
-
-    it("leaves a SEPA payment as it is on completion, since it was taken at checkout", async () => {
-      const { deps, zulexId, payment, poll, checkoutAndPay } = setup()
-      const reference = await checkoutAndPay("sepaDebit")
-
-      deps.registration.setStatus(await zulexId(reference), { state: "finished", documents: [] })
-      await poll(1)
-
-      expect(await payment(reference)).toMatchObject({ status: "captured", captured: SERVICE_PRICES.deregistration })
     })
 
     it("sends the same status link in every email", async () => {
@@ -70,7 +59,7 @@ describe("de-registration flow on fakes", () => {
     it("resumes on the provider's retry when email 1 failed, keeping the status link it already issued", async () => {
       const { deps, emails, stored } = setup()
       const { reference } = await submitCheckout(deps, { service: "deregistration", request: FAKE_REQUEST, email: "customer@example.test", consents: FAKE_CONSENTS })
-      await deps.payments.customerPays((await stored(reference)).payment.id, "card")
+      await deps.payments.customerPays((await stored(reference)).payment.id)
       jest.spyOn(deps.mailer, "send").mockRejectedValueOnce(new Error("Resend refused the message"))
 
       await expect(confirmPayment(deps, reference)).rejects.toThrow("Resend refused the message")
@@ -86,7 +75,7 @@ describe("de-registration flow on fakes", () => {
     it("leaves a submission that died after payment was recorded for the poller to resume", async () => {
       const { deps, emails, stored, poll } = setup()
       const { reference } = await submitCheckout(deps, { service: "deregistration", request: FAKE_REQUEST, email: "customer@example.test", consents: FAKE_CONSENTS })
-      await deps.payments.customerPays((await stored(reference)).payment.id, "card")
+      await deps.payments.customerPays((await stored(reference)).payment.id)
       deps.registration.failNext("submit", new Error("the process died"))
 
       await expect(confirmPayment(deps, reference)).rejects.toThrow("the process died")
@@ -174,7 +163,7 @@ describe("de-registration flow on fakes", () => {
       const flow = setup()
       const submit = jest.spyOn(flow.deps.registration, "submit")
       flow.deps.registration.failNext("submit", new GatewayUnavailable())
-      const reference = await flow.checkoutAndPay("card")
+      const reference = await flow.checkoutAndPay()
 
       await keepServiceDown(flow, 5)
 
@@ -193,7 +182,7 @@ describe("de-registration flow on fakes", () => {
     ])("backs off when %s fails after the application was filed, instead of retrying it every tick (D4's twin)", async (_, breakIt) => {
       const error = jest.spyOn(console, "error").mockImplementation(() => {})
       const flow = setup()
-      const reference = await flow.payForCheckout("card")
+      const reference = await flow.payForCheckout()
       const broken = breakIt(flow)
 
       await expect(flow.confirm(reference)).rejects.toThrow()
@@ -213,7 +202,7 @@ describe("de-registration flow on fakes", () => {
       const warn = jest.spyOn(console, "warn").mockImplementation(() => {})
       const flow = setup()
       flow.deps.registration.failNext("submit", new GatewayUnavailable())
-      const reference = await flow.checkoutAndPay("card")
+      const reference = await flow.checkoutAndPay()
 
       flow.deps.registration.failNext("submit", new GatewayRejected())
       await flow.poll(2)
@@ -232,7 +221,7 @@ describe("de-registration flow on fakes", () => {
       const flow = setup()
       flow.deps.registration.failNext("submit", new GatewayRejected())
 
-      const reference = await flow.checkoutAndPay("card")
+      const reference = await flow.checkoutAndPay()
 
       expect((await flow.stored(reference)).status).toBe("failed_correctable")
     })
@@ -240,7 +229,7 @@ describe("de-registration flow on fakes", () => {
     it("then files the application when the service comes back, however late within the day", async () => {
       const flow = setup()
       flow.deps.registration.failNext("submit", new GatewayUnavailable())
-      const reference = await flow.checkoutAndPay("card")
+      const reference = await flow.checkoutAndPay()
       await keepServiceDown(flow, 20)
 
       await flow.poll(60)
@@ -253,7 +242,7 @@ describe("de-registration flow on fakes", () => {
       const warn = jest.spyOn(console, "warn").mockImplementation(() => {})
       const flow = setup()
       flow.deps.registration.failNext("submit", new GatewayUnavailable())
-      const reference = await flow.checkoutAndPay("card")
+      const reference = await flow.checkoutAndPay()
 
       await keepServiceDown(flow, 23)
       expect((await flow.stored(reference)).status).toBe("submitted_and_paid")
@@ -264,8 +253,6 @@ describe("de-registration flow on fakes", () => {
       expect(await flow.payment(reference)).toMatchObject({ status: "released", captured: Money.ofCents(0) })
       expect(flow.emails()).toEqual(["orderConfirmation", "rejected", "refundIssued"])
       expect(warn.mock.calls.flat().join(" ")).toContain(reference)
-      await confirmRefund(flow.deps, reference)
-      expect(flow.emails()).toEqual(["orderConfirmation", "rejected", "refundIssued"])
       expect(flow.deps.mailer.sent.at(-1)?.template).toMatchObject({ amount: SERVICE_PRICES.deregistration })
       warn.mockRestore()
     })
@@ -275,7 +262,7 @@ describe("de-registration flow on fakes", () => {
       const flow = setup()
       const refused = new Error("Zulex POST /deregistration-applications answered 401")
       refused.name = "ZulexRequestFailed"
-      const reference = await flow.payForCheckout("card")
+      const reference = await flow.payForCheckout()
       flow.deps.registration.failNext("submit", refused)
       await expect(flow.confirm(reference)).rejects.toThrow("answered 401")
 
@@ -401,33 +388,15 @@ describe("de-registration flow on fakes", () => {
     })
   })
 
-  describe("refund email 6, sent once the payment provider confirms the refund", () => {
-    const finalFailure = { state: "failed", error: { code: 202, details: [] }, documents: [] } as const
-
-    it.each(["card", "sepaDebit"] as const)(
-      "tells a %s customer what came back: everything but the processing fee",
-      async (method) => {
-        const { deps, emails, zulexId, poll, checkoutAndPay } = setup()
-        const reference = await checkoutAndPay(method)
-        deps.registration.setStatus(await zulexId(reference), finalFailure)
-        await poll(1)
-
-        await confirmRefund(deps, reference)
-
-        expect(emails()).toEqual(["orderConfirmation", "submittedToKba", "rejected", "refundIssued"])
-        expect(deps.mailer.sent.at(-1)?.template).toMatchObject({ amount: SERVICE_PRICES.deregistration.subtract(PROCESSING_FEE) })
-      },
-    )
-
-    it("sends nothing for an order that kept all its money", async () => {
+  describe("refund email 6", () => {
+    it("tells the customer what came back: everything but the processing fee", async () => {
       const { deps, emails, zulexId, poll, checkoutAndPay } = setup()
       const reference = await checkoutAndPay()
-      deps.registration.setStatus(await zulexId(reference), { state: "finished", documents: [] })
+      deps.registration.setStatus(await zulexId(reference), { state: "failed", error: { code: 202, details: [] }, documents: [] })
       await poll(1)
 
-      await confirmRefund(deps, reference)
-
-      expect(emails()).toEqual(["orderConfirmation", "submittedToKba", "completed"])
+      expect(emails()).toEqual(["orderConfirmation", "submittedToKba", "rejected", "refundIssued"])
+      expect(deps.mailer.sent.at(-1)?.template).toMatchObject({ amount: SERVICE_PRICES.deregistration.subtract(PROCESSING_FEE) })
     })
   })
 
@@ -444,7 +413,7 @@ describe("de-registration flow on fakes", () => {
 
     it("keeps the processing fee on a non-correctable KBA error and returns the rest", async () => {
       const { deps, emails, stored, zulexId, payment, poll, checkoutAndPay } = setup()
-      const reference = await checkoutAndPay("card")
+      const reference = await checkoutAndPay()
 
       deps.registration.setStatus(await zulexId(reference), { state: "failed", error: { code: 202, details: [] }, documents: [] })
       await poll(1)

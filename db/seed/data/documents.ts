@@ -7,7 +7,6 @@ export interface SeededDocument {
   readonly bytes: Uint8Array
 }
 
-/** A one-page PDF that says it is not a confirmation, so nobody mistakes the seed for a real document. */
 const TEST_PDF = [
   "%PDF-1.4",
   "1 0 obj",
@@ -44,7 +43,6 @@ const TEST_PDF = [
   "",
 ].join("\n")
 
-/** Each completed application's confirmation, so the download can be tried in dev and on staging. Its id is an int64 beyond what a JS number holds, as Zulex's are. */
 export const SEEDED_DOCUMENTS: readonly SeededDocument[] = [
   {
     reference: parseApplicationReference("ZG-SEED04"),

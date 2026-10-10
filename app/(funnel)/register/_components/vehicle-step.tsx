@@ -11,7 +11,6 @@ import { RadioGroup } from "@/src/ui/radio-group"
 import { ENGINE_CHOICES } from "./registration-data"
 import { fieldId, useStepForm, type StepProps } from "./use-step-form"
 
-/** site-contract §2.3: the car's papers and its insurance, exactly what the API asks for. */
 export function VehicleStep({ data, onChange, onNext }: StepProps) {
   const { errors, set, bind, check } = useStepForm("vehicle", data, onChange)
 

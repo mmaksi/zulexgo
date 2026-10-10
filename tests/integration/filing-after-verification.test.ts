@@ -6,11 +6,6 @@ import { GatewayUnavailable } from "@/src/core/errors/registration/gateway-unava
 import { submitToKba } from "@/src/core/use-cases/registration/submit-to-kba"
 import { HOUR, setupFlow as setup } from "./flow-harness"
 
-/**
- * A service that verifies the customer's identity files its application at status 3, days after payment, so what the
- * flow assumed about filing happening at status 1 has to hold for it too. These drive the same use cases with the data
- * that differs: when the order became ready to be filed, and which service it names.
- */
 describe("filing an order whose identity was verified after payment", () => {
   beforeEach(() => {
     jest.spyOn(console, "warn").mockImplementation(() => {})
@@ -20,9 +15,8 @@ describe("filing an order whose identity was verified after payment", () => {
   it("counts the patience for an unconfirmed filing from when the order became ready to be filed, not from payment", async () => {
     const flow = setup()
     flow.deps.registration.failNext("submit", new GatewayUnavailable())
-    const reference = await flow.checkoutAndPay("card")
+    const reference = await flow.checkoutAndPay()
 
-    // Three days pass before the identity is verified: the day of patience must not already be used up by then.
     flow.clock.advance(72 * HOUR)
     const waiting = await flow.stored(reference)
     await flow.deps.repository.update({
@@ -40,7 +34,7 @@ describe("filing an order whose identity was verified after payment", () => {
   it("still gives up with a full refund once a day has passed since it became ready, the clock having started there", async () => {
     const flow = setup()
     flow.deps.registration.failNext("submit", new GatewayUnavailable())
-    const reference = await flow.checkoutAndPay("card")
+    const reference = await flow.checkoutAndPay()
     flow.clock.advance(72 * HOUR)
     const waiting = await flow.stored(reference)
     await flow.deps.repository.update({
@@ -59,8 +53,6 @@ describe("filing an order whose identity was verified after payment", () => {
   })
 
   describe("submitToKba, asked to file an order that has not been verified", () => {
-    // The checkout in this harness only sells de-registrations, so the paid order it makes is given a Neuzulassung's request:
-    // the one thing that differs is the service it names. What is asserted is that nothing is sent or taken.
     const unverified = (application: Application): Application => ({
       ...application,
       request: parseNewRegistrationRequest(FAKE_NEW_REGISTRATION, FAKE_NEW_REGISTRATION_NOW),
@@ -68,7 +60,7 @@ describe("filing an order whose identity was verified after payment", () => {
 
     it("files nothing, takes no money and leaves it as it was, since it may only be filed at status 3", async () => {
       const flow = setup()
-      const reference = await flow.payForCheckout("card")
+      const reference = await flow.payForCheckout()
       const paid = unverified(await flow.stored(reference))
       const atStatusOne = await flow.deps.repository.update({ ...paid, status: "submitted_and_paid", history: [...paid.history, { status: "submitted_and_paid", at: flow.clock.now() }] })
 
@@ -81,9 +73,8 @@ describe("filing an order whose identity was verified after payment", () => {
 
     it("does file the same order once its identity is verified, from status 3", async () => {
       const flow = setup()
-      const reference = await flow.payForCheckout("card")
+      const reference = await flow.payForCheckout()
       const paid = unverified(await flow.stored(reference))
-      // Payment confirmation issues the status link the filing email carries.
       await flow.deps.repository.setStatusToken(reference, flow.deps.tokens.generate())
       const verified = await flow.deps.repository.update({
         ...paid,
@@ -99,7 +90,7 @@ describe("filing an order whose identity was verified after payment", () => {
 
     it("is an ordinary de-registration's filing, unchanged: from status 1", async () => {
       const flow = setup()
-      const reference = await flow.payForCheckout("card")
+      const reference = await flow.payForCheckout()
       await flow.confirm(reference)
 
       expect(flow.deps.registration.submissions).toHaveLength(1)

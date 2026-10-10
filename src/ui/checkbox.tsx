@@ -4,9 +4,6 @@ import { Checkbox as CheckboxPrimitive } from "@base-ui/react/checkbox"
 import { CheckIcon } from "lucide-react"
 import { cn } from "@/src/lib/utils"
 
-// design-standard.md §6.3 — border darkens on hover; checked fill is orange with
-// a grau-dark mark; focus ring grau-dark. The ::after extends the tap target
-// towards 48px (§4.4) without growing the box.
 function Checkbox({ className, ...props }: CheckboxPrimitive.Root.Props) {
   return (
     <CheckboxPrimitive.Root

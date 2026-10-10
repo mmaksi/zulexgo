@@ -8,7 +8,6 @@ import { setupFlow } from "./flow-harness"
 
 const DAY = 24 * 60 * 60_000
 
-/** An order that reached `events` in turn, the first an hour after `start`. */
 function lived(order: ReturnType<typeof aNewRegistrationApplication>, start: Date, events: ApplicationEvent[]) {
   let current = { ...order, history: [{ status: order.status, at: start }] }
   events.forEach((event, index) => {

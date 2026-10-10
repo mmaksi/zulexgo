@@ -10,8 +10,9 @@ import { keepServiceDown, setupFlow } from "./flow-harness"
 describe("payment and polling recovery", () => {
   it.each(["cancelled", "ourTechnicalError"] as const)("accounts for a prior partial refund when settling %s", async (type) => {
     const flow = setupFlow()
-    const reference = await flow.payForCheckout("sepaDebit")
+    const reference = await flow.payForCheckout()
     const application = await flow.stored(reference)
+    await flow.deps.payments.capture(application.payment.id, application.payment.total)
     await flow.deps.payments.refund(application.payment.id, Money.ofCents(100), "external-refund")
 
     const decision = await settlePayment(flow.deps, application, { type })

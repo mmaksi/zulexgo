@@ -2,9 +2,7 @@ import * as React from "react"
 import { Input as InputPrimitive } from "@base-ui/react/input"
 import { cn } from "@/src/lib/utils"
 
-// design-standard.md §4.4/§6.3 — 12px 16px padding, 48px min height,
-// --border-default at rest, grau on hover, 2px grau-dark plus bg-blue on focus,
-// no glow. 16px text so iOS does not zoom into the field.
+// 16px text so iOS does not zoom into the field.
 function Input({ className, type, ...props }: React.ComponentProps<"input">) {
   return (
     <InputPrimitive

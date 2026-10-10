@@ -9,7 +9,6 @@ import { Button } from "@/src/ui/button"
 
 export type ResendLinkAction = (input: { reference: string; email: string }) => Promise<ResendFormState>
 
-/** site-contract §3: the recovery for a lost link; the answer never says whether the order exists. */
 export function ResendLinkForm({ action }: { action: ResendLinkAction }) {
   const [state, setState] = useState<ResendFormState>()
   const [pending, setPending] = useState(false)

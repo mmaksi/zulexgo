@@ -1,10 +1,6 @@
 import type { ReactNode } from "react"
 import { cn } from "@/src/lib/utils"
 
-/**
- * design-standard.md §4.2/§4.3 — the 1200px page frame plus the section
- * rhythm. Both gaps are responsive tokens, so nothing here hard-codes a value.
- */
 export function Section({
   id,
   className,
@@ -21,7 +17,6 @@ export function Section({
   )
 }
 
-/** The 2:1 above/below ratio is what groups a heading with its content. */
 export function SectionHeading({
   eyebrow,
   title,

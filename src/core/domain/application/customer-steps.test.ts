@@ -7,7 +7,6 @@ import type { Service } from "./service"
 const T0 = new Date("2026-03-01T09:00:00.000Z")
 const minutes = (n: number) => new Date(T0.getTime() + n * 60_000)
 
-/** Walks the real status machine, one minute per event, so every history is one the app can produce. */
 function reached(...events: ApplicationEvent[]): Application {
   return events.reduce(
     (application, event, index) => applyEvent(application, event, minutes(index + 1)),
@@ -60,11 +59,6 @@ describe("customerSteps: statuses 1 → 4 → 5 as the customer sees them", () =
   })
 })
 
-/**
- * Walks the real status machine for a service, one minute per event. A Neuzulassung order cannot be built as an
- * `Application` yet (its request is not a `ServiceRequest` until it is stored), and the stepper and the machine read
- * only the status, the history and the service.
- */
 function reachedBy(service: Service, ...events: ApplicationEvent[]) {
   const first = { status: "awaiting_payment" as ApplicationStatus, history: [{ status: "awaiting_payment" as ApplicationStatus, at: T0 }], request: { service } }
   return events.reduce((order, event, index) => applyEvent(order, event, minutes(index + 1)), first)

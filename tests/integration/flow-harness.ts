@@ -13,12 +13,10 @@ import { SERVICE_PRICES } from "@/src/core/domain/payment/pricing"
 import type { VerifiedPerson } from "@/src/core/domain/customer/verified-person"
 import { GatewayUnavailable } from "@/src/core/errors/registration/gateway-unavailable"
 import type { RejectionCatalogue } from "@/src/core/domain/registration/rejection-catalogue"
-import type { PaymentMethodKind } from "@/src/core/ports/payment/payment-provider"
 import { confirmPayment } from "@/src/core/use-cases/payment/confirm-payment"
 import { pollDueApplications } from "@/src/core/use-cases/registration/poll-due-applications"
 import { submitCheckout } from "@/src/core/use-cases/checkout/submit-checkout"
 
-/** Every fake wired as the container wires them, for tests that drive the whole flow. */
 export const MINUTE = 60_000
 export const CATALOGUE: RejectionCatalogue = {
   101: { class: "correctable", reason: "Die FIN wurde nicht akzeptiert." },
@@ -29,7 +27,6 @@ export const CODES = Object.values(FAKE_REQUEST.codes)
 export const HOUR = 60 * MINUTE
 export const DAY = 24 * HOUR
 
-/** The service cannot be reached for this many hourly checks: every attempt to file a waiting application fails. */
 export async function keepServiceDown(flow: Pick<ReturnType<typeof setupFlow>, "deps" | "poll">, hours: number) {
   for (let hour = 0; hour < hours; hour++) {
     flow.deps.registration.failNext("submit", new GatewayUnavailable())
@@ -63,21 +60,15 @@ export function setupFlow() {
     return pollDueApplications(deps, 50)
   }
 
-  /** Checks out and pays, but leaves the payment notification unhandled. */
-  async function payForCheckout(method: PaymentMethodKind = "card") {
-    // Tests that run several orders at once put them all on one fake vehicle, so each customer here has confirmed the duplicate warning.
+  async function payForCheckout() {
     const { reference } = await submitCheckout(deps, { service: "deregistration", request: FAKE_REQUEST, email: "customer@example.test", consents: FAKE_CONSENTS, acknowledgedDuplicate: true })
-    await deps.payments.customerPays((await stored(reference)).payment.id, method)
+    await deps.payments.customerPays((await stored(reference)).payment.id)
     return reference
   }
 
   const confirm = (reference: ApplicationReference) => confirmPayment(deps, reference)
 
-  /**
-   * A Neuzulassung that has been paid for but whose payment notification is not handled yet. Checkout sells no
-   * Neuzulassung (it is not on sale), so the order is stored as checkout would have left it: awaiting payment.
-   */
-  async function payForNewRegistration(method: PaymentMethodKind = "card") {
+  async function payForNewRegistration() {
     const order = aNewRegistrationApplication({ status: "awaiting_payment", ikfzStatus: "online" })
     const total = SERVICE_PRICES.newRegistration
     const { paymentId } = await deps.payments.createPayment({ reference: order.reference, service: "newRegistration", amount: total, email: order.email })
@@ -87,20 +78,18 @@ export function setupFlow() {
       payment: { id: paymentId, total },
       idempotencyKey: deps.tokens.generate(),
     })
-    await deps.payments.customerPays(paymentId, method)
+    await deps.payments.customerPays(paymentId)
     return order.reference
   }
 
-  /** Pays for a Neuzulassung and handles the payment notification: it ends at status 2, waiting for the customer to verify. */
-  async function checkoutAndPayNewRegistration(method: PaymentMethodKind = "card") {
-    const reference = await payForNewRegistration(method)
+  async function checkoutAndPayNewRegistration() {
+    const reference = await payForNewRegistration()
     await confirm(reference)
     return reference
   }
 
   const verificationId = async (reference: ApplicationReference) => (await stored(reference)).identityVerification!.id
 
-  /** The customer completes the check at the provider; by default as the person the order names. */
   async function customerVerifies(reference: ApplicationReference, person?: VerifiedPerson) {
     const { request } = await stored(reference)
     if (request.service !== "newRegistration") throw new Error("Only a Neuzulassung verifies")
@@ -111,8 +100,8 @@ export function setupFlow() {
   const customerFailsVerification = async (reference: ApplicationReference) =>
     deps.identity.customerFinishes(await verificationId(reference), { status: "failed" })
 
-  async function checkoutAndPay(method: PaymentMethodKind = "card") {
-    const reference = await payForCheckout(method)
+  async function checkoutAndPay() {
+    const reference = await payForCheckout()
     await confirm(reference)
     return reference
   }

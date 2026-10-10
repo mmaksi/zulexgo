@@ -16,12 +16,7 @@ import { submitToKba } from "@/src/core/use-cases/registration/submit-to-kba"
 import { HOUR, setupFlow } from "./flow-harness"
 import { withVendorsAtTheNetwork } from "./network-harness"
 
-/**
- * N7, 5b for a Neuzulassung (launch plan Q53 and Q47, provisional). Two kinds of 5b, told apart by whether the
- * order's identity was ever verified: one the KBA or Zulex sent back after the identity was confirmed, whose
- * eVB number and Teil II can be corrected, and one the identity check sent back because the person verified is
- * not the owner on the order, whose name and birth date can be corrected and which is then checked again.
- */
+// Provisional: launch plan Q53 and Q47 (what a Neuzulassung's 5b lets the customer correct).
 const CATALOGUE: RejectionCatalogue = { 101: { class: "correctable", reason: "Die eVB-Nummer wurde nicht akzeptiert." } }
 const NEW_EVB = "FAKEEVC"
 
@@ -30,7 +25,6 @@ describe("a Neuzulassung the KBA or Zulex sent back, its identity already verifi
   const deps = () => ({ ...world.deps, errorCatalogue: CATALOGUE })
   const tokenOf = async (reference: NewRegistrationApplication["reference"]) => (await world.deps.repository.getStatusToken(reference))!
 
-  /** Filed and then refused by the KBA with a code the catalogue calls correctable: 5b, the application held by Zulex. */
   async function refusedByKba() {
     const order = await verifiedNewRegistration()
     await submitToKba(deps(), order)
@@ -42,7 +36,6 @@ describe("a Neuzulassung the KBA or Zulex sent back, its identity already verifi
     return { order, zulexId: zulexApplicationId!, token: await tokenOf(order.reference) }
   }
 
-  /** Refused outright when filed (a 400): Zulex holds nothing, so the correction files the order afresh. */
   async function refusedAtSubmission() {
     const order = await verifiedNewRegistration()
     world.zulex.failNext("create", new Response(null, { status: 400 }))
@@ -192,7 +185,6 @@ describe("a Neuzulassung the identity check sent back because the person verifie
   })
   afterEach(() => jest.restoreAllMocks())
 
-  /** Nothing filed, the card held: the customer typed "Erika", the identity provider found "Erik". */
   async function mismatched() {
     const flow = setupFlow()
     const reference = await flow.checkoutAndPayNewRegistration()
@@ -262,7 +254,6 @@ describe("a Neuzulassung the identity check sent back because the person verifie
     expect(order.status).toBe("failed_correctable")
     expect(order.failure).toEqual({ kind: "rejected" })
     expect(order.history.map(({ status }) => status)).toContain("identity_verified")
-    // From here the owner's name is the one the identity was checked against, so only the eVB and the Teil II can change.
     await expect(correctApplication(flow.deps, flow.token, { firstName: "Erika" })).rejects.toBeInstanceOf(ValidationError)
   })
 
@@ -370,7 +361,6 @@ describe("a Neuzulassung the identity check sent back because the person verifie
   it("puts neither the name the customer typed nor the corrected one in an email or a log", async () => {
     const flow = await mismatched()
     const logs = [jest.spyOn(console, "error"), jest.spyOn(console, "warn"), jest.spyOn(console, "info"), jest.spyOn(console, "log")]
-    // Read before the correction, so the name that was typed wrong is among them as well as the one that replaces it.
     const before = secretsOf((await flow.stored(flow.reference)).request)
 
     await correctApplication(flow.deps, flow.token, { firstName: "Erik" })

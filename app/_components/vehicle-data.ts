@@ -6,7 +6,6 @@ import { vinSchema } from "@/src/core/domain/vehicle/vin"
 
 export type PlateCount = 1 | 2
 
-/** What the customer typed, as typed. Parsed into a DeregistrationRequest on the server. */
 export interface VehicleData {
   prefix: string
   letters: string
@@ -31,7 +30,6 @@ export const EMPTY_VEHICLE: VehicleData = {
   email: "",
 }
 
-/** site-contract §2.3: human, action-oriented, never the API's text. */
 const RULES: Record<VehicleField, { schema: z.ZodType; message: string }> = {
   prefix: { schema: licencePlateSchema.shape.prefix, message: "Geben Sie das Ortskürzel ein: 1 bis 3 Buchstaben, z. B. B oder HH." },
   letters: { schema: licencePlateSchema.shape.letters, message: "Geben Sie die 1 bis 2 Buchstaben nach dem Ortskürzel ein." },
@@ -43,11 +41,9 @@ const RULES: Record<VehicleField, { schema: z.ZodType; message: string }> = {
   email: { schema: emailSchema, message: "Geben Sie eine gültige E-Mail-Adresse ein, z. B. name@beispiel.de." },
 }
 
-/** The fields this vehicle needs, in the order the form shows them: a one-plate vehicle has no front code. */
 export const fieldsFor = (plateCount: PlateCount): VehicleField[] =>
   ["prefix", "letters", "numbers", "vin", "rearPlate", ...(plateCount === 2 ? (["frontPlate"] as const) : []), "certificate", "email"]
 
-/** The wording for a field's value, or nothing when it is fine. */
 export function validateField(field: VehicleField, value: string): string | undefined {
   return RULES[field].schema.safeParse(value).success ? undefined : RULES[field].message
 }
@@ -61,7 +57,6 @@ export function validateVehicle(data: VehicleData, plateCount: PlateCount): Part
   return errors
 }
 
-/** The shape `parseDeregistrationRequest` expects. */
 export function toRequest(data: VehicleData, plateCount: PlateCount) {
   const licencePlate = { prefix: data.prefix, letters: data.letters, numbers: data.numbers }
   const codes =

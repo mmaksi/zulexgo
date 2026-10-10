@@ -8,8 +8,6 @@ function RadioGroup({ className, ...props }: RadioGroupPrimitive.Props) {
   return <RadioGroupPrimitive data-slot="radio-group" className={cn("grid w-full gap-3", className)} {...props} />
 }
 
-// design-standard.md §6.3 — as the checkbox: grau-dark border on hover, orange
-// when chosen, grau-dark focus ring; status dots are the only round shapes (§4.5).
 function RadioGroupItem({ className, ...props }: RadioPrimitive.Root.Props) {
   return (
     <RadioPrimitive.Root

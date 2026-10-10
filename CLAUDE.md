@@ -13,7 +13,7 @@ B2C web app for German vehicle registration services, built on the B2B Zulex API
 - **All Zulex API calls are server-side only.** The `X-Api-Key` is a merchant credential and must never reach the browser; the app calls the API through its own route handlers/server actions.
 - **No vendor is imported outside its own adapter.** Stripe, the Zulex API, email, storage and identity verification (a fake today, Verimi added later) sit behind ports in `src/core/ports/`, wired in one composition root. Stripe is the first payment adapter, not a core dependency. See the `external-services` skill.
 - Stages `dev`, `staging`, `production`, selected by `APP_ENV`, never `NODE_ENV`.
-- Cards use manual capture (pre-authorization); SEPA Direct Debit cannot be held and is captured at checkout.
+- Cards only, with manual capture (pre-authorization); no SEPA Direct Debit (launch plan Q12).
 - Business logic and integration constraints (the statuses, error algorithm, polling, idempotency, payment and refunds, GDPR and German consumer law) are in `docs/launch-plan.md`, which wins when documents disagree. Do not re-derive them here.
 - **Shadcn** for all UI components; build a custom component only when Shadcn has none. Shared styling lives in `app/globals.css`.
 
@@ -130,7 +130,7 @@ Authoritative; read before deciding in their area. This file does not repeat the
 | [docs/prd.md](docs/prd.md) | Vision, personas, prioritised features, success criteria, with pointers to where each rule lives. | Starting a feature, or deciding if something is MVP. |
 | [docs/design-standard.md](docs/design-standard.md) | Visual spec from the Zulex Style Guide: colour, type, spacing, brand wedge, elevation, motion. | Any visual decision, CSS or new component. |
 | [docs/site-contract.md](docs/site-contract.md) | Page structure, content fields with length/format/tone limits, behaviour spec (navigation, scroll, hover, mobile, transitions). | Building a page, writing copy, defining props/schemas, implementing interaction. |
-| [docs/launch-plan.md](docs/launch-plan.md) | Milestones M0–M9 with exit criteria, default technical decisions, fallbacks for blocked items, open questions Q1–Q56. **Source of truth when documents disagree.** | Choosing what to build next, checking exit criteria, implementing any status, error, payment or refund rule. |
+| [docs/launch-plan.md](docs/launch-plan.md) | Milestones M0–M9 with exit criteria, default technical decisions, fallbacks for blocked items, open questions Q1–Q67. **Source of truth when documents disagree.** | Choosing what to build next, checking exit criteria, implementing any status, error, payment or refund rule. |
 | [docs/registration-plan.md](docs/registration-plan.md) | The Neuzulassung plan: scope, milestones N0–N10 with exit criteria and what each built, risks. Its open questions Q45–Q56 live in `launch-plan.md`. | Working on Neuzulassung. |
 | [docs/re-registration-plan.md](docs/re-registration-plan.md) | The Wiederzulassung plan: scope, milestones W0–W10 with exit criteria, API findings, risks. Its open questions Q57–Q67 live in `launch-plan.md`. | Working on Wiederzulassung. |
 | [docs/deregistration-user-journeys.md](docs/deregistration-user-journeys.md) | Success, failure and edge-case journeys J1–J12, plus problems found in the Zulex API spec. | Handling a failure path or edge case. |

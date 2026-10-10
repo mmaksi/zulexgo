@@ -5,41 +5,19 @@ import { RATE_LIMITS } from "@/src/core/domain/rate-limit/rate-limits"
 import type { RateLimitDecision } from "@/src/core/ports/rate-limit/rate-limiter"
 import type { Dependencies } from "@/src/core/use-cases/dependencies"
 
-/**
- * Counts a "send me my link again" request against the address that made it
- * and against the order it names, whoever asks, so neither a single caller nor
- * a crowd can flood one customer's inbox. Counted whether or not the order
- * exists, so the limit tells nothing about it. The caller has validated the
- * reference.
- *
- * The address bound is checked first, so a caller over it does not also spend the
- * order's allowance. Returns the refused decision, with the wait, for the form to show.
- */
+// Counted whether or not the order exists, so the limit reveals nothing about it.
 export async function limitResend(
   deps: Pick<Dependencies, "rateLimiter">,
   { address, reference }: { address: string; reference: string },
 ): Promise<RateLimitDecision> {
   const order = parseApplicationReference(reference)
+  // Address first, so a caller over its bound does not also spend the order's allowance.
   const byAddress = await deps.rateLimiter.consume(`resend-link:address:${address}`, RATE_LIMITS.resendLinkPerAddress)
   if (!byAddress.allowed) return byAddress
   return deps.rateLimiter.consume(`resend-link:order:${order}`, RATE_LIMITS.resendLinkPerOrder)
 }
 
-/**
- * Mails a new status link to the address on file for the order, and only when
- * the caller named that address. A wrong pair, an unknown order and an order
- * that has not paid (it has no link) do nothing and look the same from outside,
- * because the caller is shown one answer whatever happens here.
- *
- * The new link is mailed before it is stored, so a failed send leaves the old
- * link working instead of locking the customer out. Each send is keyed by the
- * new link, so two requests in one minute deliver two emails, each with the
- * link that was current when it was sent.
- *
- * Reached from the "Resend my link" form, which counts the request with `limitResend`
- * first and runs this after answering, so the time taken says nothing about a match.
- * Storing the token replaces the old one: earlier links stop working.
- */
+// The caller answers before running this, so the time taken says nothing about a match.
 export async function resendStatusLink(
   deps: Pick<Dependencies, "repository" | "mailer" | "tokens" | "statusLink">,
   input: { reference: string; email: string },
@@ -50,10 +28,10 @@ export async function resendStatusLink(
   if (!reference.success || !email.success) return
 
   const application = await deps.repository.get(reference.data)
-  // An order still awaiting payment has no link yet: it is issued when payment is confirmed.
   if (!application || application.status === "awaiting_payment" || application.email !== email.data) return
 
   const token = deps.tokens.generate()
+  // Mail before storing: a failed send leaves the old link working.
   await deps.mailer.send({
     to: application.email,
     template: { name: "statusLinkResent", reference: application.reference, statusLink: deps.statusLink(token) },

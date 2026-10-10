@@ -1,8 +1,11 @@
 import { inspect } from "node:util"
 import { ValidationError } from "@/src/core/errors/validation-error"
-import { parseBankAccount } from "./bank-account"
+import { validate } from "@/src/core/domain/validate"
+import { bankAccountSchema } from "./bank-account"
 
-// Published example IBANs (checksums verified independently of the code under test).
+const parseBankAccount = (input: unknown) => validate(bankAccountSchema, input, "bankAccount")
+
+// Published example IBANs, checked independently of the code under test.
 const VALID_IBANS = ["DE89370400440532013000", "DE02120300000000202051", "DE75512108001245126199"]
 const valid = { iban: "DE89370400440532013000", bic: "COBADEFFXXX", bankName: "Beispielbank" }
 
@@ -30,7 +33,6 @@ describe("parseBankAccount: the account the vehicle tax is collected from", () =
       expect(parseBankAccount({ ...valid, iban: " de89 3704 0044 0532 0130 00 " }).iban).toBe("DE89370400440532013000")
     })
 
-    // One wrong digit, and two digits swapped: the checksum catches a typo the format alone would not.
     it.each(["DE89370400440532013001", "DE88370400440532013000", "DE89370400440532013100", "DE89370400440532031000"])(
       "refuses %s, whose checksum is wrong",
       (iban) => {
@@ -38,7 +40,7 @@ describe("parseBankAccount: the account the vehicle tax is collected from", () =
       },
     )
 
-    // Launch plan Q54, provisional: German accounts only. Both are valid IBANs: GB82 WEST 1234 5698 7654 32 and AT61 1904 3002 3457 3201.
+    // Provisional: launch plan Q54. Both are valid IBANs, so only their country can refuse them.
     it.each(["GB82WEST12345698765432", "AT611904300234573201"])("refuses %s, an IBAN of another country, even a valid one", (iban) => {
       expect(fieldsRejected({ ...valid, iban })).toEqual(["iban"])
     })

@@ -17,7 +17,6 @@ import { StaleApplication } from "@/src/core/errors/application/stale-applicatio
 import type { ApplicationRepository } from "./application-repository"
 
 const NOW = new Date("2026-03-01T09:00:00.000Z")
-// One of each Failure kind: only a kbaError carries a code, which Postgres keeps in its own column.
 const FAILURES: Failure[] = [
   { kind: "unavailable" },
   { kind: "rejected" },
@@ -26,20 +25,7 @@ const FAILURES: Failure[] = [
 ]
 const minutes = (count: number) => new Date(NOW.getTime() + count * 60_000)
 
-/**
- * Every ApplicationRepository adapter must pass this, including the fake.
- *
- * Pins down the port's guarantees: `create` stores version 1 and refuses a
- * reused reference or idempotency key; `update` is version-checked, so a stale
- * or never-created application is refused and nothing changes; security codes,
- * money and dates round-trip and what is returned is a copy; a status token is
- * found, read back, revoked by a newer one and never shared by two orders;
- * `hasOpenApplication` counts only paid, unfinished orders for the same service,
- * plate and VIN; `findDueForPolling` returns what is due, soonest first.
- *
- * `makeSubject` runs before every test and must hand back an empty store: a
- * fresh fake, or a database truncated beforehand.
- */
+// `makeSubject` must hand back an empty store: a fresh fake, or a database truncated beforehand.
 export function applicationRepositoryContract(name: string, makeSubject: () => ApplicationRepository) {
   describe(`ApplicationRepository contract: ${name}`, () => {
     let repository: ApplicationRepository
@@ -60,8 +46,6 @@ export function applicationRepositoryContract(name: string, makeSubject: () => A
         expect(stored?.payment.total.equals(application.payment.total)).toBe(true)
       })
 
-      // Postgres checks status against a domain mirroring this list, so a status added only in code
-      // fails here.
       it.each(APPLICATION_STATUSES)("stores an application in status %s", async (status) => {
         const created = await repository.create(anApplication({ status, history: [{ status, at: NOW }] }))
 
@@ -76,7 +60,6 @@ export function applicationRepositoryContract(name: string, makeSubject: () => A
         expect(await repository.get(created.reference)).toEqual({ ...order, version: 1 })
       })
 
-      // Optional fields are nullable columns in Postgres: absent must come back absent, not null.
       it("round-trips a one-plate vehicle and every optional field", async () => {
         const application = anApplication({
           status: "submitted_to_kba",
@@ -104,7 +87,6 @@ export function applicationRepositoryContract(name: string, makeSubject: () => A
         expect((stored as DeregistrationApplication).request.codes.rearPlate.reveal()).toBe("AA1")
       })
 
-      // Launch plan D9: what the customer agreed to is kept with the order, with the version of each text.
       it("round-trips the consent given at checkout, a Neuzulassung's power of attorney included, and nothing for an order made before it was recorded", async () => {
         const deregistration = anApplication({ consent: { agbVersion: "2026-03", givenAt: minutes(-30) } })
         const newRegistration = aNewRegistrationApplication({ consent: { agbVersion: "2026-03", powerOfAttorneyVersion: "2026-04", givenAt: minutes(-30) } })
@@ -147,7 +129,6 @@ export function applicationRepositoryContract(name: string, makeSubject: () => A
         )
       })
 
-      // Matters for adapters that keep objects in memory; a database returns fresh ones per read.
       it("hands out copies, so mutating one never changes the store", async () => {
         const created = await repository.create(anApplication())
         const copy = (await repository.get(created.reference)) as unknown as { history: { at: Date }[]; status: string }
@@ -249,7 +230,7 @@ export function applicationRepositoryContract(name: string, makeSubject: () => A
       })
     })
 
-    // Launch plan Q22, provisional: an order that has ended is never filed again, so its security codes are not kept.
+    // Provisional: launch plan Q22 (an ended order keeps no security codes).
     it("stores a de-registration that has ended without its security codes and reads it back so, plate and VIN kept", async () => {
       const created = await repository.create(anApplication({ status: "submitted_to_kba" }))
 
@@ -263,7 +244,6 @@ export function applicationRepositoryContract(name: string, makeSubject: () => A
     describe("a Neuzulassung order", () => {
       const request = (overrides: object) => parseNewRegistrationRequest({ ...FAKE_NEW_REGISTRATION, ...overrides }, FAKE_NEW_REGISTRATION_NOW)
 
-      // Optional parts are absent or nullable in storage: absent must come back absent, never null or empty.
       it("round-trips the optional parts: a seasonal E-plate, the engine, a verification in progress", async () => {
         const order = aNewRegistrationApplication({
           status: "awaiting_identity_verification",
@@ -299,7 +279,7 @@ export function applicationRepositoryContract(name: string, makeSubject: () => A
         expect(identityVerification).toBeUndefined()
       })
 
-      // Launch plan Q54: the account is for the vehicle tax; once the order has ended, it is not stored any more.
+      // Launch plan Q54: the account is for the vehicle tax, so an ended order no longer stores it.
       it("stores an order that has ended without its bank account and reads it back so, the rest of the request kept", async () => {
         const created = (await repository.create(aNewRegistrationApplication({ status: "submitted_to_kba" }))) as NewRegistrationApplication
 
@@ -379,7 +359,7 @@ export function applicationRepositoryContract(name: string, makeSubject: () => A
         copy.request.owner.firstName = "Changed"
         copy.request.registrationCertificate.number = "CHANGED"
 
-        // Literals, not `created`: a part the store failed to copy would be shared with it too, and the two would still agree.
+        // Literals, not `created`: an uncopied part would be shared with it too, and they would still agree.
         const { request: stored } = (await repository.get(created.reference)) as NewRegistrationApplication
         expect(stored.plate.seasonal).toEqual({ from: 3, until: 9 })
         expect(stored.owner.firstName).toBe(FAKE_NEW_REGISTRATION.owner.firstName)
@@ -525,8 +505,6 @@ export function applicationRepositoryContract(name: string, makeSubject: () => A
       })
     })
 
-    // Due includes a moment exactly at `now`; an application with no nextPollAt (no longer
-    // watched) is never due.
     describe("findDueForPolling", () => {
       it("returns only applications whose KBA check, silent resubmission or hold check (a 5b waiting on the customer) is due, soonest first, up to the limit", async () => {
         const atKba = (nextPollAt: Date) => anApplication({ status: "submitted_to_kba", polling: { nextPollAt, attempts: 1 } })
@@ -572,7 +550,6 @@ export function applicationRepositoryContract(name: string, makeSubject: () => A
       })
     })
 
-    // What the monitoring report reads. It must never carry what the customer entered.
     describe("findTrailsSince", () => {
       const startedAt = (at: Date, status: Application["status"] = "awaiting_payment") => [{ status, at }]
 

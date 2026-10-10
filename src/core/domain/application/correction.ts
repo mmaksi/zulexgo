@@ -5,7 +5,6 @@ import type { NewRegistrationCorrectionInput } from "./new-registration-correcti
 import { SecurityCode, type SecurityCodeKind } from "@/src/core/domain/vehicle/security-code"
 import { vinSchema } from "@/src/core/domain/vehicle/vin"
 
-/** What the correction form sends: the fields the customer changed, as typed; blank means unchanged. */
 export interface CorrectionInput {
   vin?: string
   rearPlate?: string
@@ -13,23 +12,11 @@ export interface CorrectionInput {
   certificate?: string
 }
 
-/** What a customer sends from the status page: the fields of either service's correction form, of which an order reads its own service's. */
 export type OrderCorrectionInput = CorrectionInput & NewRegistrationCorrectionInput
 
-/** The security codes that can be corrected, in the order wrong ones are reported. */
 const CODES: SecurityCodeKind[] = ["rearPlate", "frontPlate", "certificate"]
 
-/**
- * Launch plan Q26, a provisional answer pending the founder: the VIN and the
- * three security codes can be corrected, the plate cannot (a different plate is
- * a different vehicle, so a new order). Fields left blank stay as they were.
- * Throws a `ValidationError` naming the wrong fields, never their values.
- *
- * `plateCount` is the order's own: a front code for a one-plate vehicle is refused as
- * `frontPlate`, since there is no front seal to correct. A form with nothing filled in is
- * refused as `correction`. The result is the registration gateway's `Correction`: only the
- * changed fields, the codes as `SecurityCode`s.
- */
+// Provisional: launch plan Q26 (plate not correctable). Errors name wrong fields, never their values.
 export function parseCorrection(input: CorrectionInput, plateCount: 1 | 2): Correction {
   const given = (value: string | undefined) => (value?.trim() ? value : undefined)
   const wrong: string[] = []
@@ -42,7 +29,6 @@ export function parseCorrection(input: CorrectionInput, plateCount: 1 | 2): Corr
   for (const kind of CODES) {
     const value = given(input[kind])
     if (value === undefined) continue
-    // undefined fails the check below, so a front code on a one-plate order is reported as wrong.
     const parsed = kind === "frontPlate" && plateCount === 1 ? undefined : SecurityCode.schema(kind).safeParse(value)
     if (parsed?.success) codes[kind] = parsed.data
     else wrong.push(kind)
@@ -54,12 +40,6 @@ export function parseCorrection(input: CorrectionInput, plateCount: 1 | 2): Corr
   return { ...(parsedVin?.success ? { vin: parsedVin.data } : {}), ...(Object.keys(codes).length > 0 ? { codes } : {}) }
 }
 
-/**
- * The request with the corrected fields replaced, re-validated as any request is, so it
- * throws a `ValidationError` if the result is not a valid request. The codes are revealed
- * only to be parsed again into new `SecurityCode`s; the given request is not changed. Only an order at 5b is
- * corrected, and it still holds its codes: they go when an order ends.
- */
 export function applyCorrection(request: StoredDeregistrationRequest, { vin, codes }: Correction): DeregistrationRequest {
   const current = request.codes
   if (!current) throw new Error("A de-registration without its security codes cannot be corrected")

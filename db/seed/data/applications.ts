@@ -13,16 +13,6 @@ import { verificationDeadlineAt } from "@/src/core/domain/payment/verification-p
 const CREATED_AT = new Date("2026-01-05T09:00:00.000Z")
 const HOUR = 60 * 60 * 1000
 
-/**
- * How each seeded application reached its status, through the real status
- * machine, so every history is one the app could have produced. Per service, each
- * a `Record` over the statuses it passes through, so a new status fails to compile
- * until it is seeded. Each status owns its number, which fixes its reference:
- * staging keeps seeded rows across deploys, so numbering by position would move
- * references when a status is inserted. De-registrations never wait for an identity
- * verification, so statuses 2 and 3 have no journey for them; a Neuzulassung has one
- * for every status.
- */
 type DeregistrationStatus = Exclude<ApplicationStatus, "awaiting_identity_verification" | "identity_verified">
 
 interface Journey {
@@ -31,6 +21,7 @@ interface Journey {
   readonly failure?: Failure
 }
 
+// Fixed numbers, not positions: staging keeps seeded rows, so renumbering would move their references.
 export const JOURNEYS = {
   deregistration: {
     awaiting_payment: { number: 1, events: [] },
@@ -63,16 +54,13 @@ export const JOURNEYS = {
       events: ["paymentConfirmed", "identityVerificationStarted", "identityVerified", "submittedToKba", "failedCorrectable", "cancelledByCustomer"],
     },
   } satisfies Record<ApplicationStatus, Journey>,
-  // A service with orders and no journey fails to compile here.
 } satisfies Record<OrderableService, Partial<Record<ApplicationStatus, Journey>>>
 
 export interface SeededApplication {
   readonly application: Application
-  /** Open it in dev at /status/<statusToken> */
   readonly statusToken: string
 }
 
-/** Obviously fake: the published example IBAN, the German placeholder name, a made-up street, a phone number in the range reserved for fiction. */
 function newRegistrationRequestOf(digits: string): ServiceRequest {
   return parseNewRegistrationRequest(
     {
@@ -106,10 +94,6 @@ function deregistrationRequestOf(number: number, digits: string): ServiceRequest
   })
 }
 
-/**
- * A de-registration's reference, status link and payment keep the names they always had, since staging
- * keeps its seeded rows; the other services' carry the service's name too.
- */
 const SLUG_PREFIX: Record<OrderableService, string> = { deregistration: "", newRegistration: "new-registration-" }
 
 function seeded(service: OrderableService, status: ApplicationStatus, { number, events, failure }: Journey): SeededApplication {
@@ -122,7 +106,6 @@ function seeded(service: OrderableService, status: ApplicationStatus, { number, 
     history: [{ status: "awaiting_payment", at: CREATED_AT }],
     request: service === "deregistration" ? deregistrationRequestOf(number, digits) : newRegistrationRequestOf(digits),
     email: emailSchema.parse(`seed-${slug}@example.test`),
-    // As checkout leaves every order: each seeded customer ticked what their service asks.
     consent: recordConsent(service, { terms: true, earlyStart: true, powerOfAttorney: true }, CREATED_AT),
     ikfzStatus: status === "failed_final" ? "unavailable" : "online",
     idempotencyKey: `seed-idempotency-${slug}`,
@@ -144,15 +127,13 @@ function seeded(service: OrderableService, status: ApplicationStatus, { number, 
       failure,
       zulexApplicationId: atKba ? `seed-zulex-${slug}` : undefined,
       identityVerification: verificationStartedAt && { id: `seed-verification-${slug}`, deadline: verificationDeadlineAt(verificationStartedAt), reminderSent: false },
-      // Only a de-registration is polled: a seeded Neuzulassung's verification id was never issued by the identity provider,
-      // so asking for its result would fail every tick.
+      // A seeded Neuzulassung's verification id was never issued, so polling it would fail every tick.
       polling: service === "deregistration" && status === "submitted_to_kba" ? { nextPollAt: CREATED_AT, attempts: 1 } : application.polling,
     },
     statusToken: `seed-status-link-${slug}`,
   }
 }
 
-/** The journeys given, per service, each as the order it ends in. */
 export const seededApplications = (journeys: { [Service in OrderableService]?: Partial<Record<ApplicationStatus, Journey>> }): SeededApplication[] =>
   Object.entries(journeys).flatMap(([service, byStatus]) =>
     Object.entries(byStatus).map(([status, journey]) => seeded(service as OrderableService, status as ApplicationStatus, journey)),

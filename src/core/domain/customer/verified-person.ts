@@ -1,23 +1,14 @@
 import type { Owner } from "./owner"
 import type { Secret } from "@/src/core/domain/secret"
 
-/**
- * Who the identity provider verified, as read off the document: what an order's owner is compared with.
- * The birth date is a secret like the owner's, so it prints as a placeholder wherever it ends up.
- */
 export interface VerifiedPerson {
   readonly firstName: string
   readonly lastName: string
-  /** `YYYY-MM-DD`. */
+  /** `YYYY-MM-DD`, as the owner's: the two are compared exactly. */
   readonly birthDate: Secret<string>
 }
 
-/**
- * Case, accents, the spelling of umlauts and apostrophes, and hyphens differ between a form and a document
- * without naming another person. Marks are stripped from the decomposed letter (so the two ways to write an
- * umlaut agree), and "ae", "oe" and "ue" fold to the bare vowel, so "Müller", "Mueller" and "Muller" meet.
- * Folded this way a name can collide with a different one; that cannot matter, since the birth date has to agree too.
- */
+// Loose on purpose (Müller = Mueller = Muller): safe only because the birth date must agree too.
 const normalised = (name: string): string =>
   name
     .normalize("NFD")
@@ -31,12 +22,7 @@ const normalised = (name: string): string =>
     .replace(/[\s-]+/g, " ")
     .trim()
 
-/**
- * Launch plan Q47, a provisional answer pending the founder: the verified person is the order's owner
- * when first name, last name and birth date agree. The names are compared in whole, so a second first name
- * on the document that the order lacks is a mismatch; the birth date exactly. A mismatch is not a
- * failed verification: nothing was filed, so the customer can correct the order.
- */
+// Provisional: launch plan Q47
 export function isTheOwner(person: VerifiedPerson, owner: Pick<Owner, "firstName" | "lastName" | "birthDate">): boolean {
   return (
     normalised(person.firstName) === normalised(owner.firstName) &&

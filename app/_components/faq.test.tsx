@@ -4,7 +4,6 @@ import { Faq } from "./faq"
 
 const OFFICIAL_ANSWER = /amtliche i-Kfz-Schnittstelle des Kraftfahrt-Bundesamtes/i
 
-/** Disclosure behaviour, plus the keepMounted guarantee the copy relies on. */
 describe("Faq", () => {
   it("starts with every answer collapsed", () => {
     render(<Faq />)

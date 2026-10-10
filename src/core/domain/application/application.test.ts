@@ -5,7 +5,6 @@ import type { ApplicationEvent, ApplicationStatus } from "./application-status"
 import type { Service } from "./service"
 
 const NOW = new Date("2026-03-01T09:00:00.000Z")
-const LATER = new Date("2026-03-01T09:05:00.000Z")
 
 describe("applyEvent", () => {
   it("moves the status and records when it changed", () => {
@@ -13,13 +12,6 @@ describe("applyEvent", () => {
 
     expect(paid.status).toBe("submitted_and_paid")
     expect(paid.history.at(-1)).toEqual({ status: "submitted_and_paid", at: NOW })
-  })
-
-  it("records nothing when an event keeps the status, so a poll tick adds no history", () => {
-    const submitted = applyEvent(anApplication({ status: "submitted_and_paid" }), "submittedToKba", NOW)
-    const polled = applyEvent(submitted, "kbaProcessing", LATER)
-
-    expect(polled.history).toEqual(submitted.history)
   })
 
   it("leaves the original untouched", () => {
@@ -37,7 +29,6 @@ describe("applyEvent", () => {
     )
   })
 
-  // The path is the order's service's own: a de-registration is never sent to verify its customer.
   it("refuses a verification event on a de-registration, which goes from 1 straight to the KBA", () => {
     expect(() => applyEvent(anApplication({ status: "submitted_and_paid" }), "identityVerificationStarted", NOW)).toThrow(
       InvalidTransition,
@@ -45,10 +36,6 @@ describe("applyEvent", () => {
   })
 })
 
-/**
- * A Neuzulassung cannot be built as an `Application` yet (its request is not a `ServiceRequest` until it is
- * stored), and the machine reads only the status, the history and the service.
- */
 function orderOf(service: Service, ...events: ApplicationEvent[]) {
   const first = { status: "awaiting_payment" as ApplicationStatus, history: [{ status: "awaiting_payment" as ApplicationStatus, at: NOW }], request: { service } }
   return events.reduce((order, event, index) => applyEvent(order, event, new Date(NOW.getTime() + (index + 1) * 60_000)), first)
@@ -114,7 +101,7 @@ describe("applyEvent, for a service that verifies the customer's identity", () =
   })
 })
 
-// Launch plan Q54, provisional: the account is held for the vehicle tax and nothing else, so it goes with the order that held it.
+// Provisional: launch plan Q54
 describe("applyEvent, once a Neuzulassung's order has ended", () => {
   const PAID = ["paymentConfirmed", "identityVerificationStarted"] as const
   const AT_THE_KBA = [...PAID, "identityVerified", "submittedToKba"] as const
@@ -160,7 +147,7 @@ describe("applyEvent, once a Neuzulassung's order has ended", () => {
   })
 })
 
-// Launch plan Q22, provisional: the codes prove possession for one filing, and an order that has ended is never filed again.
+// Provisional: launch plan Q22
 describe("applyEvent, once a de-registration's order has ended", () => {
   const walk = (...events: ApplicationEvent[]) =>
     events.reduce((order, event, index) => applyEvent(order, event, new Date(NOW.getTime() + (index + 1) * 60_000)), anApplication({ status: "submitted_to_kba" }))
@@ -195,7 +182,6 @@ describe("filingDueSince: when an order last became ready to be filed", () => {
     expect(filingDueSince(history(["awaiting_payment", 0], ["submitted_and_paid", 1], ["submitted_to_kba", 2]))).toEqual(at(1))
   })
 
-  // Filing for a Neuzulassung is days after payment: its patience for an unconfirmed filing must not already be used up.
   it("is when the identity was verified, for a service that verifies it first, not when it was paid", () => {
     const verified = history(["awaiting_payment", 0], ["submitted_and_paid", 1], ["awaiting_identity_verification", 2], ["identity_verified", 5000])
 

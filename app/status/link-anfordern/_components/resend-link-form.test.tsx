@@ -62,11 +62,6 @@ describe("ResendLinkForm", () => {
     finish({ status: "accepted" })
   })
 
-  /**
-   * The form is on screen before its script has run, and for good where the script is blocked or fails.
-   * A native submit then sends the order reference and the email address as a query string: they would
-   * end up in the address bar, the history and the server's logs.
-   */
   describe("before its script has run", () => {
     const html = () => renderToStaticMarkup(<ResendLinkForm action={jest.fn()} />)
 

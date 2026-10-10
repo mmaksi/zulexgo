@@ -20,18 +20,11 @@ const unauthorized = () =>
 const notFound = () =>
   HttpResponse.json({ statusCode: "404", error: "not_found", message: "Object not found" }, { status: 400 })
 
-/**
- * Supabase Storage's object endpoints at the network boundary, as the
- * @supabase/storage-js client calls them: upload (`POST /object/{bucket}/{path}`,
- * with `x-upsert`), download (`GET`) and list (`POST /object/list/{bucket}`).
- * Like Storage, a private bucket answers only requests that carry the key.
- */
 export class SupabaseStorageDouble {
   readonly objects = new Map<string, StoredObject>()
   private failure?: { response: Response; on?: Call }
   private clock = 0
 
-  /** The next request, or the next `on` one, gets this response instead. */
   failNext(response: Response, on?: Call) {
     this.failure = { response, on }
   }

@@ -29,7 +29,6 @@ describe("isTheOwner: whether the person the provider verified is the owner the 
     ["ß and ss", { lastName: "Strauss" }, { lastName: "Strauß" }],
     ["other accents", { firstName: "Jose" }, { firstName: "José" }],
     ["a hyphen and a space", { firstName: "Anna Lena" }, { firstName: "Anna-Lena" }],
-    // Pasted from a PDF or typed on some keyboards, an umlaut is a letter plus a combining mark, not one character.
     ["an umlaut written as a letter and a combining mark", { lastName: "Mueller" }, { lastName: "Mu\u0308ller" }],
     ["the same umlaut written both ways", { lastName: "Mu\u0308ller" }, { lastName: "M\u00fcller" }],
     ["an upper-case document and an umlaut typed", { lastName: "MULLER" }, { lastName: "Müller" }],

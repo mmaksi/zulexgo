@@ -8,10 +8,6 @@ const ITEMS = [
   { label: "Fragen", href: "/#fragen" },
 ] as const
 
-/**
- * The only navigation below the desktop breakpoint, and where routing
- * destinations through SheetClose previously turned the links into buttons.
- */
 describe("MobileNav", () => {
   const open = async () => {
     const user = userEvent.setup()

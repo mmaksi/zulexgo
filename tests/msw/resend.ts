@@ -11,10 +11,7 @@ interface SentEmail {
   idempotencyKey: string | null
 }
 
-/**
- * Resend's POST /emails at the network boundary. Like Resend, a repeated
- * Idempotency-Key is answered with the first response and delivers nothing.
- */
+// Like Resend, a repeated Idempotency-Key gets the first response and delivers nothing.
 export class ResendDouble {
   readonly delivered: SentEmail[] = []
   private readonly keys = new Map<string, string>()

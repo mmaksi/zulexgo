@@ -38,7 +38,6 @@ interface Refund {
   metadata: Record<string, string>
 }
 
-/** Stripe's form encoding (`metadata[order_id]=…`, `payment_method_types[0]=card`) read back into an object. */
 function readForm(text: string): Record<string, unknown> {
   const result: Record<string, unknown> = {}
   for (const [key, value] of new URLSearchParams(text)) {
@@ -53,15 +52,7 @@ function readForm(text: string): Record<string, unknown> {
 const stripeError = (message: string, code: string) =>
   HttpResponse.json({ error: { type: "invalid_request_error", code, message } }, { status: 400 })
 
-/**
- * Stripe's API at the network boundary, holding PaymentIntents, Charges and
- * Refunds in memory with the fields and state changes of the real objects
- * (API version 2026-08-26.dahlia). Honours Idempotency-Key on POST, as Stripe
- * does. `customerPays` and `event` stand in for the browser and for Stripe's
- * webhook delivery.
- */
 export class StripeDouble {
-  /** Every form body POSTed, as sent. */
   readonly sent: string[] = []
   readonly intents = new Map<string, Intent>()
   private readonly charges = new Map<string, Charge>()
@@ -70,33 +61,32 @@ export class StripeDouble {
   private sequence = 0
   private updatesRefused = false
 
-  /** Stripe answers every later PaymentIntent update with an error. */
   refuseUpdates() {
     this.updatesRefused = true
   }
 
-  /** card: authorised and held. sepaDebit: taken at once, as a method that cannot be held. */
-  customerPays(intentId: string, method: "card" | "sepaDebit") {
+  customerPays(intentId: string) {
     const intent = this.find(intentId)
     const charge: Charge = {
       id: this.id("ch"),
       amount: intent.amount,
-      amount_captured: method === "card" ? 0 : intent.amount,
+      amount_captured: 0,
       amount_refunded: 0,
-      captured: method !== "card",
+      captured: false,
       payment_intent: intent.id,
-      capture_before: method === "card" ? Math.floor(Date.now() / 1000) + HOLD_VALIDITY_S : undefined,
+      capture_before: Math.floor(Date.now() / 1000) + HOLD_VALIDITY_S,
     }
     this.charges.set(charge.id, charge)
-    Object.assign(intent, {
-      chargeId: charge.id,
-      status: method === "card" ? "requires_capture" : "succeeded",
-      amount_capturable: method === "card" ? intent.amount : 0,
-      amount_received: method === "card" ? 0 : intent.amount,
-    })
+    Object.assign(intent, { chargeId: charge.id, status: "requires_capture", amount_capturable: intent.amount, amount_received: 0 })
   }
 
-  /** A webhook delivery: the event body and the Stripe-Signature header for it. */
+  capture(intentId: string, amount?: number) {
+    const intent = this.find(intentId)
+    const taken = amount ?? intent.amount
+    Object.assign(this.charges.get(intent.chargeId!)!, { amount_captured: taken, captured: true, capture_before: undefined })
+    Object.assign(intent, { status: "succeeded", amount_received: taken, amount_capturable: 0 })
+  }
+
   event(type: string, intentId: string, secret = STRIPE_TEST_WEBHOOK_SECRET) {
     const payload = JSON.stringify({
       id: this.id("evt"),
@@ -152,10 +142,7 @@ export class StripeDouble {
         if (intent.status !== "requires_capture") {
           return stripeError(`This PaymentIntent could not be captured because it has a status of ${intent.status}.`, "payment_intent_unexpected_state")
         }
-        const amount = form.amount_to_capture ? Number(form.amount_to_capture) : intent.amount
-        const charge = this.charges.get(intent.chargeId!)!
-        Object.assign(charge, { amount_captured: amount, captured: true, capture_before: undefined })
-        Object.assign(intent, { status: "succeeded", amount_received: amount, amount_capturable: 0 })
+        this.capture(intent.id, form.amount_to_capture ? Number(form.amount_to_capture) : undefined)
         return this.intentJson(intent)
       }),
     ),

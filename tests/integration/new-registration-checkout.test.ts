@@ -7,10 +7,6 @@ import { ValidationError } from "@/src/core/errors/validation-error"
 import { submitCheckout } from "@/src/core/use-cases/checkout/submit-checkout"
 import { setupFlow } from "./flow-harness"
 
-/**
- * Checkout of a Neuzulassung. The service is not on sale yet (launch plan N9), so these tests put it
- * on sale for their own dependencies, as the composition root never does.
- */
 function setup() {
   const flow = setupFlow()
   const deps = { ...flow.deps, servicesOnSale: ["deregistration", "newRegistration"] as const }
@@ -62,7 +58,6 @@ describe("a Neuzulassung checkout", () => {
 
   it("checks the keeper's age against the server's own clock, not the browser's", async () => {
     const { checkout } = setup()
-    // The frozen clock is 2026-03-01, so someone born the next day is still 17.
     const almostAdult = { ...FAKE_NEW_REGISTRATION, owner: { ...FAKE_NEW_REGISTRATION.owner, birthDate: "2008-03-02" } }
 
     await expect(checkout(almostAdult)).rejects.toEqual(new ValidationError(["owner.birthDate"]))

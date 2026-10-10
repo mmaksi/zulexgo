@@ -16,19 +16,15 @@ export const ZULEX_TEST_API_KEY = "fake-zulex-api-key"
 type Operation = "create" | "get" | "patch" | "retry" | "authorities" | "document"
 
 interface Stored {
-  /** The endpoint it was filed at: an id is known only to the service it belongs to. */
   path: string
-  /** What was filed, echoed back by a GET: the API returns the personal data and the codes it was given. */
   body: object
   status: ZulexStatus | string
   documents: ZulexDocument[]
   errorInfo?: ZulexErrorInfo
 }
 
-/** How one service's applications behave at the vendor. */
 interface Routes {
   path: string
-  /** Zulex answers 400 to a create or patch body the spec does not accept. */
   accepts: (body: unknown) => boolean
   acceptsPatch: (body: unknown) => boolean
   patched: (filed: object, patch: object) => object
@@ -63,14 +59,6 @@ const NEW_REGISTRATION: Routes = {
   json: (applicationId, { body, status, documents, errorInfo }) => applicationResponseJson({ applicationId, echoed: body, status, documents, errorInfo }),
 }
 
-/**
- * A stand-in for the Zulex integration environment at the network boundary,
- * following docs/api-1.yaml: API key required, idempotent create, the three
- * status values, bare-binary documents. Tests script its state and its next
- * failure; `requests` records what the adapter sent. A registration's create
- * and patch bodies are checked against the spec's schemas, and answered with
- * a 400 when they do not match, as the API does.
- */
 export class ZulexDouble {
   readonly requests: { method: string; path: string; headers: Headers; body?: unknown }[] = []
   readonly applications = new Map<string, Stored>()
@@ -80,7 +68,6 @@ export class ZulexDouble {
   private readonly failures = new Map<Operation, Response>()
   private sequence = 0
 
-  /** `where` is a plate prefix or a postcode: whichever the adapter asks by, the double answers by it. */
   setAuthorities(where: string, authorities: { kreiscode: string; ikfzStatus: string }[]) {
     this.authorities.set(where, authorities)
   }
@@ -93,7 +80,6 @@ export class ZulexDouble {
     this.documents.set(documentId, bytes)
   }
 
-  /** The next call of `operation` answers with this response instead. */
   failNext(operation: Operation, response: Response) {
     this.failures.set(operation, response)
   }
@@ -129,7 +115,6 @@ export class ZulexDouble {
     ),
   ]
 
-  /** Create, read and patch share one path per service; the ids come from one counter. */
   private applicationHandlers({ path, accepts, acceptsPatch, patched, json }: Routes) {
     return [
       http.post(`${ZULEX_BASE_URL}${path}`, ({ request }) =>

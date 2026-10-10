@@ -329,7 +329,7 @@ The checkout action is per service and stores consent, so launch-plan D9 is fixe
 
 **Goal:** The founder's add-ons, once Q41 and Q50 are answered: ordered and charged only after the KBA has completed the registration, never if it rejects it.
 
-**How:** a basket at review (`quote()` already splits checkout from after-completion), a second payment opened from 5a, a supplier port per `external-services`, the delivery address and its retention, email 5a's "plate shipping info". The answers decide the shape; launch-plan Q41 lists the files.
+**How:** a basket at review, a second payment opened from 5a, a supplier port per `external-services`, the delivery address and its retention, email 5a's "plate shipping info". The answers decide the shape; launch-plan Q41 lists the files.
 
 ---
 

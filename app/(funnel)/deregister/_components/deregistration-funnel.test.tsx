@@ -82,6 +82,21 @@ describe("de-registration funnel", () => {
       expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Können Sie online abmelden?")
     })
 
+    it.each([
+      ["no authority answers", jest.fn(async () => ({ ok: false as const, reason: "invalidPrefix" as const }))],
+      ["the request rejects", jest.fn(async () => Promise.reject(new Error("Network lost")))],
+    ])("moves focus to the prefix when %s, with the error already described, so a screen reader hears it", async (_, checkEligibility) => {
+      const { user } = setup({ checkEligibility })
+      const prefix = screen.getByLabelText("Ortskürzel Ihres Kennzeichens")
+      let describedOnFocus: string | null = null
+      prefix.addEventListener("focus", () => (describedOnFocus = prefix.getAttribute("aria-describedby")))
+
+      await passEligibility(user)
+
+      expect(prefix).toHaveFocus()
+      expect(describedOnFocus).toContain("eligibility-prefix-error")
+    })
+
     it("tells the customer how long to wait when their address asked too often, and keeps them on the step", async () => {
       const { user } = setup({ checkEligibility: jest.fn(async () => ({ ok: false as const, reason: "limited" as const, retryAfterMinutes: 42 })) })
 
@@ -131,6 +146,24 @@ describe("de-registration funnel", () => {
   })
 
   describe("vehicle data", () => {
+    it("takes the prefix from the check and keeps it fixed, so the notice is about the authority on the order", async () => {
+      const { user } = setup({
+        checkEligibility: jest.fn(async (prefix: string) => ({ ok: true as const, prefix, ikfzStatus: prefix === "AAA" ? ("online" as const) : ("offline" as const) })),
+      })
+      await passEligibility(user)
+      expect(screen.getByText(/wenigen Minuten bis Stunden/)).toBeInTheDocument()
+      expect(screen.getByLabelText("Ortskürzel")).toHaveValue("AAA")
+      expect(screen.getByLabelText("Ortskürzel")).toBeDisabled()
+
+      await user.click(screen.getByRole("button", { name: "Zurück" }))
+      await user.clear(screen.getByLabelText("Ortskürzel Ihres Kennzeichens"))
+      await user.type(screen.getByLabelText("Ortskürzel Ihres Kennzeichens"), "bbb")
+      await user.click(screen.getByRole("button", { name: "Weiter" }))
+
+      expect(screen.getByLabelText("Ortskürzel")).toHaveValue("BBB")
+      expect(screen.getByText(/einige Tage dauern/)).toBeInTheDocument()
+    })
+
     it("asks for the front plate code only on a two-plate vehicle", async () => {
       const { user } = setup()
       await passEligibility(user, "Ein")
@@ -147,13 +180,12 @@ describe("de-registration funnel", () => {
     it("names every field and explains each invalid one, focusing the first", async () => {
       const { user } = setup()
       await passEligibility(user)
-      await user.clear(screen.getByLabelText("Ortskürzel"))
 
       await user.click(screen.getByRole("button", { name: "Weiter" }))
 
       const invalid = screen.getAllByRole("textbox").concat(screen.getByLabelText("Sicherheitscode Fahrzeugschein"))
       for (const field of invalid) expect(field).toHaveAccessibleName()
-      expect(screen.getByLabelText("Ortskürzel")).toHaveFocus()
+      expect(screen.getByLabelText("Buchstaben")).toHaveFocus()
       expect(screen.getByLabelText("Sicherheitscode hinteres Kennzeichen")).toHaveAccessibleDescription(/3-stelligen Code/)
       expect(screen.getByLabelText("E-Mail-Adresse")).toHaveAttribute("aria-invalid", "true")
     })
@@ -418,7 +450,6 @@ describe("de-registration funnel", () => {
     })
 
     it("tells the customer when the card form never loaded, instead of ignoring the click", async () => {
-      // jsdom loads no external script, so Stripe.js never arrives: as with a blocker or a dropped connection.
       const { user, actions } = setup({}, { kind: "stripe", publishableKey: "pk_test_fake" })
       await passEligibility(user)
       await fillVehicle(user)

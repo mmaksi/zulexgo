@@ -16,13 +16,11 @@ import { CancelOrder, type CancelOrderAction } from "./cancel-order"
 import { CorrectNewRegistration, type CorrectNewRegistrationAction } from "./correct-new-registration"
 import { CorrectOrder, type CorrectOrderAction } from "./correct-order"
 
-/** The bound server action reads any input and answers for the order's own service, so one action serves either form. */
 type CorrectAction = CorrectOrderAction & CorrectNewRegistrationAction
 
 const when = (date: Date) =>
   new Intl.DateTimeFormat("de-DE", { dateStyle: "medium", timeStyle: "short", timeZone: "Europe/Berlin" }).format(date)
 
-/** Titles are the customer statuses, status lines the internal labels (launch plan § Context). */
 function describe(step: CustomerStep, view: View): { title: string; line?: string; text?: string } {
   const { failureReason } = view
   if (step.id === "paid") {
@@ -34,7 +32,6 @@ function describe(step: CustomerStep, view: View): { title: string; line?: strin
           text: "Wir haben Ihren Antrag erhalten. Ihre Karte wird belastet, sobald er eingereicht ist, spätestens kurz vor Ablauf der Kartenreservierung.",
         }
   }
-  // Their explanations are about waiting, so a finished step keeps only its status line.
   if (step.id === "verification") {
     if (step.rechecking) {
       return { title: "Identität prüfen", line: "Angaben werden geprüft", text: "Wir gleichen Ihre korrigierten Angaben mit Ihrer Identitätsprüfung ab. Das dauert nur einen Moment." }
@@ -84,7 +81,6 @@ const TITLES: Record<View["service"], string> = {
   newRegistration: "Ihre Neuzulassung",
 }
 
-/** What the order is about, as the service sees it: for a de-registration, the plate and the end of the VIN; for a Neuzulassung, which has no plate yet, the VIN. */
 function Summary({ view }: { view: View }) {
   switch (view.service) {
     case "deregistration":
@@ -112,13 +108,7 @@ function Summary({ view }: { view: View }) {
   }
 }
 
-/**
- * What the customer may correct, which fields the form asks for being the service's: a de-registration's VIN and
- * codes, a Neuzulassung's eVB number and Teil II, and its owner's name and birth date while its identity was never
- * verified.
- */
 function Correction({ view, action }: { view: View; action: CorrectAction }) {
-  // An order whose provider has begun a cancel is offered no form: part of its money has gone back.
   if (view.correctable === false) {
     return (
       <Alert role="status" variant="warning">
@@ -153,17 +143,10 @@ const DOCUMENT_LABELS: Record<DocumentKind, string> = {
   unknown: "Dokument",
 }
 
-/** The kinds a Neuzulassung's documents call by another name: its confirmation is of the registration, not a de-registration. */
 const NEW_REGISTRATION_LABELS: Partial<Record<DocumentKind, string>> = { confirmation: "Bestätigung der Zulassung" }
 
 const documentLabel = (service: View["service"], kind: DocumentKind) => (service === "newRegistration" ? NEW_REGISTRATION_LABELS[kind] : undefined) ?? DOCUMENT_LABELS[kind]
 
-/**
- * site-contract §2.6: plate and the end of the VIN, never a security code; a
- * vertical stepper at every size. `documentHref` builds a download link, the
- * one place a page repeats its own token; `cancelAction` is the server action
- * bound to it, as is `correctAction`.
- */
 export function StatusView({
   view,
   servicesOnSale,
@@ -172,7 +155,6 @@ export function StatusView({
   correctAction,
 }: {
   view: View
-  /** What checkout sells now: a failed order links to its service's funnel only if that service is still on sale. */
   servicesOnSale: readonly OrderableService[]
   documentHref: (documentId: string) => string
   cancelAction: CancelOrderAction
@@ -226,7 +208,6 @@ function MailLink() {
   )
 }
 
-/** site-contract §2.6: what to do next, by outcome. */
 function OutcomeBlock({
   view,
   servicesOnSale,
@@ -242,7 +223,6 @@ function OutcomeBlock({
 }) {
   const outcome = view.steps.find((step) => step.id === "outcome")?.outcome
   if (!outcome) return null
-  // Another try goes to the service's own funnel, once it is on sale; until then, to the start page.
   const funnel = servicesOnSale.includes(view.service) ? FUNNELS[view.service] : undefined
 
   switch (outcome) {
@@ -294,13 +274,11 @@ function RefundInfo({ refund }: { refund: View["refund"] }) {
   )
 }
 
-/** What the downloads section says while the documents are not there yet, up to where it points to the support address. */
 const NO_DOCUMENTS_YET: Record<View["service"], string> = {
   deregistration: "Die Bestätigung steht hier zum Download bereit, sobald sie vorliegt. Fehlt sie länger, schreiben Sie uns an",
   newRegistration: "Ihre Unterlagen stehen hier zum Download bereit, sobald sie vorliegen. Fehlen sie länger, schreiben Sie uns an",
 }
 
-/** What happens after a Neuzulassung is completed: what arrives by post, where the plate is, and that plates are made locally. */
 function NextSteps() {
   return (
     <section aria-labelledby="status-next-steps" className="measure flex flex-col gap-4">

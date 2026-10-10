@@ -76,7 +76,6 @@ describe("startDeregistrationCheckout", () => {
   it("opens nothing once the address is over its limit: no order, no payment", async () => {
     const { deps, createPayment } = setup()
     const { max } = RATE_LIMITS.checkout
-    // Invalid every time: the attempts count even though none of them opens anything.
     for (let attempt = 0; attempt < max; attempt++) await startDeregistrationCheckout(deps, from("203.0.113.7"), { ...input, vehicle: { ...VEHICLE, vin: "" } })
 
     const refused = await startDeregistrationCheckout(deps, from("203.0.113.7"), input)

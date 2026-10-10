@@ -5,32 +5,21 @@ import { SUPPORT_EMAIL } from "@/src/core/domain/customer/contact"
 import { formatEuros } from "@/src/core/domain/payment/money"
 import type { EmailTemplate } from "@/src/core/ports/mail/mailer"
 
-/**
- * The German wording of business logic §5, one statement and one button per
- * email. Kept apart from the markup so it can be read and reviewed alone.
- * The reason in the correction and rejection emails is ours, from the
- * rejection catalogue (launch plan Q10); vendor text never reaches a customer.
- */
+// Reasons come from our rejection catalogue (launch plan Q10); vendor text never reaches a customer.
 export interface EmailCopy {
-  /** Carries the order reference, so the email can be found by it; short enough for an inbox. */
   readonly subject: string
-  /** The inbox preview line. */
   readonly preview: string
   readonly heading: string
-  /** Body text after the layout's fixed greeting; each entry is one paragraph. */
   readonly paragraphs: readonly string[]
-  /** A callout under the paragraphs, for what must not be missed. */
   readonly note?: string
-  /** The one button. Its `href` is always the status link, so no email links anywhere else. */
   readonly action?: { readonly label: string; readonly href: string }
 }
 
 const REFUND_TIMEFRAME = "Je nach Bank ist der Betrag in 3 bis 5 Werktagen auf Ihrem Konto."
 
-/** The correction email's note, the same for every service: cancelling keeps the processing fee. */
 const CANCEL_NOTE = `Sie können den Antrag dort auch stornieren. Wir behalten dann die Bearbeitungsgebühr von ${formatEuros(PROCESSING_FEE)} ein und erstatten den Rest.`
 
-/** In Berlin time, spelled out by hand: the default `Intl` pattern for a date with a time differs between Node versions. */
+// Two formats joined by hand: Intl's combined date-time pattern differs between Node versions.
 function formatDeadline(deadline: Date): string {
   const berlin = { timeZone: "Europe/Berlin" } as const
   const day = new Intl.DateTimeFormat("de-DE", { ...berlin, day: "numeric", month: "long", year: "numeric" }).format(deadline)
@@ -38,30 +27,13 @@ function formatDeadline(deadline: Date): string {
   return `${day}, ${time} Uhr`
 }
 
-/** The emails whose wording says what was ordered or what the KBA did, so it differs per service. */
 type ServiceEmail = Extract<EmailTemplate, { service: OrderableService }>
 
-/** A service's wording for `ServiceEmail`. A service that is added has none until it is written here. */
 const SERVICE_COPY: Record<OrderableService, (template: ServiceEmail) => EmailCopy> = {
   deregistration: deregistrationCopy,
   newRegistration: newRegistrationCopy,
 }
 
-/**
- * The German subject and body for one template. The switch has no default, so a template
- * added to `EmailTemplate` does not compile until it has wording here. The emails that name
- * the service take theirs from `SERVICE_COPY`; what depends on the data:
- * - `orderConfirmation` says the card is charged once the application is filed and, at the
- *   latest, shortly before the hold lapses (the margin is `HOLD_CAPTURE_MARGIN_MS`).
- * - `submittedToKba` promises minutes to hours, or days when `manualProcessing`.
- * - `correctionRequired` and `rejected` open with `reason`; `correctionRequired` also warns that
- *   cancelling keeps the processing fee, while `rejected` names the refund and, when
- *   `retained` is above zero, the fee kept, and promises a further email (`refundIssued`).
- * - `identityVerificationRequested` and `identityVerificationReminder` name the deadline in Berlin time and
- *   say that missing it cancels the order with the whole amount back; their button is the verification link.
- * - `statusLinkResent` tells the customer the previous link no longer works.
- * - `refundIssued` is the only email without a status link, hence without a button.
- */
 export function copyFor(template: EmailTemplate): EmailCopy {
   const { reference } = template
 
@@ -127,7 +99,6 @@ export function copyFor(template: EmailTemplate): EmailCopy {
   }
 }
 
-/** The wording of a de-registration's emails: what the customer ordered, and how the KBA answers it. */
 function deregistrationCopy(template: ServiceEmail): EmailCopy {
   const { reference } = template
 
@@ -195,18 +166,12 @@ function deregistrationCopy(template: ServiceEmail): EmailCopy {
   }
 }
 
-/** What goes back after a rejection, and the fee kept when the failure was not ours. */
 function refundSentence(template: Extract<EmailTemplate, { name: "rejected" }>): string {
   return template.retained.cents > 0
     ? `Sie erhalten ${formatEuros(template.refund)} zurück. Die Bearbeitungsgebühr von ${formatEuros(template.retained)} behalten wir ein. Eine weitere E-Mail bestätigt die Erstattung.`
     : `Sie erhalten ${formatEuros(template.refund)} zurück. Eine weitere E-Mail bestätigt die Erstattung.`
 }
 
-/**
- * The wording of a Neuzulassung's emails. The order is paid for first and its identity checked before anything is filed,
- * so email 1 says a check follows, and a 5b may come from that check (nothing filed yet) as well as from the registration
- * service. What follows a completed registration is `NEW_REGISTRATION_NEXT_STEPS`, shared with the status page.
- */
 function newRegistrationCopy(template: ServiceEmail): EmailCopy {
   const { reference } = template
 

@@ -7,10 +7,6 @@ jest.mock("next/server", () => ({ connection: async () => undefined }))
 
 const notFound = { digest: "NEXT_HTTP_ERROR_FALLBACK;404" }
 
-/**
- * A funnel collects an IBAN and a birth date, so it must not exist for a customer while checkout would
- * refuse the order. What is sold is the deployment's setting, so each stage answers for itself.
- */
 describe("a funnel's route", () => {
   afterEach(() => {
     mockContainer.servicesOnSale = ["deregistration"]
