@@ -1,4 +1,4 @@
-import { DatabaseError, Pool, type PoolClient } from "pg"
+import { DatabaseError, type Pool, type PoolClient } from "pg"
 import type { Application, StatusChange } from "@/src/core/domain/application/application"
 import { parseApplicationReference, type ApplicationReference } from "@/src/core/domain/application/application-reference"
 import { OPEN_STATUSES, POLLED_STATUSES, type ApplicationStatus } from "@/src/core/domain/application/application-status"
@@ -15,7 +15,6 @@ import { StaleApplication } from "@/src/core/errors/application/stale-applicatio
 import type { ApplicationRepository } from "@/src/core/ports/repository/application-repository"
 import { FieldCipher } from "./field-cipher"
 import { detailsOf, requestFrom } from "./new-registration-details"
-import { tlsFor } from "./tls"
 
 interface ApplicationRow {
   reference: string
@@ -67,11 +66,9 @@ export class PostgresApplicationRepository implements ApplicationRepository {
   private readonly pool: Pool
   private readonly cipher: FieldCipher
 
-  constructor(options: { connectionString: string; encryptionKey: string; ca?: string }) {
-    this.pool = new Pool({ connectionString: options.connectionString, ssl: tlsFor(options.connectionString, options.ca), allowExitOnIdle: true })
-    // An idle connection dropped by the pooler must not crash the process; the next query reconnects.
-    this.pool.on("error", (error) => console.error(`Postgres connection lost: ${error.message}`))
-    this.cipher = new FieldCipher(options.encryptionKey)
+  constructor(options: { pool: Pool; encryptionKey: string; retiredEncryptionKeys?: readonly string[] }) {
+    this.pool = options.pool
+    this.cipher = new FieldCipher(options.encryptionKey, options.retiredEncryptionKeys)
   }
 
   async create(application: Application): Promise<Application> {
@@ -283,18 +280,58 @@ export class PostgresApplicationRepository implements ApplicationRepository {
     }
   }
 
+  // Rewrites every encrypted value under the current key, so a retired key can be dropped.
+  async reencrypt(): Promise<number> {
+    return this.transaction(async (client) => {
+      let rewritten = 0
+      const fresh = (stored: string | null, reference: string, column: string) => {
+        if (stored === null) return null
+        let plaintext: string
+        try {
+          plaintext = this.cipher.decrypt(stored, reference)
+        } catch {
+          throw new Error(`${reference}: no configured key decrypts its ${column}`)
+        }
+        rewritten++
+        return this.cipher.encrypt(plaintext, reference)
+      }
+      const { rows: applications } = await client.query<Pick<ApplicationRow, "reference" | "encrypted_security_codes" | "encrypted_details" | "identity_verification_id">>(
+        "SELECT reference, encrypted_security_codes, encrypted_details, identity_verification_id FROM applications FOR UPDATE",
+      )
+      for (const { reference, encrypted_security_codes, encrypted_details, identity_verification_id } of applications) {
+        await client.query(
+          "UPDATE applications SET encrypted_security_codes = $2, encrypted_details = $3, identity_verification_id = $4 WHERE reference = $1",
+          [
+            reference,
+            fresh(encrypted_security_codes, reference, "security codes"),
+            fresh(encrypted_details, reference, "details"),
+            fresh(identity_verification_id, reference, "verification id"),
+          ],
+        )
+      }
+      const { rows: tokens } = await client.query<{ application_reference: string; encrypted_token: string }>(
+        "SELECT application_reference, encrypted_token FROM status_tokens FOR UPDATE",
+      )
+      for (const { application_reference: reference, encrypted_token } of tokens) {
+        await client.query("UPDATE status_tokens SET encrypted_token = $2 WHERE application_reference = $1", [reference, fresh(encrypted_token, reference, "status link")])
+      }
+      return rewritten
+    })
+  }
+
   private async findOne(sql: string, values: unknown[]): Promise<Application | undefined> {
     const { rows } = await this.pool.query<ApplicationRow>(sql, values)
     return rows[0] && this.toApplication(rows[0])
   }
 
   // pool.query may use a different connection per statement, so a transaction needs its own client.
-  private async transaction(run: (client: PoolClient) => Promise<void>): Promise<void> {
+  private async transaction<T>(run: (client: PoolClient) => Promise<T>): Promise<T> {
     const client = await this.pool.connect()
     try {
       await client.query("BEGIN")
-      await run(client)
+      const result = await run(client)
       await client.query("COMMIT")
+      return result
     } catch (error) {
       await client.query("ROLLBACK")
       throw error

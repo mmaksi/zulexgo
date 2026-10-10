@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto"
 import { join } from "node:path"
 import { loadSeed, seedFor } from "@/db/seed/seed"
+import { createPool } from "@/src/adapters/repository/postgres/pool"
 import { PostgresApplicationRepository } from "@/src/adapters/repository/postgres/postgres-application-repository"
 import { Migrator, readMigrations } from "@/src/adapters/repository/postgres/migrator"
 import { APPLICATION_STATUSES } from "@/src/core/domain/application/application-status"
@@ -94,7 +95,7 @@ describeWithPostgres("migration rehearsal", () => {
     const migrations = await readMigrations(join(process.cwd(), "db", "migrations"))
     const migrator = new Migrator(database.url, migrations)
     await migrator.up()
-    const repository = new PostgresApplicationRepository({ connectionString: database.url, encryptionKey: randomBytes(32).toString("base64") })
+    const repository = new PostgresApplicationRepository({ pool: createPool(database.url), encryptionKey: randomBytes(32).toString("base64") })
     const seed = seedFor("dev")
     const kept = seed.filter(({ application: { request } }) => request.service === "deregistration" && request.codes).length
     await loadSeed(repository, seed)
@@ -113,7 +114,7 @@ describeWithPostgres("migration rehearsal", () => {
     const migrator = new Migrator(database.url, migrations)
     await migrator.down(migrations.length)
     await migrator.up()
-    const repository = new PostgresApplicationRepository({ connectionString: database.url, encryptionKey: randomBytes(32).toString("base64") })
+    const repository = new PostgresApplicationRepository({ pool: createPool(database.url), encryptionKey: randomBytes(32).toString("base64") })
     const seed = seedFor("dev")
     await loadSeed(repository, seed)
 
@@ -136,7 +137,7 @@ describeWithPostgres("migration rehearsal", () => {
     const migrator = new Migrator(database.url, migrations)
     await migrator.down(migrations.length)
     await migrator.up()
-    const repository = new PostgresApplicationRepository({ connectionString: database.url, encryptionKey: randomBytes(32).toString("base64") })
+    const repository = new PostgresApplicationRepository({ pool: createPool(database.url), encryptionKey: randomBytes(32).toString("base64") })
     const seed = seedFor("dev")
     const forgotten = seed.filter(({ application: { request } }) => request.service === "deregistration" && !request.codes).length
     await loadSeed(repository, seed)

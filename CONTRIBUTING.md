@@ -81,7 +81,7 @@ That is what CI runs, except for the Postgres suites (the migration runner, the
 Postgres repository and rate limiter, the database commands and the migration
 rehearsal): without `TEST_DATABASE_URL` they are skipped locally, while CI always
 runs them against Postgres 17. CI also rehearses the migrations through the npm
-scripts and, after the build, fails if a client chunk carries a server-secret canary
+scripts and, after the build, fails if a server-secret canary appears anywhere in the build output outside its cache
 (`.github/workflows/ci.yml`). To run the Postgres suites before CI does:
 
 ```bash

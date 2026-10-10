@@ -75,7 +75,7 @@ The runner is `src/adapters/repository/postgres/migrator.ts`; the npm scripts ca
 | `npm run db:status` | Lists each migration as applied (with its time) or pending. |
 | `npm run db:seed` | Loads the seed, adding only the applications that are missing (and, with `STORAGE_DRIVER=supabase`, the missing documents). Refuses production. |
 
-They connect over `DIRECT_DATABASE_URL` and need `REPOSITORY_DRIVER=postgres`. A stage's Vercel build runs `db:migrate` before `next build` (`scripts/vercel-build`, when `REPOSITORY_DRIVER=postgres`; a preview deploy carries no database credentials and runs neither), and staging's also runs `db:seed`, so a deployed stage is always migrated and seeded by its own deploy, never by hand.
+They connect over `DIRECT_DATABASE_URL` and need `REPOSITORY_DRIVER=postgres`. A stage's Vercel build runs `db:migrate` after `next build` (`scripts/vercel-build`, when `REPOSITORY_DRIVER=postgres`; a preview deploy carries no database credentials and runs neither), and staging's also runs `db:seed`, so a deployed stage is always migrated and seeded by its own deploy, never by hand.
 
 ## Checklist
 

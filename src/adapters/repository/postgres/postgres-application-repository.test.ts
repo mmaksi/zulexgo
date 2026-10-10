@@ -8,6 +8,7 @@ import { applyEvent } from "@/src/core/domain/application/application"
 import { applicationRepositoryContract } from "@/src/core/ports/repository/application-repository.contract"
 import { FieldCipher } from "./field-cipher"
 import { Migrator, readMigrations } from "./migrator"
+import { createPool } from "./pool"
 import { PostgresApplicationRepository } from "./postgres-application-repository"
 import { createTestDatabase, describeWithPostgres, type TestDatabase } from "./test-database"
 
@@ -21,10 +22,7 @@ describeWithPostgres("PostgresApplicationRepository", () => {
   beforeAll(async () => {
     database = await createTestDatabase()
     await new Migrator(database.url, await readMigrations(join(process.cwd(), "db", "migrations"))).up()
-    repository = new PostgresApplicationRepository({
-      connectionString: database.url,
-      encryptionKey,
-    })
+    repository = new PostgresApplicationRepository({ pool: createPool(database.url), encryptionKey })
   })
   beforeEach(() => database.query("TRUNCATE applications CASCADE"))
   afterAll(() => database.drop())
@@ -213,5 +211,40 @@ describeWithPostgres("PostgresApplicationRepository", () => {
 
     for (const code of Object.values(FAKE_REQUEST.codes)) expect(everything).not.toContain(code)
     expect(everything).not.toContain(TOKEN)
+  })
+
+  describe("rotating the encryption key", () => {
+    it("reads what a retired key wrote, and reencrypt moves every encrypted value to the current key", async () => {
+      const current = randomBytes(32).toString("base64")
+      const pool = createPool(database.url)
+      const deregistration = await repository.create(anApplication())
+      const newRegistration = await repository.create(
+        aNewRegistrationApplication({
+          status: "awaiting_identity_verification",
+          history: [{ status: "awaiting_identity_verification", at: new Date("2026-03-01T09:02:00.000Z") }],
+          identityVerification: { id: "provider-verification-4711", deadline: new Date("2026-03-05T09:02:00.000Z"), reminderSent: false },
+        }),
+      )
+      await repository.setStatusToken(deregistration.reference, TOKEN)
+      const rotated = new PostgresApplicationRepository({ pool, encryptionKey: current, retiredEncryptionKeys: [encryptionKey] })
+
+      expect(await rotated.get(deregistration.reference)).toEqual(deregistration)
+      expect(await rotated.get(newRegistration.reference)).toEqual(newRegistration)
+      expect(await rotated.reencrypt()).toBe(4)
+
+      const currentOnly = new PostgresApplicationRepository({ pool, encryptionKey: current })
+      expect(await currentOnly.get(deregistration.reference)).toEqual(deregistration)
+      expect(await currentOnly.get(newRegistration.reference)).toEqual(newRegistration)
+      expect(await currentOnly.getStatusToken(deregistration.reference)).toBe(TOKEN)
+      await expect(repository.get(deregistration.reference)).rejects.toThrow()
+    })
+
+    it("names the order when no configured key opens one of its values, and changes nothing", async () => {
+      const order = await repository.create(anApplication())
+      const strangers = new PostgresApplicationRepository({ pool: createPool(database.url), encryptionKey: randomBytes(32).toString("base64") })
+
+      await expect(strangers.reencrypt()).rejects.toThrow(order.reference)
+      expect(await repository.get(order.reference)).toEqual(order)
+    })
   })
 })

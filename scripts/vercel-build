@@ -2,11 +2,12 @@
 # VERCEL_ENV is production on each stage's own deploy; previews carry no database credentials.
 set -euo pipefail
 
+# Build first: a build that fails leaves the schema as the serving code knows it.
+npm run build
+
 if [ "${VERCEL_ENV:-}" = "production" ] && [ "${REPOSITORY_DRIVER:-}" = "postgres" ]; then
   npm run db:migrate
   if [ "${APP_ENV:-}" = "staging" ]; then
     npm run db:seed
   fi
 fi
-
-npm run build

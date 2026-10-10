@@ -326,6 +326,14 @@ describe("database and encryption", () => {
     ).toThrow(/CODES_ENCRYPTION_KEY/)
   })
 
+  it("takes retired encryption keys as a comma-separated list, each 32 bytes, for reading what they wrote", () => {
+    const [first, second] = [Buffer.alloc(32, 1).toString("base64"), Buffer.alloc(32, 2).toString("base64")]
+
+    expect(parseEnv({ ...production, RETIRED_CODES_ENCRYPTION_KEYS: `${first}, ${second}` }).RETIRED_CODES_ENCRYPTION_KEYS).toEqual([first, second])
+    expect(parseEnv(production).RETIRED_CODES_ENCRYPTION_KEYS).toEqual([])
+    expect(() => parseEnv({ ...production, RETIRED_CODES_ENCRYPTION_KEYS: Buffer.alloc(16, 1).toString("base64") })).toThrow(/RETIRED_CODES_ENCRYPTION_KEYS/)
+  })
+
   it("takes the database's CA certificate as PEM, and refuses at boot anything else pasted there", () => {
     const pem = "-----BEGIN CERTIFICATE-----\nMIIDxTCCAq2gAwIBAgIUfake\n-----END CERTIFICATE-----\n"
 

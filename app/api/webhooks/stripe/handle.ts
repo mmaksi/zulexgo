@@ -12,6 +12,14 @@ export async function handlePaymentNotification(deps: Dependencies, request: Req
     throw error
   }
 
-  if (notification.kind === "paymentReady") await confirmPayment(deps, notification.reference)
+  if (notification.kind === "paymentReady") {
+    try {
+      await confirmPayment(deps, notification.reference)
+    } catch (error) {
+      // Order and error name only: a database error can quote the customer's row
+      console.error(`[payments] ${notification.reference}: notification not handled: ${error instanceof Error ? error.name : "unknown error"}`)
+      return new Response(null, { status: 500 })
+    }
+  }
   return new Response(null, { status: 200 })
 }

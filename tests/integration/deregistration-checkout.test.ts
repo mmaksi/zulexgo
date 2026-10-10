@@ -116,6 +116,21 @@ describe("de-registration checkout", () => {
     expect(emails()).toEqual([])
   })
 
+  it("answers 500 when it cannot act on a payment, so Stripe retries, and logs the order and the error's name only", async () => {
+    const error = jest.spyOn(console, "error").mockImplementation(() => {})
+    const { reference, paymentId } = await checkout()
+    world.stripe.customerPays(paymentId)
+    jest.spyOn(world.deps.repository, "update").mockRejectedValueOnce(new Error("row customer@example.test violates a constraint"))
+
+    const response = await handlePaymentNotification(world.deps, webhookRequest(world.stripe.event("payment_intent.amount_capturable_updated", paymentId)))
+
+    expect(response.status).toBe(500)
+    const logged = error.mock.calls.flat().map(String).join(" ")
+    expect(logged).toContain(reference)
+    expect(logged).not.toContain("customer@example.test")
+    error.mockRestore()
+  })
+
   it("does not start an application whose payment was not completed", async () => {
     const { reference, paymentId } = await checkout()
 

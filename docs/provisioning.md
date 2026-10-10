@@ -84,7 +84,7 @@ No Supabase Auth (no accounts by design), no client-side Supabase SDK, no RLS-ba
    | `DIRECT_DATABASE_URL` | Session pooler | 5432 | `npm run db:migrate` and `db:seed` during the Vercel build |
 
 4. **Generate the encryption key**: `openssl rand -base64 32` → `CODES_ENCRYPTION_KEY`. Store a copy in your password manager: without it, every stored security code and status link is unreadable. A new key per stage.
-5. **Set them in the stage's Vercel project** (Production scope), together with `REPOSITORY_DRIVER=postgres`, **before** merging the change that should run on Postgres. The next deploy runs `scripts/vercel-build`, which migrates the database, seeds it on staging, and then builds; a failed migration fails the deploy and the previous one keeps serving.
+5. **Set them in the stage's Vercel project** (Production scope), together with `REPOSITORY_DRIVER=postgres`, **before** merging the change that should run on Postgres. The next deploy runs `scripts/vercel-build`, which builds, then migrates the database and seeds it on staging; a failed build or migration fails the deploy and the previous one keeps serving.
 6. **Encrypt and verify the database link** *(not done yet on staging, 2026-10-10)*: the app reaches every database not on the same machine over TLS (`src/adapters/repository/postgres/tls.ts`), but Supabase also accepts plain text until told otherwise, and without the project's certificate the app cannot check who answers.
    1. Project Settings → Database → **SSL Configuration** → **Download certificate** (`prod-ca-2021.crt`). Open it in a text editor and paste the whole text, `-----BEGIN CERTIFICATE-----` to `-----END CERTIFICATE-----`, into the stage's Vercel project as `DATABASE_CA_CERT` (Production scope). A file name or anything else fails the next boot.
    2. Redeploy, and check the site still loads an order (the status page of a seeded one on staging). A certificate that does not match fails every query, so check before the next step.
@@ -213,3 +213,13 @@ The landing page is built ahead of any request, so its cards take these settings
 ## Rotating a secret
 
 Change it in the Vercel project and redeploy. If rotation ever needs a code change, the config layer is wrong.
+
+`CODES_ENCRYPTION_KEY` is the exception: what the old key encrypted can only be read with it. Rotate it in three steps:
+
+1. Generate a new key (`openssl rand -base64 32`) and keep it in your password manager. In the stage's Vercel project, set `RETIRED_CODES_ENCRYPTION_KEYS` to the old key (comma-separated after any already there) and `CODES_ENCRYPTION_KEY` to the new one, both Sensitive, and redeploy. Everything written from then on uses the new key, and what the old one wrote still reads. Rate-limit counts start again once, because their key is derived from the current one; a service in beta can then take up to twice `BETA_DAILY_CAP` places that day.
+2. Wait until that deployment is live and no older one can still serve (Skew Protection's maximum age, if it is on): an older deployment still writes with the old key. Then run, from any shell, with nothing else set:
+   ```bash
+   DIRECT_DATABASE_URL='<session pooler URL>' CODES_ENCRYPTION_KEY='<new>' RETIRED_CODES_ENCRYPTION_KEYS='<old>' npm run db:reencrypt
+   ```
+   It rewrites every stored code, Neuzulassung detail, verification id and status link under the new key, in one transaction, and prints how many it rewrote. Writes to existing orders wait while it runs.
+3. Run it once more without `RETIRED_CODES_ENCRYPTION_KEYS`. It fails, naming the order, if anything still needs the old key: then repeat step 2. Once it passes, remove `RETIRED_CODES_ENCRYPTION_KEYS` in Vercel and redeploy with **Use existing Build Cache** unticked: the build cache stores the build's environment, old key included.

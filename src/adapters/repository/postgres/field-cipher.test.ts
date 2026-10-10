@@ -40,6 +40,15 @@ describe("FieldCipher", () => {
     expect(() => new FieldCipher(key()).decrypt(stored, "ZG-000001")).toThrow()
   })
 
+  it("reads what a retired key wrote, and writes with the current key only", () => {
+    const [retired, current] = [key(), key()]
+    const stored = new FieldCipher(retired).encrypt("AAAAAA1", "ZG-000001")
+    const rotated = new FieldCipher(current, [retired])
+
+    expect(rotated.decrypt(stored, "ZG-000001")).toBe("AAAAAA1")
+    expect(() => new FieldCipher(retired).decrypt(rotated.encrypt("AAAAAA1", "ZG-000001"), "ZG-000001")).toThrow()
+  })
+
   it("hashes a lookup value the same way every time, without revealing it", () => {
     const cipher = new FieldCipher(key())
 

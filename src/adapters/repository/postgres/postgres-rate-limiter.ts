@@ -1,8 +1,7 @@
-import { createHmac } from "node:crypto"
-import { Pool } from "pg"
+import { createHmac, hkdfSync } from "node:crypto"
+import type { Pool } from "pg"
 import type { Clock } from "@/src/core/ports/clock/clock"
 import { MAX_WINDOW_MS, type RateLimit, type RateLimitDecision, type RateLimiter } from "@/src/core/ports/rate-limit/rate-limiter"
-import { tlsFor } from "./tls"
 
 // One statement, so concurrent attempts queue on the row and each sees the count the last one left.
 const COUNT_ATTEMPT = `
@@ -20,15 +19,14 @@ const PURGE_EVERY_MS = 60 * 60_000
 // Supavisor's transaction pooler: queries must stay unnamed (no prepared statements).
 export class PostgresRateLimiter implements RateLimiter {
   private readonly pool: Pool
-  private readonly secret: string
+  private readonly key: Buffer
   private readonly clock: Clock
   private lastPurgeAt = 0
 
-  constructor(options: { connectionString: string; secret: string; clock: Clock; ca?: string }) {
-    this.pool = new Pool({ connectionString: options.connectionString, ssl: tlsFor(options.connectionString, options.ca), allowExitOnIdle: true })
-    // An idle connection dropped by the pooler must not crash the process; the next query reconnects.
-    this.pool.on("error", (error) => console.error(`Postgres connection lost: ${error.message}`))
-    this.secret = options.secret
+  constructor(options: { pool: Pool; secret: string; clock: Clock }) {
+    this.pool = options.pool
+    // A key of its own, so the encryption key never signs anything, and rotating it only restarts the counts.
+    this.key = Buffer.from(hkdfSync("sha256", Buffer.from(options.secret, "base64"), Buffer.alloc(0), "zulexgo rate limit keys", 32))
     this.clock = options.clock
   }
 
@@ -38,7 +36,7 @@ export class PostgresRateLimiter implements RateLimiter {
     const now = this.clock.now()
     await this.purgeOldWindows(now)
     // Keyed, so a stolen table cannot be checked against guessed addresses; the key is never stored.
-    const keyHash = createHmac("sha256", this.secret).update(key).digest("base64url")
+    const keyHash = createHmac("sha256", this.key).update(key).digest("base64url")
     const { rows } = await this.pool.query<{ window_started_at: Date; attempts: number }>(COUNT_ATTEMPT, [keyHash, now, windowMs])
     const { window_started_at: startedAt, attempts } = rows[0]
 

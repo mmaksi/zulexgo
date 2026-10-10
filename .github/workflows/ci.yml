@@ -33,8 +33,8 @@ jobs:
 
     # A production build of the staging configuration, with placeholders only.
     # No real secret is needed: every driver is a fake, and the point of the
-    # build step is to prove the client bundle cannot see a server secret:
-    # ZULEX_API_KEY is a canary that must not appear in any client chunk.
+    # build step is to prove no server secret is baked into the build:
+    # ZULEX_API_KEY is a canary that must appear nowhere in what .next serves.
     env:
       APP_ENV: staging
       APP_BASE_URL: https://ci.example.test
@@ -66,7 +66,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: package.json
           cache: npm
 
       - run: npm ci
@@ -97,9 +97,12 @@ jobs:
 
       - run: npm run build
 
-      - name: Client chunks carry no server secret
+      # Next reads server variables at runtime, so the canary belongs nowhere in the build: not in client
+      # chunks, and not in a prerendered page's HTML or RSC payload, which is served to every visitor.
+      # .next/cache is Turbopack's build cache, which stores the build's environment and is never served.
+      - name: The build carries no server secret
         run: |
-          if grep -rqF "$ZULEX_API_KEY" .next/static; then
-            echo "::error::The ZULEX_API_KEY canary is in the client bundle."
+          if grep -rlF --exclude-dir=cache "$ZULEX_API_KEY" .next; then
+            echo "::error::The ZULEX_API_KEY canary is in the build output above."
             exit 1
           fi

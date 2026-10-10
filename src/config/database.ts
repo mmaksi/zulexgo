@@ -1,16 +1,19 @@
 import "server-only"
 import { join } from "node:path"
 import { Migrator, readMigrations, type Migration } from "@/src/adapters/repository/postgres/migrator"
+import { createPool } from "@/src/adapters/repository/postgres/pool"
 import { PostgresApplicationRepository } from "@/src/adapters/repository/postgres/postgres-application-repository"
 import { SupabaseDocumentStore } from "@/src/adapters/storage/supabase/supabase-document-store"
 import { loadDocuments, loadSeed, seedDocumentsFor, seedFor } from "@/db/seed/seed"
-import { parseEnv, type Env, type EnvSource } from "./env"
+import { parseEnv, parseKeyRotation, type Env, type EnvSource, type KeyRotation } from "./env"
 
 const MIGRATIONS_DIRECTORY = join(process.cwd(), "db", "migrations")
 
-const USAGE = "Usage: db up | db down [count | all] | db status | db seed"
+const USAGE = "Usage: db up | db down [count | all] | db status | db seed | db reencrypt"
 
 export async function runDatabaseCommand([command, count]: string[], source: EnvSource = process.env): Promise<string> {
+  if (command === "reencrypt" && count === undefined) return reencrypt(parseKeyRotation(source))
+
   const env = parseEnv(source)
   if (env.REPOSITORY_DRIVER !== "postgres") {
     throw new Error(`REPOSITORY_DRIVER is ${env.REPOSITORY_DRIVER}: there is no database to migrate.`)
@@ -27,9 +30,9 @@ export async function runDatabaseCommand([command, count]: string[], source: Env
   }
   if (command === "seed" && count === undefined) {
     const repository = new PostgresApplicationRepository({
-      connectionString: env.DIRECT_DATABASE_URL!,
+      pool: createPool(env.DIRECT_DATABASE_URL!, env.DATABASE_CA_CERT),
       encryptionKey: env.CODES_ENCRYPTION_KEY!,
-      ca: env.DATABASE_CA_CERT,
+      retiredEncryptionKeys: env.RETIRED_CODES_ENCRYPTION_KEYS,
     })
     const added = await loadSeed(repository, seedFor(env.APP_ENV))
     const documents = env.STORAGE_DRIVER === "supabase" ? await loadSeededDocuments(env) : 0
@@ -42,6 +45,15 @@ export async function runDatabaseCommand([command, count]: string[], source: Env
     return report("Reverted", await (await migrator()).down(steps), "Nothing to revert.")
   }
   throw new Error(USAGE)
+}
+
+async function reencrypt(keys: KeyRotation): Promise<string> {
+  const repository = new PostgresApplicationRepository({
+    pool: createPool(keys.DIRECT_DATABASE_URL, keys.DATABASE_CA_CERT),
+    encryptionKey: keys.CODES_ENCRYPTION_KEY,
+    retiredEncryptionKeys: keys.RETIRED_CODES_ENCRYPTION_KEYS,
+  })
+  return `Re-encrypted ${await repository.reencrypt()} values under the current key.`
 }
 
 function loadSeededDocuments(env: Env): Promise<number> {
