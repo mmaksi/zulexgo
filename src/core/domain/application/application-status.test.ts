@@ -199,7 +199,7 @@ describe("the statuses that are looked at on a schedule, or that a second order 
     expect(POLLED_STATUSES).toContain(status)
   })
 
-  it.each(["awaiting_payment", "completed", "failed_final", "cancelled"] as const)("leaves out %s", (status) => {
+  it.each(["completed", "failed_final", "cancelled"] as const)("leaves out %s", (status) => {
     expect(OPEN_STATUSES).not.toContain(status)
     expect(POLLED_STATUSES).not.toContain(status)
   })

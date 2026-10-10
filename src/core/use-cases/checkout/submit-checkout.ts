@@ -3,6 +3,7 @@ import { referenceFromToken } from "@/src/core/domain/application/application-re
 import { recordConsent } from "@/src/core/domain/application/consent"
 import { isOrderable, parseServiceRequest, type ServiceRequest } from "@/src/core/domain/application/service"
 import { emailSchema } from "@/src/core/domain/customer/email"
+import { firstPaymentCheckAt } from "@/src/core/domain/payment/payment-check-policy"
 import { SERVICE_PRICES } from "@/src/core/domain/payment/pricing"
 import { combinedIkfzStatus } from "@/src/core/domain/registration/registration-authority"
 import { validate } from "@/src/core/domain/validate"
@@ -59,7 +60,7 @@ export async function submitCheckout(
         idempotencyKey: deps.tokens.generate(),
         payment: { id: paymentId, total },
         retryAttempts: 0,
-        polling: { attempts: 0 },
+        polling: { attempts: 0, nextPollAt: firstPaymentCheckAt(now) },
       })
       return { reference, clientSecret }
     } catch (error) {

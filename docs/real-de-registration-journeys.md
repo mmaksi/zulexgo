@@ -136,12 +136,12 @@ As H1 except:
 | P1 | Card declined / insufficient funds | Stripe's message under the form. The same order and PaymentIntent are reused for the next try. No application. |
 | P2 | Card needs a redirect (3-D Secure, some wallets) | Returns to `/deregister/bestaetigung?auftrag=…`. If `redirect_status` is not `failed` it shows "Ihr Antrag ist eingegangen" for any well-formed reference, without checking payment [GAP]. |
 | P3 | 3-D Secure failed or abandoned | "Zahlung nicht abgeschlossen. Es wurde nichts abgebucht." + "Erneut versuchen" → restart at step 0 (new order). |
-| P4 | Customer never pays, or goes back and edits after a failed try | An `awaiting_payment` row and an open PaymentIntent stay for ever. No link exists for it. Nothing is deleted [OPEN Q22]. |
+| P4 | Customer never pays, or goes back and edits after a failed try | An `awaiting_payment` row and an open PaymentIntent stay for ever. No link exists for it. Nothing is deleted [OPEN Q22]. The poller asks Stripe about the payment every hour for the first seven days and does nothing else with it. |
 | P5 | Tab closed after paying | No effect: the webhook, not the browser, starts everything. |
 | P6 | Webhook unsigned / wrongly signed | 400, Stripe doesn't retry. Events other than `amount_capturable_updated` / `succeeded`, or a PaymentIntent without an `order_id` that is one of our references, are ignored (200). A repeat is a no-op. Any failure inside is a 500, so Stripe retries. Retry resumes with the token it already issued. |
 | P7 | Payment not yet held/captured when the event is handled, or not the order's whole total (a partial capture or refund, another amount) | Nothing happens; in the second case nothing is filed, mailed or issued, and a log line names the order. |
-| P8 | Email 1 cannot be sent | Nothing is recorded; 500; Stripe retries. If it never works the order stays `awaiting_payment`, the hold lapses in 7 days, the customer is charged nothing and told nothing [OPEN Q33]. |
-| P9 | Webhook never delivered | Same dead end. The poller doesn't look at `awaiting_payment` and "resend link" refuses it [GAP]. |
+| P8 | Email 1 cannot be sent | Nothing is recorded; 500; Stripe retries, and so does the poller, every hour for the first seven days. If it never works the order stays `awaiting_payment`, the hold lapses in 7 days, the customer is charged nothing and told nothing [OPEN Q33]. |
+| P9 | Webhook never delivered | The poller finds the held payment 15 minutes after checkout and confirms it as the webhook would, so email 1 and the filing follow. "Resend link" still refuses an `awaiting_payment` order: it has no link yet. |
 | P10 | SEPA Direct Debit | Not offered (cards, Apple Pay, Google Pay only). `payment_failed` isn't subscribed; the customer sees the failure in the form [OPEN Q12]. |
 | P11 | Email typed wrong | The link goes to a stranger, who can open the status page (plate, last 4 of the FIN, documents). The customer has no recovery: resend only mails the stored address [OPEN Q25]. |
 
