@@ -129,6 +129,7 @@ export const OPEN_STATUSES: readonly ApplicationStatus[] = [
 ]
 
 export const POLLED_STATUSES: readonly ApplicationStatus[] = [
+  "awaiting_payment",
   "submitted_and_paid",
   "awaiting_identity_verification",
   "identity_verified",

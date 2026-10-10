@@ -534,6 +534,16 @@ export function applicationRepositoryContract(name: string, makeSubject: () => A
         expect(firstTwo).toHaveLength(2)
       })
 
+      it("returns an order that still awaits its payment once its payment check is due, and not before", async () => {
+        const checkDue = await repository.create(anApplication({ status: "awaiting_payment", polling: { nextPollAt: minutes(-1), attempts: 0 } }))
+        await repository.create(anApplication({ status: "awaiting_payment", polling: { nextPollAt: minutes(14), attempts: 0 } }))
+        await repository.create(anApplication({ status: "awaiting_payment", polling: { attempts: 0 } }))
+
+        const due = await repository.findDueForPolling(NOW, 10)
+
+        expect(due.map(({ reference }) => reference)).toEqual([checkDue.reference])
+      })
+
       it("returns a Neuzulassung order that waits for its verification or is verified and not yet filed, when due", async () => {
         const waiting = await repository.create(
           aNewRegistrationApplication({ status: "awaiting_identity_verification", polling: { nextPollAt: minutes(-2), attempts: 0 } }),

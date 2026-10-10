@@ -3,6 +3,7 @@ import { requiresIdentityVerification } from "@/src/core/domain/application/appl
 import type { DocumentRef } from "@/src/core/domain/registration/document"
 import type { Failure } from "@/src/core/domain/registration/failure"
 import { HOLD_CHECK_INTERVAL_MS, HOLD_RETRY_MS } from "@/src/core/domain/payment/hold-policy"
+import { nextPaymentCheckAt } from "@/src/core/domain/payment/payment-check-policy"
 import { nextPollAt } from "@/src/core/domain/registration/poll-schedule"
 import { GatewayUnavailable } from "@/src/core/errors/registration/gateway-unavailable"
 import { checkIdentityVerification } from "@/src/core/use-cases/identity/check-identity-verification"
@@ -11,11 +12,13 @@ import type { GatewayStatus } from "@/src/core/ports/registration/registration-g
 import type { Dependencies } from "@/src/core/use-cases/dependencies"
 import { handleFailure } from "./handle-failure"
 import { mailCustomer } from "@/src/core/use-cases/mail/mail-customer"
+import { confirmPayment } from "@/src/core/use-cases/payment/confirm-payment"
 import { guardHold, guardHoldQuietly } from "@/src/core/use-cases/payment/secure-hold"
 import { settlePayment } from "@/src/core/use-cases/payment/settle-payment"
 import { afterFailure, submitToKba } from "./submit-to-kba"
 
 export async function advanceStatus(deps: Dependencies, application: Application): Promise<void> {
+  if (application.status === "awaiting_payment") return checkPayment(deps, application)
   if (application.status === "submitted_and_paid") {
     const proceed = requiresIdentityVerification(application.request.service) ? startIdentityVerification : submitToKba
     return backOffOnFailure(deps, application, () => proceed(deps, application))
@@ -61,6 +64,16 @@ export async function advanceStatus(deps: Dependencies, application: Application
 
     await complete(deps, application, status.documents)
   })
+}
+
+// The webhook confirms a payment first; this finds one whose notification was lost. A stale write is dropped harmlessly.
+async function checkPayment(deps: Dependencies, application: Application): Promise<void> {
+  try {
+    await confirmPayment(deps, application.reference)
+  } finally {
+    const nextPollAt = nextPaymentCheckAt(application.history[0].at, deps.clock.now())
+    await deps.repository.update({ ...application, polling: { attempts: application.polling.attempts, nextPollAt } }).catch(() => undefined)
+  }
 }
 
 // Without a backoff the order stays first in the queue; a stale backoff write is dropped harmlessly.
